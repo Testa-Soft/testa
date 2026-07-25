@@ -40,6 +40,8 @@ export interface AssignedExperiment {
 export interface GoalDeps {
   /** Emit an event through the normal track pipeline (outbox → ClickHouse). */
   track: (name: string, props?: Record<string, unknown>) => void;
+  /** Fire the legacy /api/leads/convert call for crobot MySQL dashboards. */
+  postLeadConvert?: (experimentId: number, goalId: number, data?: Record<string, unknown>) => void;
 }
 
 export type Teardown = () => void;
@@ -85,6 +87,7 @@ function fireConversion(
     variation_id: exp.variationId,
     ...(data ?? {}),
   });
+  deps.postLeadConvert?.(exp.experimentId, goal.goal_id, data);
 }
 
 /**
