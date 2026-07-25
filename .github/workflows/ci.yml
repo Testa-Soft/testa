@@ -85,10 +85,10 @@ jobs:
         options: >-
           --health-cmd "redis-cli ping" --health-interval 5s --health-timeout 3s --health-retries 10
       clickhouse:
-        image: clickhouse/clickhouse-server:24.10-alpine
+        image: clickhouse/clickhouse-server:24.10
         ports: ['8123:8123', '9000:9000']
         options: >-
-          --health-cmd "wget --quiet --spider http://localhost:8123/ping" --health-interval 5s --health-timeout 3s --health-retries 20
+          --health-cmd "curl -sf http://localhost:8123/ping" --health-interval 5s --health-timeout 3s --health-retries 20
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
