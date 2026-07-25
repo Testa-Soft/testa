@@ -84,11 +84,6 @@ jobs:
         ports: ['6379:6379']
         options: >-
           --health-cmd "redis-cli ping" --health-interval 5s --health-timeout 3s --health-retries 10
-      clickhouse:
-        image: clickhouse/clickhouse-server:24.10
-        ports: ['8123:8123', '9000:9000']
-        options: >-
-          --ulimit nofile=262144:262144 --health-cmd "curl -sf http://localhost:8123/ping" --health-interval 5s --health-timeout 3s --health-retries 20
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -97,6 +92,23 @@ jobs:
         with: { node-version: '22', cache: 'pnpm' }
       - uses: oven-sh/setup-bun@v2
         with: { bun-version: latest }
+      - name: Start ClickHouse
+        run: |
+          docker run -d --name clickhouse \
+            --ulimit nofile=262144:262144 \
+            -p 8123:8123 -p 9000:9000 \
+            clickhouse/clickhouse-server:24.10
+          echo "Waiting for ClickHouse HTTP server (up to 180 s)..."
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:8123/ping > /dev/null 2>&1; then
+              echo "ClickHouse ready (${i}×3 s elapsed)"
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "ClickHouse did not start in 180 s — container logs:"
+          docker logs clickhouse
+          exit 1
       - run: pnpm install --frozen-lockfile
       - name: Apply CH migrations
         run: pnpm --filter @testa-platform/collector migrate
