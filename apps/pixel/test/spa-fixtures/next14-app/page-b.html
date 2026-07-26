@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>SPA fixture — next14-app / page B</title>
+    <script>
+      (function () {
+        window.__NEXT_ROUTER__ = {
+          version: '14',
+          push: function (href) {
+            history.pushState({}, '', href);
+          },
+          replace: function (href) {
+            history.replaceState({}, '', href);
+          },
+        };
+        history.replaceState(
+          {
+            __NA: true,
+            __PRIVATE_NEXTJS_INTERNALS_TREE: JSON.stringify({ type: 'page', subTreeData: null }),
+          },
+          '',
+          window.location.href,
+        );
+        window.__nextRouterVersion = '14';
+      })();
+    </script>
+    <script>
+      window.cfPrefill = {
+        project: {
+          project_id: 9001,
+          slug: 'spa-next14',
+          integration_version: '4.0',
+          consent_mode: 'aware',
+          experiments: [
+            {
+              experiment_id: 9001,
+              status: 'active',
+              traffic_allocation: 100,
+              rules: [],
+              variations: [
+                {
+                  variation_id: 1,
+                  weight: 100,
+                  changes: [
+                    {
+                      type: 'redirect',
+                      from_url: '/page-a.html',
+                      to_url: '/page-b.html',
+                      url_match_type: 'contains',
+                    },
+                  ],
+                },
+              ],
+              goals: [],
+            },
+          ],
+          published_at: '2026-07-26T00:00:00.000Z',
+          config_hash: 'spa-next14-v1',
+        },
+        apiUrl: 'https://collect.testa-test.invalid',
+      };
+    </script>
+    <script src="/dist/loader.min.js"></script>
+    <script defer src="/dist/runtime.min.js"></script>
+  </head>
+  <body>
+    <!--$-->
+    <main>
+      <h1>Next.js 14 App Router + PPR — Page B</h1>
+      <!--$?-->
+      <p>UTM params preserved. Pixel must NOT re-redirect.</p>
+      <a id="back" href="javascript:history.back()">Back</a>
+      <!--/$-->
+    </main>
+    <!--/$-->
+  </body>
+</html>

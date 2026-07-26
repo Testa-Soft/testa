@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>SPA fixture — next12-pages / page A</title>
+    <!--
+      Next.js 12 (pages router) static export output.
+
+      During hydration, Next's client router calls history.replaceState to
+      attach its own state to the current entry BEFORE React flushes effects.
+      The pixel must snapshot the current URL before this mutation so the
+      redirect target is computed against the original URL, not the router's
+      rewritten one.  This is the race condition the `currentUrl` snapshot in
+      redirect/index.ts was built to close.
+    -->
+    <script id="__NEXT_DATA__" type="application/json">
+      {
+        "props": { "pageProps": {} },
+        "page": "/page-a",
+        "query": {},
+        "buildId": "fixture-build",
+        "isFallback": false,
+        "gssp": false,
+        "appGip": true,
+        "scriptLoader": []
+      }
+    </script>
+    <script>
+      /**
+       * Simulate Next.js 12 pages-router hydration:
+       * next/router calls history.replaceState({ as, url, options }, '', href)
+       * synchronously during ReactDOM.hydrateRoot.
+       */
+      (function () {
+        var href = window.location.href;
+        history.replaceState(
+          { as: window.location.pathname, url: window.location.pathname, options: {} },
+          '',
+          href,
+        );
+        window.__nextRouterVersion = '12';
+        window.__nextRouterInitialized = true;
+      })();
+    </script>
+    <script>
+      window.cfPrefill = {
+        project: {
+          project_id: 9001,
+          slug: 'spa-next12',
+          integration_version: '4.0',
+          consent_mode: 'aware',
+          experiments: [
+            {
+              experiment_id: 9001,
+              status: 'active',
+              traffic_allocation: 100,
+              rules: [],
+              variations: [
+                {
+                  variation_id: 1,
+                  weight: 100,
+                  changes: [
+                    {
+                      type: 'redirect',
+                      from_url: '/page-a.html',
+                      to_url: '/page-b.html',
+                      url_match_type: 'contains',
+                    },
+                  ],
+                },
+              ],
+              goals: [],
+            },
+          ],
+          published_at: '2026-07-26T00:00:00.000Z',
+          config_hash: 'spa-next12-v1',
+        },
+        apiUrl: 'https://collect.testa-test.invalid',
+      };
+    </script>
+    <script src="/dist/loader.min.js"></script>
+    <script defer src="/dist/runtime.min.js"></script>
+  </head>
+  <body>
+    <div id="__next">
+      <main>
+        <h1>Next.js 12 Pages Router — Page A</h1>
+        <p>
+          Pixel fires redirect during hydration window (after <code>__NEXT_DATA__</code> but
+          before React flushes effects).
+        </p>
+      </main>
+    </div>
+  </body>
+</html>

@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>SPA fixture — next14-app / page A</title>
+    <!--
+      Next.js 14 (App Router + Partial Prerendering preview).
+
+      Next 14 introduced PPR (Partial Prerendering): static "shell" renders
+      server-side; dynamic parts stream in via Suspense boundaries using the
+      <!--$?--> / <!--/$--> marker pair.  The pixel must still redirect
+      correctly even when some subtree hasn't finished streaming.
+
+      Additional Next 14 quirk: the internal router state now includes
+      `__PRIVATE_NEXTJS_INTERNALS_TREE` as a JSON-serialised RSC tree patch;
+      the replaceState call happens earlier in the bootstrap sequence.
+    -->
+    <script>
+      (function () {
+        window.__NEXT_ROUTER__ = {
+          version: '14',
+          push: function (href) {
+            history.pushState({}, '', href);
+          },
+          replace: function (href) {
+            history.replaceState({}, '', href);
+          },
+        };
+        // Next 14 bootstrap: earlier replaceState with RSC tree
+        history.replaceState(
+          {
+            __NA: true,
+            __PRIVATE_NEXTJS_INTERNALS_TREE: JSON.stringify({ type: 'page', subTreeData: null }),
+          },
+          '',
+          window.location.href,
+        );
+        window.__nextRouterVersion = '14';
+      })();
+    </script>
+    <script>
+      window.cfPrefill = {
+        project: {
+          project_id: 9001,
+          slug: 'spa-next14',
+          integration_version: '4.0',
+          consent_mode: 'aware',
+          experiments: [
+            {
+              experiment_id: 9001,
+              status: 'active',
+              traffic_allocation: 100,
+              rules: [],
+              variations: [
+                {
+                  variation_id: 1,
+                  weight: 100,
+                  changes: [
+                    {
+                      type: 'redirect',
+                      from_url: '/page-a.html',
+                      to_url: '/page-b.html',
+                      url_match_type: 'contains',
+                    },
+                  ],
+                },
+              ],
+              goals: [],
+            },
+          ],
+          published_at: '2026-07-26T00:00:00.000Z',
+          config_hash: 'spa-next14-v1',
+        },
+        apiUrl: 'https://collect.testa-test.invalid',
+      };
+    </script>
+    <script src="/dist/loader.min.js"></script>
+    <script defer src="/dist/runtime.min.js"></script>
+  </head>
+  <body>
+    <!-- PPR static shell -->
+    <!--$-->
+    <main>
+      <h1>Next.js 14 App Router + PPR — Page A</h1>
+      <!--$?-->
+      <!-- Suspense boundary: dynamic content streams in after static shell -->
+      <p>
+        Pixel redirect must fire before AND after dynamic content streams in, without
+        double-firing.
+      </p>
+      <!--/$-->
+    </main>
+    <!--/$-->
+  </body>
+</html>
