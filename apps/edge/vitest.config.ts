@@ -8,5 +8,13 @@ export default defineWorkersConfig({
       },
     },
     include: ['src/**/*.test.ts', 'src/**/__tests__/**/*.test.ts'],
+    coverage: {
+      provider: 'v8',
+      include: ['src/**'],
+      thresholds: {
+        lines: 80,
+        branches: 80,
+      },
+    },
   },
 });
