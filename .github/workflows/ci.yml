@@ -78,6 +78,9 @@ jobs:
           --health-cmd "redis-cli ping" --health-interval 5s --health-timeout 3s --health-retries 10
       clickhouse:
         image: clickhouse/clickhouse-server:25.3-alpine
+        env:
+          CLICKHOUSE_USER: default
+          CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
         ports: ['8123:8123', '9000:9000']
         options: >-
           --health-cmd "wget --quiet --spider http://localhost:8123/ping" --health-interval 5s --health-timeout 3s --health-retries 20
