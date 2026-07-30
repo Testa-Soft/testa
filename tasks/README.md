@@ -68,7 +68,16 @@ The Phase 3 corpus reflects the 2026-05-06 grilling decisions: anti-flicker is t
 
 ## Phase 4 — Collector read API
 
-To be scoped. The write path (Phase 1.4 + 1.5, PRD-001) is done, so the read API is unblocked — scope it once the Phase 1–3 stragglers (1.6, 1.7, 2.8, 3.11, 3.13, 3.15) are closed.
+Scoped 2026-07-30. Phase 1–3 write-path stragglers (1.7, 2.8, 3.11, 3.13) have green draft PRs awaiting merge; 3.15 is still pending. Phase 4 is approved to proceed in parallel. Shared types (`packages/shared-types/src/metric-summary.ts`) and CH migrations (003–008) are already in place.
+
+| ID | Task | Status | Blocked by |
+|---|---|---|---|
+| [4.1](./phase-4/4.1-service-token-auth.md) | Service-token auth middleware + route skeleton | pending | — |
+| [4.2](./phase-4/4.2-aov-endpoint.md) | `GET /api/v1/metrics/aov` — AOV + FX + Welch t-test | pending | 4.1 |
+| [4.3](./phase-4/4.3-rpv-endpoint.md) | `GET /api/v1/metrics/rpv` — RPV + bootstrap CIs | pending | 4.1 |
+| [4.4](./phase-4/4.4-sessions-endpoint.md) | `GET /api/v1/metrics/sessions` — sessions/bounce/pps | pending | 4.1 |
+| [4.5](./phase-4/4.5-funnel-endpoint.md) | `GET /api/v1/metrics/funnel` — multi-step funnel | pending | 4.1 |
+| [4.6](./phase-4/4.6-read-api-tests.md) | Read API integration tests (live CH) | pending | 4.2, 4.3, 4.4, 4.5 |
 
 ## Phase 5 — Crobot integration
 
