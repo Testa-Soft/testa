@@ -4,6 +4,52 @@ Routine / agent session log. Most recent at top. Each entry: what was picked up,
 
 ---
 
+## 2026-07-31 (Fri) — Nightly audit (all tasks already in-flight)
+
+### Context
+
+Scheduled nightly routine. On inspection, all four unblocked pending tasks already had open draft PRs with **green CI** from prior nightly runs. No new coding work was required this cycle — the board is clear for human review and merge.
+
+### Task state at run time
+
+| Task | Status on `main` | PR | CI |
+|---|---|---|---|
+| 1.7 — Phase 1 integration test | pending (PR branch: `in_progress`) | #7 `feat/1.7-tests` | ✅ all checks passed 2026-07-28 |
+| 2.8 — Edge integration test | pending (PR branch: `in_progress`) | #4 `feat/2.8-edge-integration` | ✅ all checks passed 2026-07-28 |
+| 3.11 — SPA redirect harness | pending (PR branch: `in_progress`) | #6 `feat/3.11-spa-redirect-harness` | ✅ all checks passed 2026-07-26 |
+| 3.13 — Legacy HTTP calls | pending (PR branch: `in_progress`) | #5 `feat/3.13-legacy-http` | ✅ all checks passed 2026-07-25 |
+
+### Issue flagged: duplicate PR for task 1.7
+
+Task 1.7 has **two** open draft PRs:
+- **PR #3** (`feat/1.7-collector-integration`) — opened 2026-07-24, older implementation
+- **PR #7** (`feat/1.7-tests`) — opened 2026-07-28, newer implementation with correct task-file status update
+
+Violates "One task = one PR" from AGENTS.md. **Human action needed: close PR #3** (the older one) and keep PR #7 as the canonical PR for task 1.7.
+
+### Drafts opened this run
+
+None — all unblocked tasks were already covered.
+
+### Blocked
+
+None.
+
+### Next pickup on tomorrow's run
+
+If PRs #4, #5, #6, #7 are merged (marking 1.7, 2.8, 3.11, 3.13 as done), the next unblocked tasks will be:
+- **2.9** (staging deploy — unblocks after 2.8 merges; **PAUSE for human** per task file)
+- **3.15** (Vitest coverage + Playwright golden flows — unblocks after 3.13 merges and 3.7 completes)
+- If 3.7 (`in_progress`, audience engine) also merges: 3.15 becomes fully unblocked
+- If nothing merges: no new unblocked tasks exist; the routine should author **Phase 4 task corpus** per AGENTS.md meta-task guidance
+
+### Notes
+
+- PR #8 (`docs/phase-4-task-corpus`) is also open and awaiting review — this scopes the collector read API phase; worth reviewing alongside the task PRs.
+- tasks/README.md on `main` still shows 1.7/2.8/3.11/3.13 as `pending` because their PRs haven't merged yet; this is expected — the status update lives on each PR branch.
+
+---
+
 ## 2026-05-07 (Thu) — Phase 3 continuation (lifecycle wired end-to-end)
 
 ### Context
