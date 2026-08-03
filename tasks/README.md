@@ -11,6 +11,7 @@ Each task = one focused PR. Agents pick the lowest-numbered `pending` task whose
 **Status legend:** `pending` (open, ready to claim) · `in_progress` (claimed, work happening) · `blocked` (depends on a pending task) · `done` (PR merged) · `cancelled` (no longer needed).
 
 > **2026-06-12 — board reconciled against git history.** The status table had drifted behind the code. Closed out as `done`: **1.2** (migrate runner), **1.4** + **1.5** (subsumed by PRD-001 ingest pipeline, `81f5ede`), **3.6** (`e26930c`), **3.10** (`5012248`/`38115de`), **3.14** (`fc444dd`). Genuinely still open: **1.6**, **1.7**, **2.8**, **2.9** (human-gated), **3.11**, **3.13**, **3.15**; **3.7** stays `in_progress` (audience engine shipped, but `visitor.custom` sandbox + legacy `targeting[]` evaluator deferred). Test baseline at reconciliation: pixel 317 + edge 90 + collector 41 = 448 green.
+> **2026-08-03 — 3.7 closed out.** `custom-js.ts` and `legacy.ts` (the two deferred pieces) landed in commit `4744900` as part of PR #2 (3.3.3 parity). All 3.7 acceptance criteria are met; test count now 418 pixel. Status updated to `done`.
 
 ---
 
@@ -54,7 +55,7 @@ Foundation work was done in the seed commits before this task system existed. Se
 | [3.4](./phase-3/3.4-consent-state-machine.md) | Consent state machine + CMP integration | done | — |
 | [3.5](./phase-3/3.5-spa-navigation.md) | SPA navigation (patch consumer + canonical URL diff) | done | 3.1 |
 | [3.6](./phase-3/3.6-idb-outbox-transport.md) | IDB outbox + transport + retry + `_pixel_health` | done | 3.4 |
-| [3.7](./phase-3/3.7-audience-rule-engine.md) | Audience rule engine + sandboxed JS evaluator + legacy compat | in_progress | — |
+| [3.7](./phase-3/3.7-audience-rule-engine.md) | Audience rule engine + sandboxed JS evaluator + legacy compat | done | — |
 | [3.8](./phase-3/3.8-traffic-assignment.md) | Variation traffic assignment (xxhash32 + freq + mutex) | done | 3.3 |
 | [3.9](./phase-3/3.9-variation-apply.md) | Variation apply (CSS / HTML / text / attr / JS) | done | 3.8 |
 | [3.10](./phase-3/3.10-redirect-engine.md) | Redirect engine (decide + execute + loop guard + cross-domain + SPA) | done | 3.7, 3.8 |
