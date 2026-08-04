@@ -4,6 +4,45 @@ Routine / agent session log. Most recent at top. Each entry: what was picked up,
 
 ---
 
+## 2026-08-04 (Mon) — Routine status sync (all unblocked tasks in review)
+
+### Context
+
+Scheduled routine run. No new code tasks were started because all unblocked pending tasks already have open draft PRs with green CI from previous nightly runs. This run's job: reconcile task file statuses and post the board update.
+
+### Open draft PRs found (all CI green)
+
+| PR | Branch | Task | CI | Notes |
+|---|---|---|---|---|
+| #7 | `feat/1.7-tests` | 1.7 phase-1 integration test | ✅ 5/5 green | Preferred; see note on PR #3 |
+| #3 | `feat/1.7-collector-integration` | 1.7 (duplicate) | ✅ green | Earlier attempt; can be closed in favour of #7 |
+| #4 | `feat/2.8-edge-integration` | 2.8 edge integration tests | ✅ 5/5 green | |
+| #6 | `feat/3.11-spa-redirect-harness` | 3.11 SPA redirect harness | ✅ 6/6 green | Includes E2E check |
+| #5 | `feat/3.13-legacy-http` | 3.13 legacy HTTP calls | ✅ 5/5 green | Already marked in_progress on branch |
+| #9 | `chore/3.7-done-reconcile` | 3.7 close-out | ✅ green | |
+| #8 | `docs/phase-4-task-corpus` | Phase 4 task corpus docs | open | |
+
+### Board changes made this run
+
+- 1.7 → `in_progress` (commit d9c6077, PR #7)
+- 2.8 → `in_progress` (commit ff24056, PR #4)
+- 3.11 → `in_progress` (commit 9727940, PR #6)
+- 3.13 → `in_progress` (commit 7828c22, already on branch; reflected in README now)
+
+### Routine run 2026-08-04
+
+```
+Picked up: [no new tasks — all unblocked pending tasks had draft PRs from prior runs]
+Drafts opened: [none new this run]
+Blocked: none
+Next pickup on tomorrow's run: 3.15 (once 3.11, 3.13, 3.7 merge); 2.9 (once 2.8 merges)
+Notes: PR #3 (feat/1.7-collector-integration) is a duplicate of PR #7 — suggest closing #3.
+       Merging PRs #4–#7 unblocks: 2.9 (needs 2.8), 3.15 (needs 3.11 + 3.13 + others).
+       PR #9 (3.7 done) and PR #8 (Phase 4 corpus) are also awaiting review.
+```
+
+---
+
 ## 2026-05-07 (Thu) — Phase 3 continuation (lifecycle wired end-to-end)
 
 ### Context
