@@ -28,7 +28,7 @@ Foundation work was done in the seed commits before this task system existed. Se
 | [1.4](./phase-1/1.4-ingest-route.md) | `POST /_ingest` route + HMAC + Zod | done | 1.3 |
 | [1.5](./phase-1/1.5-consumer-worker.md) | Consumer worker (XREADGROUP → CH INSERT) | done | 1.1, 1.2, 1.3 |
 | [1.6](./phase-1/1.6-fx-rates.md) | FX rates sync + dictionary endpoint | done | 1.3 |
-| [1.7](./phase-1/1.7-tests.md) | Vitest coverage for ingest, consumer, replay | pending | 1.4, 1.5 |
+| [1.7](./phase-1/1.7-tests.md) | Vitest coverage for ingest, consumer, replay | in_progress | 1.4, 1.5 |
 
 ## Phase 2 — Edge worker
 
@@ -41,7 +41,7 @@ Foundation work was done in the seed commits before this task system existed. Se
 | [2.5](./phase-2/2.5-batch-buffer-do.md) | DurableObject batch buffer | done | — |
 | [2.6](./phase-2/2.6-ingest-forward.md) | HMAC sign + POST to collector | done | 2.5 |
 | [2.7](./phase-2/2.7-serve-pixel.md) | GET /projects/:slug.js — KV serve | done | — |
-| [2.8](./phase-2/2.8-tests.md) | miniflare + Vitest coverage | pending | 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7 |
+| [2.8](./phase-2/2.8-tests.md) | miniflare + Vitest coverage | in_progress | 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7 |
 | [2.9](./phase-2/2.9-staging-deploy.md) | wrangler deploy to staging — **PAUSE** for human | pending | 2.8 |
 
 ## Phase 3 — Tracker pixel 4.0
@@ -58,9 +58,9 @@ Foundation work was done in the seed commits before this task system existed. Se
 | [3.8](./phase-3/3.8-traffic-assignment.md) | Variation traffic assignment (xxhash32 + freq + mutex) | done | 3.3 |
 | [3.9](./phase-3/3.9-variation-apply.md) | Variation apply (CSS / HTML / text / attr / JS) | done | 3.8 |
 | [3.10](./phase-3/3.10-redirect-engine.md) | Redirect engine (decide + execute + loop guard + cross-domain + SPA) | done | 3.7, 3.8 |
-| [3.11](./phase-3/3.11-spa-redirect-harness.md) | SPA redirect repro harness (Next 12/13/14, RR6, plain JS) | pending | 3.10 |
+| [3.11](./phase-3/3.11-spa-redirect-harness.md) | SPA redirect repro harness (Next 12/13/14, RR6, plain JS) | in_progress | 3.10 |
 | [3.12](./phase-3/3.12-legacy-globals-compat.md) | `window.Analytica.*` legacy globals + eventEmitter | done | 3.2, 3.3, 3.8 |
-| [3.13](./phase-3/3.13-legacy-http-calls.md) | Legacy HTTP calls (`/api/leads`, `/api/leads/convert`, `/api/pixel`) | pending | 3.12 |
+| [3.13](./phase-3/3.13-legacy-http-calls.md) | Legacy HTTP calls (`/api/leads`, `/api/leads/convert`, `/api/pixel`) | in_progress | 3.12 |
 | [3.14](./phase-3/3.14-bundle-build.md) | esbuild loader + runtime, content-hashed runtime URL | done | 3.1, 3.2 |
 | [3.15](./phase-3/3.15-test-coverage.md) | Vitest coverage + Playwright golden flows | pending | 3.1–3.13 |
 
