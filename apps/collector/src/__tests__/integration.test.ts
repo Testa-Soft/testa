@@ -25,7 +25,8 @@ import { Hono } from 'hono';
 import IORedis, { type Redis } from 'ioredis';
 import { config } from '../config.ts';
 import { Consumer } from '../consumer/consumer.ts';
-import { insertEvents, query } from '../db/clickhouse.ts';
+import { command, insertEvents, insertRows, query } from '../db/clickhouse.ts';
+import { rowFromEvent } from '../db/row-mapper.ts';
 import { sign } from '../ingest/hmac.ts';
 import { makeIngestHandler } from '../ingest/route.ts';
 
@@ -197,5 +198,44 @@ describe.skipIf(!live)('Phase 1 ingest → consumer → ClickHouse (live)', () =
       }),
     );
     expect(res.status).toBe(400);
+  });
+});
+
+/**
+ * Differential-TTL reaping (task 1.8). Only needs ClickHouse, so it's gated on
+ * `liveCh` independently of Redis. Rows are dated 2 days back so the 1-day
+ * non-experiment page_view tier is due while the 30-day / 13-month tiers are
+ * not; `OPTIMIZE … FINAL` materializes the TTL synchronously.
+ */
+describe.skipIf(!liveCh)('page_view differential TTL (live ClickHouse)', () => {
+  it('reaps only non-experiment page_views; keeps experiment page_views and conversions', async () => {
+    const marker = `it-ttl-${randomUUID()}`;
+    const twoDaysAgoMs = Date.now() - 2 * 24 * 60 * 60 * 1000;
+    const base = { session_id: marker, client_ts: twoDaysAgoMs, server_ts: twoDaysAgoMs };
+
+    const rows = [
+      makeEvent(marker, { ...base, event_name: 'purchase', in_experiment: 0 }),
+      makeEvent(marker, { ...base, event_name: 'page_view', in_experiment: 1 }),
+      makeEvent(marker, { ...base, event_name: 'page_view', in_experiment: 0 }),
+    ].map(rowFromEvent);
+
+    // Insert straight into `events` (the TTL owner) — the Buffer would defer the flush.
+    await insertRows('events', rows);
+    await command('OPTIMIZE TABLE events FINAL');
+
+    const survivors = await query<{ event_name: string; in_experiment: number }>(
+      `SELECT event_name, in_experiment FROM events
+       WHERE session_id = {marker:String} ORDER BY event_name, in_experiment`,
+      { marker },
+    );
+
+    expect(survivors.map((r) => [r.event_name, Number(r.in_experiment)])).toEqual([
+      ['page_view', 1], // experiment page_view survives (30-day tier)
+      ['purchase', 0], // conversion survives (13-month tier)
+    ]);
+    // The non-experiment page_view (1-day tier) is gone.
+    expect(
+      survivors.some((r) => r.event_name === 'page_view' && Number(r.in_experiment) === 0),
+    ).toBe(false);
   });
 });

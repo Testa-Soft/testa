@@ -29,7 +29,7 @@ Foundation work was done in the seed commits before this task system existed. Se
 | [1.5](./phase-1/1.5-consumer-worker.md) | Consumer worker (XREADGROUP → CH INSERT) | done | 1.1, 1.2, 1.3 |
 | [1.6](./phase-1/1.6-fx-rates.md) | FX rates sync + dictionary endpoint | done | 1.3 |
 | [1.7](./phase-1/1.7-tests.md) | Vitest coverage for ingest, consumer, replay | done | 1.4, 1.5 |
-| [1.8](./phase-1/1.8-pageview-inexperiment-ttl.md) | page_view `in_experiment` column + differential TTL (PRD-002) | pending | 1.1 |
+| [1.8](./phase-1/1.8-pageview-inexperiment-ttl.md) | page_view `in_experiment` column + differential TTL (PRD-002) | done | 1.1 |
 
 ## Phase 2 — Edge worker
 

@@ -48,6 +48,14 @@ export interface PixelEvent {
   /** `window.innerWidth` / `window.innerHeight` at fire time. 0 if unavailable. */
   viewport_w: number;
   viewport_h: number;
+  /**
+   * 1 if the visitor was in an experiment (past their first exposure) when this
+   * event fired, else 0. Stamped by the pixel (task 3.16). Drives differential
+   * ClickHouse retention: non-experiment page_views expire fast (1d) while
+   * experiment-associated ones survive 30d. Prospective-only — a page_view
+   * before the first exposure stays 0 and cannot be promoted later (PRD-002).
+   */
+  in_experiment?: 0 | 1;
   /** UTM params parsed from `location.search` by the pixel. Empty string if absent. */
   utm_source?: string;
   utm_medium?: string;

@@ -32,6 +32,7 @@ export interface EventsRow {
   viewport_h: number;
   tracker_version: string;
   is_bot: 0 | 1;
+  in_experiment: 0 | 1;
   consent_state: string;
   utm_source: string;
   utm_medium: string;
@@ -85,6 +86,7 @@ export function rowFromEvent(ev: EnrichedEvent): EventsRow {
     viewport_h: ev.viewport_h ?? 0,
     tracker_version: ev.tracker_version ?? '',
     is_bot: ev.is_bot,
+    in_experiment: ev.in_experiment ?? 0,
     consent_state: ev.consent_state,
     utm_source: ev.utm_source ?? '',
     utm_medium: ev.utm_medium ?? '',
