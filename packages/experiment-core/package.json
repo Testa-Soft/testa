@@ -1,0 +1,27 @@
+{
+  "name": "@testa-platform/experiment-core",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Host-agnostic experiment decision core: deterministic bucketing, assignment, split-URL redirect resolution.",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "clean": "rm -rf .turbo coverage *.tsbuildinfo"
+  },
+  "devDependencies": {
+    "@testa-platform/shared-types": "workspace:*",
+    "@vitest/coverage-v8": "2.1.5",
+    "typescript": "5.6.3",
+    "vitest": "2.1.5"
+  }
+}

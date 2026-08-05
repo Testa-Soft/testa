@@ -4,13 +4,11 @@ import {
   ASSIGNMENT_TTL_SEC,
   SESSION_LENGTH_SEC,
   UUID_COOKIE,
-  assignmentName,
   bumpSession,
   clearAssignment,
   clearExperiment,
   clearFreq,
   clearMutex,
-  exclusionName,
   firstSeenName,
   freqName,
   getAssignment,
@@ -21,7 +19,6 @@ import {
   getSession,
   getUuid,
   mutexName,
-  sessionName,
   setAssignment,
   setExclusion,
   setFirstSeen,
@@ -38,11 +35,8 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-describe('name builders', () => {
+describe('name builders (freq/mutex/first-seen stay per-experiment)', () => {
   it('build canonical names with experiment id suffixes', () => {
-    expect(assignmentName(17)).toBe('_testa_exp_17');
-    expect(sessionName(17)).toBe('_testa_ses_17');
-    expect(exclusionName(17)).toBe('_testa_excl_17');
     expect(firstSeenName(17)).toBe('_testa_user_17');
     expect(freqName(17)).toBe('_testa_freq_17');
     expect(mutexName('checkout')).toBe('_testa_mutex_checkout');
@@ -83,9 +77,9 @@ describe('per-experiment assignment', () => {
     expect(getAssignment(42)).toBe(999);
   });
 
-  it('returns null for malformed value', () => {
-    document.cookie = '_testa_exp_17=not-a-number; path=/';
-    localStorage.removeItem('_testa_exp_17');
+  it('returns null for a malformed packed cookie', () => {
+    document.cookie = '_testa_exp=not-a-valid-packed-string; path=/';
+    localStorage.removeItem('_testa_exp');
     expect(getAssignment(17)).toBeNull();
   });
 });
@@ -216,8 +210,8 @@ describe('clearExperiment', () => {
 describe('localStorage mirror — survives ITP-style cookie eviction', () => {
   it('reads from localStorage when document.cookie has been wiped', () => {
     setAssignment(17, 100);
-    // Simulate Safari ITP wiping the cookie after 7 days
-    document.cookie = '_testa_exp_17=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/';
+    // Simulate Safari ITP wiping the packed cookie after 7 days
+    document.cookie = '_testa_exp=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/';
     expect(getAssignment(17)).toBe(100);
   });
 });

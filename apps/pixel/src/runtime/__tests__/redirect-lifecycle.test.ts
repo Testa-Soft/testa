@@ -13,12 +13,13 @@
  * actually navigating happy-dom.
  */
 
+import { clearRedirected } from '@testa-platform/experiment-core';
 import type { ProjectConfig } from '@testa-platform/shared-types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetPixelState } from '../../__test-utils__/reset.ts';
 import { installQueue } from '../../loader/queue.ts';
+import { cookieStore } from '../cookies.ts';
 import { hydrate } from '../lifecycle.ts';
-import { clearRedirected } from '../redirect/dedup.ts';
 
 // Capture location.replace without actually navigating.
 const replaceMock = vi.fn();
@@ -43,7 +44,7 @@ afterEach(() => {
     configurable: true,
     value: originalLocation,
   });
-  clearRedirected(50);
+  clearRedirected(cookieStore, 50);
 });
 
 function projectWithRedirect(opts: { fromUrl: string; toUrl: string }): ProjectConfig {

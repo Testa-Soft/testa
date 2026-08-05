@@ -21,7 +21,23 @@
  * (See `./storage.ts` for the underlying primitives.)
  */
 
+import {
+  type CookieStore,
+  type ExpState,
+  parsePacked,
+  serializePacked,
+} from '@testa-platform/experiment-core';
 import { SECONDS_PER_DAY, SECONDS_PER_HOUR, eraseValue, readValue, writeValue } from './storage.ts';
+
+/**
+ * Browser-backed `CookieStore` (storage.ts). Lets experiment-core's host-agnostic
+ * logic (redirect dedup, etc.) run in the pixel exactly as it does in the
+ * middleware — same code, same cookie effects.
+ */
+export const cookieStore: CookieStore = {
+  get: (name) => readValue(name),
+  set: (name, value, opts) => writeValue(name, value, { maxAgeSec: opts.maxAgeSec }),
+};
 
 // ─── cookie name constants (kept in sync with legacy-globals-inventory.md) ──
 
@@ -36,16 +52,7 @@ export const MUTEX_COOKIE = '_testa_mutex';
 export const SESSION_LENGTH_SEC = SECONDS_PER_HOUR;
 export const ASSIGNMENT_TTL_SEC = 30 * SECONDS_PER_DAY;
 
-// ─── name builders ──────────────────────────────────────────────────────────
-
-export const sessionName = (experimentId: number | string): string =>
-  `${SESSION_COOKIE}_${experimentId}`;
-
-export const assignmentName = (experimentId: number | string): string =>
-  `${ASSIGNMENT_COOKIE}_${experimentId}`;
-
-export const exclusionName = (experimentId: number | string): string =>
-  `${EXCLUSION_COOKIE}_${experimentId}`;
+// ─── name builders (freq + mutex + first-seen stay per-experiment) ────────────
 
 export const firstSeenName = (experimentId: number | string): string =>
   `${FIRST_SEEN_COOKIE}_${experimentId}`;
@@ -53,6 +60,32 @@ export const firstSeenName = (experimentId: number | string): string =>
 export const freqName = (experimentId: number | string): string => `${FREQ_COOKIE}_${experimentId}`;
 
 export const mutexName = (groupName: string): string => `${MUTEX_COOKIE}_${groupName}`;
+
+// ─── packed `_testa_exp` helpers (SAME codec + cookie the middleware uses) ─────
+//
+// Assignment, exclusion and session for ALL experiments live in one positional
+// cookie `_testa_exp` (`expId.variation.excluded.sessionExp` per experiment).
+// This is what makes the pixel and the Next.js middleware share cookie state.
+
+function readPacked(): Map<number, ExpState> {
+  return parsePacked(readValue(ASSIGNMENT_COOKIE));
+}
+
+function writePacked(map: Map<number, ExpState>): void {
+  writeValue(ASSIGNMENT_COOKIE, serializePacked(map), { maxAgeSec: ASSIGNMENT_TTL_SEC });
+}
+
+function entryOf(experimentId: number | string): ExpState | null {
+  return readPacked().get(Number(experimentId)) ?? null;
+}
+
+function upsertEntry(experimentId: number | string, patch: Partial<ExpState>): void {
+  const map = readPacked();
+  const id = Number(experimentId);
+  const current = map.get(id) ?? { variation: -1, excluded: false, sessionExp: 0 };
+  map.set(id, { ...current, ...patch });
+  writePacked(map);
+}
 
 // ─── _testa_uuid ────────────────────────────────────────────────────────────
 
@@ -64,56 +97,43 @@ export function getUuid(): string | null {
   return readValue(UUID_COOKIE);
 }
 
-// ─── per-experiment assignment ──────────────────────────────────────────────
+// ─── assignment / session / exclusion — all packed into `_testa_exp` ─────────
 
 export function getAssignment(experimentId: number | string): number | null {
-  const raw = readValue(assignmentName(experimentId));
-  if (raw === null) return null;
-  const n = Number(raw);
-  return Number.isFinite(n) ? n : null;
+  const entry = entryOf(experimentId);
+  return entry && entry.variation >= 0 ? entry.variation : null;
 }
 
 export function setAssignment(experimentId: number | string, variationId: number): void {
-  writeValue(assignmentName(experimentId), String(variationId), {
-    maxAgeSec: ASSIGNMENT_TTL_SEC,
-  });
+  upsertEntry(experimentId, { variation: variationId, excluded: false });
 }
 
 export function clearAssignment(experimentId: number | string): void {
-  eraseValue(assignmentName(experimentId));
+  const map = readPacked();
+  map.delete(Number(experimentId));
+  writePacked(map);
 }
-
-// ─── per-experiment session ─────────────────────────────────────────────────
 
 /**
- * Returns the session cookie's stored ms timestamp, or null if absent /
- * malformed. Callers compare against Date.now() to decide if the session
- * is still active.
+ * Returns the session's stored ms timestamp, or null if absent. Callers compare
+ * against Date.now() to decide if the session is still active.
  */
 export function getSession(experimentId: number | string): number | null {
-  const raw = readValue(sessionName(experimentId));
-  if (raw === null) return null;
-  const n = Number(raw);
-  return Number.isFinite(n) ? n : null;
+  const entry = entryOf(experimentId);
+  return entry && entry.sessionExp > 0 ? entry.sessionExp : null;
 }
 
-/** Bump (or initialize) the session cookie to "now". 1h sliding TTL. */
+/** Bump (or initialize) the session to "now". */
 export function bumpSession(experimentId: number | string): void {
-  writeValue(sessionName(experimentId), String(Date.now()), {
-    maxAgeSec: SESSION_LENGTH_SEC,
-  });
+  upsertEntry(experimentId, { sessionExp: Date.now() });
 }
-
-// ─── per-experiment exclusion ───────────────────────────────────────────────
 
 export function getExclusion(experimentId: number | string): boolean {
-  return readValue(exclusionName(experimentId)) === '1';
+  return entryOf(experimentId)?.excluded ?? false;
 }
 
 export function setExclusion(experimentId: number | string, excluded: boolean): void {
-  writeValue(exclusionName(experimentId), excluded ? '1' : '0', {
-    maxAgeSec: ASSIGNMENT_TTL_SEC,
-  });
+  upsertEntry(experimentId, { excluded });
 }
 
 // ─── per-experiment first-seen ──────────────────────────────────────────────
@@ -208,9 +228,8 @@ export function clearMutex(groupName: string): void {
  * and for the consent-revoke path (Phase 3.4).
  */
 export function clearExperiment(experimentId: number | string): void {
-  eraseValue(assignmentName(experimentId));
-  eraseValue(exclusionName(experimentId));
+  // assignment/exclusion/session all live in the packed `_testa_exp` entry.
+  clearAssignment(experimentId);
   eraseValue(firstSeenName(experimentId));
   eraseValue(freqName(experimentId));
-  eraseValue(sessionName(experimentId));
 }

@@ -1,8 +1,9 @@
+import { clearRedirected, markRedirected } from '@testa-platform/experiment-core';
 import type { VariationChange } from '@testa-platform/shared-types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { clearAllCookies, clearStorages } from '../../../__test-utils__/reset.ts';
+import { cookieStore } from '../../cookies.ts';
 import { readBreadcrumbs, __resetForTests as resetBreadcrumbs } from '../breadcrumbs.ts';
-import { clearRedirected, markRedirected } from '../dedup.ts';
 import { evaluateAndApply } from '../index.ts';
 
 const REDIRECT: Extract<VariationChange, { type: 'redirect' }> = {
@@ -81,7 +82,7 @@ describe('evaluateAndApply — guards', () => {
   });
 
   it('does not fire when already redirected (dedup)', () => {
-    markRedirected(17);
+    markRedirected(cookieStore, 17);
     const navigate = vi.fn();
     const out = evaluateAndApply(
       {
@@ -95,7 +96,7 @@ describe('evaluateAndApply — guards', () => {
     expect(out.fired).toBe(false);
     expect(out.reason).toBe('already_redirected');
     expect(navigate).not.toHaveBeenCalled();
-    clearRedirected(17);
+    clearRedirected(cookieStore, 17);
   });
 
   it('does not fire when target equals current (after canonicalize)', () => {

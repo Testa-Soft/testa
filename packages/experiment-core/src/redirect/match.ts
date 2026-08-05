@@ -1,26 +1,21 @@
 /**
- * URL matching for redirect rules.
+ * URL matching for redirect rules. Ported (behaviour) from
+ * `apps/pixel/src/runtime/redirect/match.ts`.
  *
- * Compares the current page URL to the experiment's `from_url` pattern.
  * Both URLs are canonicalized (lowercased host, sorted query keys, dropped
  * `_testa_*` params, stripped trailing slash) before comparison so visually-
- * equivalent URLs don't fail to match because of cosmetic differences.
- *
- * Matching modes (inferred from the pattern itself; no separate `match_type`
- * field required, mirrors VWO's behavior):
- *   - starts with `regex:`     → JS RegExp on the full URL
- *   - contains a `*` glob      → wildcard match
- *   - otherwise                → exact canonical equality
+ * equivalent URLs don't fail to match on cosmetic differences.
  */
+
+import { safeUrl } from './url.ts';
 
 const TESTA_PARAM_RE = /^_testa_/;
 
 /**
- * Mode-aware match gate for the redirect engine, mirroring legacy `urlMatches`
- * (crobot script.js ~637-656). The rewrite `url_match_type` also selects how
- * `from_url` is matched against the current URL:
+ * Mode-aware match gate, mirroring the pixel's `urlMatches`. `url_match_type` selects
+ * how `from_url` is matched against the current URL:
  *   - `contains` → substring test on the raw href.
- *   - `regex`    → `from_url` compiled as a `RegExp`, tested against the href.
+ *   - `regex`    → `from_url` compiled as a RegExp, tested against the href.
  *   - `exact` / `query` → canonical exact/glob/regex matching via `matchesUrl`.
  */
 export function matchesForMode(
@@ -47,7 +42,6 @@ export function matchesUrl(currentUrl: string, pattern: string): boolean {
     try {
       return new RegExp(body).test(currentUrl);
     } catch {
-      // Bad regex — never match rather than throw.
       return false;
     }
   }
@@ -58,33 +52,18 @@ export function matchesUrl(currentUrl: string, pattern: string): boolean {
 }
 
 /**
- * Exact match — origin + pathname must equal, AND every query param the
- * pattern explicitly specifies must be present on the current URL with the
- * same value.
- *
- * This means `from_url=https://x.com/a` matches `https://x.com/a?utm=fb`
- * (extra params allowed), but `from_url=https://x.com/a?id=1` does NOT match
- * `https://x.com/a` or `https://x.com/a?id=2`.
+ * Exact match — origin + pathname only. Query parameters are IGNORED, matching
+ * the pixel's `urlMatches('exact')` behaviour: `/pricing` matches
+ * `/pricing?utm_source=fb`. Current query params still flow to the redirect
+ * destination via `merge-params.ts`; they just don't gate the match.
  */
 function exactMatch(currentUrl: string, pattern: string): boolean {
-  let cur: URL;
-  let pat: URL;
-  try {
-    cur = new URL(currentUrl, 'https://placeholder.invalid');
-    pat = new URL(pattern, 'https://placeholder.invalid');
-  } catch {
-    return false;
-  }
+  const cur = safeUrl(currentUrl);
+  const pat = safeUrl(pattern);
+  if (!cur || !pat) return false;
 
   if (cur.hostname.toLowerCase() !== pat.hostname.toLowerCase()) return false;
-  if (normalizePath(cur.pathname) !== normalizePath(pat.pathname)) return false;
-
-  let allMatch = true;
-  pat.searchParams.forEach((value, key) => {
-    if (!allMatch) return;
-    if (cur.searchParams.get(key) !== value) allMatch = false;
-  });
-  return allMatch;
+  return normalizePath(cur.pathname) === normalizePath(pat.pathname);
 }
 
 function normalizePath(p: string): string {
@@ -93,20 +72,16 @@ function normalizePath(p: string): string {
 }
 
 /**
- * Canonical URL form for comparison + breadcrumb logs:
+ * Canonical URL form for comparison:
  *   - lowercase host
- *   - drop `_testa_*` query params (they're our own SPA-detection markers)
+ *   - drop `_testa_*` query params
  *   - sort remaining query keys
- *   - strip trailing slash on path (except for root '/')
- *   - drop fragment by default (redirects don't depend on hash for VWO/ABTasty)
+ *   - strip trailing slash on path (except root '/')
+ *   - drop fragment
  */
 export function canonicalize(rawUrl: string): string {
-  let url: URL;
-  try {
-    url = new URL(rawUrl, 'https://placeholder.invalid');
-  } catch {
-    return rawUrl;
-  }
+  const url = safeUrl(rawUrl);
+  if (!url) return rawUrl;
 
   url.hostname = url.hostname.toLowerCase();
 
@@ -126,12 +101,10 @@ export function canonicalize(rawUrl: string): string {
 
   url.hash = '';
 
-  // Strip the placeholder if the input was relative, otherwise keep origin.
   return url.toString();
 }
 
 function globMatch(input: string, pattern: string): boolean {
-  // Escape regex specials except `*`, then turn `*` into `.*`.
   const escaped = pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*');
   try {
     return new RegExp(`^${escaped}$`).test(input);

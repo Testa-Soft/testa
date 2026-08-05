@@ -26,8 +26,12 @@
  *                                                  variations' cumulative weights.
  */
 
-import { SEED, xxhash32 } from '../../utils/xxhash.ts';
+import { bucketOf, pickByWeight } from '@testa-platform/experiment-core';
 import * as cookies from '../cookies.ts';
+
+// Re-exported for the pixel's public API; the implementation is shared with the
+// middleware via experiment-core so both hosts bucket identically.
+export { bucketOf };
 
 export interface Variation {
   variation_id: number;
@@ -135,7 +139,7 @@ export function assign(experiment: Experiment, ctx: AssignContext): AssignResult
     };
   }
 
-  const variation = pickByWeight(experiment.variations, bucket - excludedRangeEnd);
+  const variation = pickByWeight(experiment.variations, bucket - excludedRangeEnd, traffic);
   if (variation === null) {
     return {
       variationId: EXCLUDED_VARIATION_ID,
@@ -175,26 +179,6 @@ export function recordExposure(experiment: Experiment, now: number = Date.now())
     { count: counter.count + 1, window_start_ts: counter.window_start_ts },
     windowSec,
   );
-}
-
-export function bucketOf(visitorId: string, experimentId: number): number {
-  return xxhash32(`${visitorId}:${experimentId}`, SEED) % 100;
-}
-
-function pickByWeight(variations: Variation[], bucketWithinIncluded: number): Variation | null {
-  // Sort by variation_id for stability: weights map to deterministic ranges
-  // even if the admin reorders the list in the UI.
-  const sorted = [...variations].sort((a, b) => a.variation_id - b.variation_id);
-  const total = sorted.reduce((sum, v) => sum + v.weight, 0);
-  if (total <= 0) return null;
-  // bucketWithinIncluded is in [0, traffic_allocation). Map to [0, total).
-  const target = (bucketWithinIncluded * total) / 100;
-  let cumulative = 0;
-  for (const v of sorted) {
-    cumulative += v.weight;
-    if (target < cumulative) return v;
-  }
-  return sorted[sorted.length - 1] ?? null;
 }
 
 function windowDurationMs(window: FrequencyWindow): number {

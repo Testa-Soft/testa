@@ -28,12 +28,19 @@
  *   - Same-page anchor changes (treated as no-op redirects).
  */
 
+import {
+  buildRedirectUrl,
+  canonicalize,
+  hasRedirected,
+  markRedirected,
+  matchesForMode,
+  matchesUrl,
+  mergeParams,
+  resolveMode,
+} from '@testa-platform/experiment-core';
 import type { VariationChange } from '@testa-platform/shared-types';
+import { cookieStore } from '../cookies.ts';
 import { type RedirectBreadcrumb, logRedirect } from './breadcrumbs.ts';
-import { buildRedirectUrl, resolveMode } from './build-url.ts';
-import { hasRedirected, markRedirected } from './dedup.ts';
-import { canonicalize, matchesForMode, matchesUrl } from './match.ts';
-import { mergeParams } from './merge-params.ts';
 
 export interface RedirectInputs {
   experiment_id: number | string;
@@ -77,7 +84,7 @@ export function evaluateAndApply(
 
   logRedirect({ ts: Date.now(), phase: 'evaluate', ...base });
 
-  if (hasRedirected(experiment_id)) {
+  if (hasRedirected(cookieStore, experiment_id)) {
     logRedirect({ ts: Date.now(), phase: 'already_redirected', ...base });
     return { fired: false, reason: 'already_redirected' };
   }
@@ -118,7 +125,7 @@ export function evaluateAndApply(
   }
 
   logRedirect({ ts: Date.now(), phase: 'match', ...base, to: finalUrl });
-  markRedirected(experiment_id);
+  markRedirected(cookieStore, experiment_id);
 
   try {
     navigate(finalUrl);

@@ -31,6 +31,13 @@ import * as consentMod from './consent.ts';
 import * as cookies from './cookies.ts';
 import { type Teardown, applyVariation } from './experiments/apply/index.ts';
 import {
+  type CrossDomainExperiment,
+  applyInboundCrossDomain,
+  eligibleCrossDomainExperiments,
+  installCrossDomainLinkTagging,
+  tagUrl,
+} from './experiments/cross-domain.ts';
+import {
   type AssignedExperiment,
   type GoalController,
   createGoalController,
@@ -42,7 +49,7 @@ import {
   recordExposure,
 } from './experiments/traffic.ts';
 import { pushLeadToDataLayer } from './legacy/data-layer.ts';
-import { fireEvent, installLegacy, publishLoaded } from './legacy/index.ts';
+import { fireEvent, installLegacy, publishLoaded, publishUuid } from './legacy/index.ts';
 import { snapshot as healthSnapshot } from './network/health.ts';
 import { initOutbox, count as outboxCount, enqueue as outboxEnqueue } from './network/outbox.ts';
 import { installTransport, notifyEnqueue, shipEventSync } from './network/transport.ts';
@@ -132,6 +139,11 @@ export function hydrate(): void {
   // before the cycle reads consent state.
   guardedInit('drain_queue', drainQueue);
 
+  // Apply an inbound `_testa_cd` bridge BEFORE the first cycle so assign()'s
+  // cookie-first lookup returns the carried variation instead of re-rolling
+  // traffic (3.3.3 `applyCrossDomainTracking`, called before `r.process()`).
+  guardedInit('cross_domain_inbound', applyInboundBridge);
+
   // Preview mode short-circuits the normal experiment cycle: fetch + apply the
   // draft changes for the preview session and skip assignment entirely (3.3.3
   // `?testa_preview=true` guard).
@@ -148,6 +160,10 @@ export function hydrate(): void {
     guardedInit('first_cycle', () => {
       runExperimentCycle();
     });
+    // Tag outbound cross-domain links after the first cycle has resolved
+    // assignments (3.3.3 `setupCrossDomainLinkTracking`). The install self-covers
+    // SPA navigation via its interval + MutationObserver, so it runs once.
+    guardedInit('cross_domain_links', installCrossDomainLinks);
   }
 
   // Fire load() once. SPA re-evaluations don't re-fire it.
@@ -544,6 +560,79 @@ function installSpaListener(): void {
   });
 }
 
+// ─── cross-domain (_testa_cd) ──────────────────────────────────────────────
+
+let _crossDomainUninstall: (() => void) | null = null;
+
+/** True when the experiment's session cookie is still within its sliding TTL. */
+function isSessionActive(experimentId: number | string): boolean {
+  const ts = cookies.getSession(experimentId);
+  return ts !== null && Date.now() - ts < cookies.SESSION_LENGTH_SEC * 1000;
+}
+
+/** Experiments whose assignment should ride along on cross-domain navigations. */
+function eligibleCrossDomain(): CrossDomainExperiment[] {
+  const project = readProject();
+  if (!project) return [];
+  return eligibleCrossDomainExperiments(project.experiments, {
+    getAssignment: cookies.getAssignment,
+    isSessionActive,
+  });
+}
+
+/**
+ * Read an inbound `_testa_cd` param on the landing URL and apply the carried
+ * assignments (assignment cookie + session bump), then strip the param from the
+ * address bar. The uuid is mirrored in-memory only — the uuid cookie stays
+ * worker-owned (see cross-domain.ts for the rationale).
+ */
+function applyInboundBridge(): void {
+  if (typeof location === 'undefined') return;
+  const result = applyInboundCrossDomain(
+    { search: location.search, pathname: location.pathname, hash: location.hash },
+    {
+      setAssignment: cookies.setAssignment,
+      bumpSession: cookies.bumpSession,
+      onUuid: (uuid) => publishUuid(uuid),
+    },
+  );
+  if (result.cleanedUrl !== null && typeof history !== 'undefined' && history.replaceState) {
+    history.replaceState({}, '', result.cleanedUrl);
+  }
+}
+
+/** Install outbound-link tagging (idempotent; disposes any prior install). */
+function installCrossDomainLinks(): void {
+  if (typeof document === 'undefined') return;
+  _crossDomainUninstall?.();
+  _crossDomainUninstall = installCrossDomainLinkTagging({
+    doc: document,
+    eligible: eligibleCrossDomain,
+    getUuid: cookies.getUuid,
+    currentHref: () => (typeof location !== 'undefined' ? location.href : ''),
+  });
+}
+
+/**
+ * Build the navigate function the redirect engine uses for a redirecting
+ * variation. For `cross_domain` experiments crossing a domain boundary, the
+ * destination is tagged with `_testa_cd` before we replace (3.3.3
+ * `createRedirectUrl`'s cross-domain branch); otherwise the plain replace.
+ */
+function redirectNavigate(crossDomain: boolean): (url: string) => void {
+  return (url: string) => {
+    if (typeof window === 'undefined') return;
+    let finalUrl = url;
+    if (crossDomain) {
+      const uuid = cookies.getUuid();
+      if (uuid) {
+        finalUrl = tagUrl(url, location.href, eligibleCrossDomain(), uuid);
+      }
+    }
+    window.location.replace(finalUrl);
+  };
+}
+
 // ─── experiment resolution cycle ───────────────────────────────────────────
 
 /**
@@ -655,12 +744,15 @@ export function runExperimentCycle(): void {
     // here so the redirect engine never reads `location` directly during
     // its merge (Next.js race-condition fix).
     if (redirectChange?.type === 'redirect') {
-      const outcome = evaluateRedirect({
-        experiment_id: expConfig.experiment_id,
-        variation_id: result.variationId,
-        change: redirectChange,
-        currentUrl: typeof location !== 'undefined' ? location.href : '',
-      });
+      const outcome = evaluateRedirect(
+        {
+          experiment_id: expConfig.experiment_id,
+          variation_id: result.variationId,
+          change: redirectChange,
+          currentUrl: typeof location !== 'undefined' ? location.href : '',
+        },
+        redirectNavigate(expConfig.cross_domain === true),
+      );
       if (outcome.fired) {
         // Page is going away — abort the rest of the cycle.
         return;
@@ -883,6 +975,8 @@ export function __resetForTests(): void {
   _previewActive = false;
   _spaUninstall?.();
   _spaUninstall = null;
+  _crossDomainUninstall?.();
+  _crossDomainUninstall = null;
   _goals?.teardown();
   _goals = null;
   for (const t of _activeTeardowns) {

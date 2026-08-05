@@ -44,6 +44,37 @@ export interface ExperimentConfig {
   frequency_cap?: { max: number; window: 'session' | 'day' | 'week' | 'month' };
   /** Optional mutex-group name. Visitor in ≤1 active experiment per group. 4.0 only. */
   mutex_group?: string;
+  /**
+   * When true, the assignment is carried across domains: outbound links to
+   * other domains are tagged with `?_testa_cd=<encoded>` and the destination
+   * site's pixel applies the assignment without re-rolling traffic. Ported
+   * from 3.3.3 `exp.cross_domain`. See `runtime/experiments/cross-domain.ts`.
+   */
+  cross_domain?: boolean;
+  /**
+   * Split-URL targeting conditions (crobot `experiment_rules` type
+   * `targeting`). ALL must match for the visitor to be eligible (AND). Flat
+   * list, distinct from the 4.0 `audience` tree. See `runtime` targeting eval.
+   */
+  targeting?: TargetingCondition[];
+  /**
+   * Split-URL exclusion conditions (crobot `experiment_rules` type
+   * `exclusion`). If ANY matches, the visitor is excluded (OR).
+   */
+  exclusions?: TargetingCondition[];
+}
+
+/** A single flat targeting/exclusion condition (split-URL). */
+export interface TargetingCondition {
+  /**
+   * Dimension key: `utm_source` | `utm_medium` | `utm_campaign` | `utm_term` |
+   * `utm_content` | `utm_keyword` | `url` | `cookie` | `device` |
+   * `region_country`. The utm dimensions, url and cookie are derivable
+   * server-side; device is UA-derived; region_country needs a geo signal.
+   */
+  dimension: string;
+  operator: 'exact' | 'equals' | 'contains' | 'not_contains' | 'regex' | 'not_equals';
+  value: string;
 }
 
 export interface ExperimentRule {

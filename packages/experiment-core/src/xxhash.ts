@@ -1,16 +1,15 @@
 /**
- * xxhash32 — pure JavaScript implementation.
+ * xxhash32 — pure JavaScript implementation. Edge-Runtime safe (TextEncoder +
+ * Math.imul only; no Node crypto), so the middleware and the pixel bucket
+ * identically.
  *
- * Used for deterministic variation bucketing (`traffic.ts`). Picked over
- * Math.random() to eliminate Sample Ratio Mismatch drift and to enable
- * cross-device consistency, QA forcing, and audit (see project memory:
- * architecture_variation_bucketing.md).
+ * **This is a byte-for-byte copy of `apps/pixel/src/utils/xxhash.ts`.** Both
+ * MUST stay identical — same algorithm, same frozen `SEED` — or a visitor
+ * bucketed on the server gets re-bucketed in the browser and we break Sample
+ * Ratio Mismatch. Reconciling the two onto this single copy (pixel imports from
+ * here) is the tracked follow-up; until then, do NOT edit either in isolation.
  *
  * Reference: https://github.com/Cyan4973/xxHash/blob/dev/doc/xxhash_spec.md
- *
- * **`SEED` is a frozen constant.** Changing it would re-bucket every visitor
- * who doesn't have a cached `_testa_exp_<id>` cookie, instantly de-stabilizing
- * every running A/B test. Don't change it.
  */
 
 export const SEED = 0xab_cd_ef;
@@ -21,9 +20,7 @@ const PRIME32_3 = 0xc2_b2_ae_3d;
 const PRIME32_4 = 0x27_d4_eb_2f;
 const PRIME32_5 = 0x16_5667_b1;
 
-/**
- * Compute xxhash32 of a string. Returns an unsigned 32-bit integer.
- */
+/** Compute xxhash32 of a string. Returns an unsigned 32-bit integer. */
 export function xxhash32(input: string, seed: number = SEED): number {
   const bytes = new TextEncoder().encode(input);
   return xxhash32Bytes(bytes, seed);
@@ -65,7 +62,6 @@ function xxhash32Bytes(bytes: Uint8Array, seed: number): number {
     i += 1;
   }
 
-  // Finalize (avalanche).
   h32 ^= h32 >>> 15;
   h32 = mul32(h32, PRIME32_2);
   h32 ^= h32 >>> 13;
@@ -84,7 +80,7 @@ function rotl(x: number, n: number): number {
   return ((x << n) | (x >>> (32 - n))) >>> 0;
 }
 
-/** Multiplication that stays in 32-bit unsigned space. JS multiplies in float64. */
+/** Multiplication that stays in 32-bit unsigned space. */
 function mul32(a: number, b: number): number {
   return Math.imul(a, b) >>> 0;
 }
