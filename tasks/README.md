@@ -71,7 +71,18 @@ The Phase 3 corpus reflects the 2026-05-06 grilling decisions: anti-flicker is t
 
 ## Phase 4 — Collector read API
 
-To be scoped. The write path (Phase 1.4 + 1.5, PRD-001) is done, so the read API is unblocked — scope it once the Phase 1–3 stragglers (1.6, 1.7, 2.8, 3.11, 3.13, 3.15) are closed.
+Serves crobot's `MetricsProxyController` the pre-aggregated metrics in `packages/shared-types/src/metric-summary.ts` — AOV, RPV, sessions, funnel — computed over the ClickHouse daily MVs (migrations 003–007) + the `fx_rates` dictionary (1.6), gated by a service token. Read path drawn in `docs/architecture/diagrams/03-read-path.mmd`. Scoped 2026-08-05 against the existing MV/type contract.
+
+| ID | Task | Status | Blocked by |
+|---|---|---|---|
+| [4.1](./phase-4/4.1-read-api-auth-router.md) | Read-API router skeleton + `X-Service-Token` auth + param validation | pending | — |
+| [4.2](./phase-4/4.2-statistics-module.md) | Statistics — Welch's t-test + seeded bootstrap CI/significance | pending | — |
+| [4.3](./phase-4/4.3-query-layer-fx.md) | Metrics query layer over the MVs + FX conversion (`dictGet`) | pending | 4.1 |
+| [4.4](./phase-4/4.4-aov-endpoint.md) | `GET /api/v1/metrics/aov` → `AovSummary` (Welch significance) | pending | 4.2, 4.3 |
+| [4.5](./phase-4/4.5-rpv-endpoint.md) | `GET /api/v1/metrics/rpv` → `RpvSummary` (bootstrap, exposed-visitor denominator) | pending | 4.2, 4.3 |
+| [4.6](./phase-4/4.6-sessions-endpoint.md) | `GET /api/v1/metrics/sessions` → `SessionsSummary` | pending | 4.3 |
+| [4.7](./phase-4/4.7-funnel-endpoint.md) | `GET /api/v1/metrics/funnel` → `FunnelSummary` (`windowFunnel`) | pending | 4.3 |
+| [4.8](./phase-4/4.8-read-api-integration-tests.md) | Read-API integration tests (live CH) + coverage gate | pending | 4.4, 4.5, 4.6, 4.7 |
 
 ## Phase 5 — Crobot integration
 
