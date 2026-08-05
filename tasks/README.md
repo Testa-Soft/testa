@@ -98,8 +98,8 @@ Server-side, flicker-free split-URL redirects for Next.js customers (PRD [003](.
 | [N.2](./phase-N/N.2-testa-next-scaffold.md) | `@testa/next` scaffold + `createTestaMiddleware()` + `NextCookieStore` + `_testa_uuid` minting | done | N.1 |
 | [N.3](./phase-N/N.3-config-client.md) | `ConfigClient` — config fetch by projectId/host, in-instance TTL cache | done | N.2 |
 | [N.4](./phase-N/N.4-redirect-decision-loop.md) | Redirect decision loop (page-gate → targeting/exclusions → assign → 307 + cookies) | done | N.2, N.3 |
-| [N.5](./phase-N/N.5-soft-nav-m1-rsc.md) | Soft-nav M1 — middleware handles App-Router RSC navigation (prefetch-safe) | pending | N.4 |
-| [N.6](./phase-N/N.6-soft-nav-m2-router-guard.md) | Soft-nav M2 — `<TestaRouterGuard/>` client component (Pages-Router-static catch-all) | pending | N.4 |
+| [N.5](./phase-N/N.5-soft-nav-m1-rsc.md) | Soft-nav M1 — middleware handles App-Router RSC navigation (prefetch-safe) | done | N.4 |
+| [N.6](./phase-N/N.6-soft-nav-m2-router-guard.md) | Soft-nav M2 — `<TestaRouterGuard/>` client component (Pages-Router-static catch-all) | done | N.4 |
 | [N.7](./phase-N/N.7-demo-app-playwright.md) | Example Next.js app — App-router demo done; Playwright moved to [P.5](./phase-P/P.5-playwright-e2e.md) | in_progress | N.5, N.6 |
 | [N.8](./phase-N/N.8-crobot-config-publish.md) | crobot publish side — `GenerateProjectScriptHandler` POSTs to the config API (done, authed) | done | N.3 |
 

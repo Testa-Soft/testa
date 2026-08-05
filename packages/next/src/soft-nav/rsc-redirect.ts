@@ -1,0 +1,40 @@
+/**
+ * App-Router RSC soft-navigation detection (task N.5, M1 — the universal safety net).
+ *
+ * Mechanism (spike outcome):
+ *   On an App-Router `<Link>` transition the client router fetches the
+ *   destination's React Server Component payload with an `RSC: 1` header, and
+ *   middleware runs on that request. Returning a 307 makes the client router
+ *   FOLLOW the redirect to the variant — the control RSC is never returned, so
+ *   nothing paints. This is the same 307 a hard load uses, so hard loads and
+ *   committed RSC navs share ONE decision path in the middleware; these
+ *   predicates are informational (and scope the prefetch optimisation), not a
+ *   gate on the redirect itself.
+ *
+ * Prefetch boundary:
+ *   App Router prefetches `<Link>` targets on hover/viewport (`Next-Router-
+ *   Prefetch: 1`). Those also hit middleware and MUST NOT commit assignment
+ *   side effects — see `prefetch-guard.ts`.
+ *
+ * No `next/server` runtime import — typed against the `NextRequest` header shape
+ * so this stays unit-testable with a plain `Headers`-backed fake.
+ */
+
+export interface RequestLike {
+  headers: { get(name: string): string | null };
+}
+
+/** True for an App-Router RSC navigation/prefetch fetch (`RSC: 1`). */
+export function isRscRequest(req: RequestLike): boolean {
+  return req.headers.get('rsc') === '1';
+}
+
+/**
+ * True for a prefetch warm-up — App Router (`Next-Router-Prefetch: 1`) or the
+ * generic `Purpose: prefetch` hint. Checked BEFORE {@link isRscRequest} so a
+ * prefetched RSC request is treated as a prefetch (compute, never commit).
+ */
+export function isPrefetchRequest(req: RequestLike): boolean {
+  const h = req.headers;
+  return h.get('next-router-prefetch') === '1' || h.get('purpose') === 'prefetch';
+}

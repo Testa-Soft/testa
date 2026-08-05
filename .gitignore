@@ -47,3 +47,11 @@ pnpm-debug.log*
 # Generated
 generated/
 *.gen.ts
+
+# Local config bucket (static config files) + local data
+.data/
+
+# Next.js (demo app) build output + generated files
+.next/
+out/
+next-env.d.ts
