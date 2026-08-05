@@ -4,6 +4,43 @@ Routine / agent session log. Most recent at top. Each entry: what was picked up,
 
 ---
 
+## 2026-08-05 — No new pickups; all tasks in-flight
+
+### Context
+
+Nightly routine ran and found no unblocked pending tasks on `main`. All four lowest-numbered pending tasks (1.7, 2.8, 3.11, 3.13) already had green draft PRs from the 2026-08-04 run. No new code was written this cycle.
+
+### Open draft PRs (all CI green)
+
+| PR | Task | Checks | Notes |
+|---|---|---|---|
+| #7 `feat/1.7-tests` | 1.7 collector integration test (E2E: HTTP→Redis→Consumer→CH) | ✅ 5/5 | Canonical 1.7 PR |
+| #4 `feat/2.8-edge-integration` | 2.8 edge integration tests (count flush, alarm flush, bot drop, KV serve) | ✅ 5/5 | |
+| #6 `feat/3.11-spa-redirect-harness` | 3.11 SPA redirect harness (plain JS, RR6, Next 12/13/14) | ✅ 6/6 (incl. E2E Playwright) | |
+| #5 `feat/3.13-legacy-http` | 3.13 legacy HTTP calls (`/api/leads`, `/api/leads/convert`, `/api/pixel`) | ✅ 5/5 | |
+| #9 `chore/3.7-done-reconcile` | Mark 3.7 done — `custom-js.ts` + `legacy.ts` landed in commit `4744900` | ✅ 5/5 | |
+| #10 `chore/run-log-update-7` | Yesterday's run log + board status update | ✅ | Awaiting merge |
+| #8 `docs/phase-4-task-corpus` | Phase 4 task corpus (4.1–4.6) | open | Awaiting human review |
+| #3 `feat/1.7-collector-integration` | 1.7 duplicate (earlier attempt) | open | Recommend closing; #7 supersedes |
+
+### 3.7 status
+
+`custom-js.ts` (sandboxed AST evaluator) and `legacy.ts` (3.3.x targeting[] compat) are both fully implemented and tested in the repo. PR #9 closes out 3.7 as `done`. Once PR #9 merges, only 3.15 remains blocked on the in-flight task merges.
+
+### Stop condition reached
+
+> **No unblocked pending tasks remain** — all pending tasks are either in_progress with open green PRs or blocked by unmerged tasks.
+
+### What unblocks next
+
+Once the human merges PRs #7, #4, #6, #5 (and #9, #10):
+- **3.15** (Vitest coverage + Playwright golden flows) becomes unblocked (blocked_by: [3.1–3.13] all done)
+- **2.9** staging deploy becomes unblocked — but it's marked as a human-gated PAUSE
+
+Next autonomous pickup: **3.15**
+
+---
+
 ## 2026-05-07 (Thu) — Phase 3 continuation (lifecycle wired end-to-end)
 
 ### Context
