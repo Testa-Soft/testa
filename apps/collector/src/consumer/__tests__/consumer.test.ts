@@ -151,3 +151,106 @@ describe.skipIf(!liveRedis)('Consumer (live Redis, mocked CH)', () => {
     expect((pending as [number])[0]).toBe(0);
   });
 });
+
+/**
+ * Drives the long-running `start()` loop (not `tick()`), which owns the
+ * happy-path drain, the poison-retry drop, backoff, and clean `stop()`.
+ */
+describe.skipIf(!liveRedis)('Consumer.start / stop loop (live Redis, mocked CH)', () => {
+  async function enq(redis: Redis, ev: EnrichedEvent): Promise<void> {
+    await enqueue(ev, {
+      redis,
+      streamKey: STREAM,
+      streamMaxLen: 1000,
+      dedupNames: ['purchase'],
+      dedupTtlSec: 60,
+    });
+  }
+
+  async function waitFor(pred: () => boolean | Promise<boolean>, timeoutMs = 3000): Promise<void> {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      if (await pred()) return;
+      await new Promise((r) => setTimeout(r, 10));
+    }
+    throw new Error('waitFor timed out');
+  }
+
+  it('drains enqueued events end-to-end, then stops cleanly', async () => {
+    const redis = getClient();
+    const inserted: object[] = [];
+    const consumer = new Consumer({
+      redis,
+      insertEvents: async (rows) => {
+        inserted.push(...rows);
+      },
+      streamKey: STREAM,
+      consumerGroup: GROUP,
+      consumerName: 'c1',
+      batchSize: 10,
+      blockMs: 20,
+      log: () => undefined,
+    });
+    await consumer.ensureGroup();
+    await enq(redis, makeEvent());
+    await enq(redis, makeEvent());
+    await enq(redis, makeEvent());
+
+    const loop = consumer.start();
+    await waitFor(() => inserted.length === 3);
+    await consumer.stop();
+    await loop;
+
+    expect(inserted).toHaveLength(3);
+    const pending = await redis.xpending(STREAM, GROUP);
+    expect((pending as [number])[0]).toBe(0); // all ACKed
+  });
+
+  it('drops a poison batch after poisonRetries and ACKs it', async () => {
+    const redis = getClient();
+    let attempts = 0;
+    const consumer = new Consumer({
+      redis,
+      insertEvents: async () => {
+        attempts += 1;
+        throw new Error('CH permanently rejects this batch');
+      },
+      streamKey: STREAM,
+      consumerGroup: GROUP,
+      consumerName: 'c1',
+      batchSize: 10,
+      blockMs: 20,
+      backoffStartMs: 1,
+      backoffMaxMs: 4,
+      poisonRetries: 3,
+      log: () => undefined,
+    });
+    await consumer.ensureGroup();
+    await enq(redis, makeEvent());
+
+    const loop = consumer.start();
+    // Flush is retried until poisonRetries is hit; the failing batch is then ACKed (dropped).
+    await waitFor(() => attempts >= 3);
+    await consumer.stop();
+    await loop;
+
+    expect(attempts).toBeGreaterThanOrEqual(3); // failed poisonRetries times before dropping
+    const pending = await redis.xpending(STREAM, GROUP);
+    expect((pending as [number])[0]).toBe(0); // poison entry was dropped (ACKed)
+  });
+
+  it('stop() is a no-op when the loop was never started', async () => {
+    const redis = getClient();
+    const consumer = new Consumer({
+      redis,
+      insertEvents: async () => undefined,
+      streamKey: STREAM,
+      consumerGroup: GROUP,
+      consumerName: 'c1',
+      batchSize: 10,
+      blockMs: 20,
+      log: () => undefined,
+    });
+    await expect(consumer.stop()).resolves.toBeUndefined();
+  });
+});

@@ -143,4 +143,36 @@ describe('sign — pairs with edge signer', () => {
     expect(out).toMatch(/^[0-9a-f]{64}$/);
     expect(sign('hello', 'world-of-secrets-1234567')).toBe(out);
   });
+
+  // Pinned vectors — the expected hex is generated OUTSIDE this codebase so a
+  // silent change to the signing algorithm (digest, encoding, secret handling)
+  // is caught, not masked by sign()/verify() agreeing with each other.
+  // Reproduce:  printf '%s' "<body>" | openssl dgst -sha256 -hmac "<secret>" -r
+  it.each([
+    {
+      body: '{"signed_at":1730902400123,"events":[]}',
+      secret: 'test-secret-at-least-16-chars',
+      expected: 'b47aa2549805eec3a63adadfc87dbd7d3568e2931cf35afc74e0d046bdd263f0',
+    },
+    {
+      body: 'hello',
+      secret: 'world-of-secrets-1234567',
+      expected: 'a501bdc3bdcd709ffc55e7250b5127771bf5500fd96adf7d9687ba393f48e4e9',
+    },
+  ])('matches the openssl-pinned HMAC for $body', ({ body, secret, expected }) => {
+    expect(sign(body, secret)).toBe(expected);
+  });
+
+  it('verify accepts a body signed to the pinned vector', () => {
+    const body = '{"signed_at":1730902400123,"events":[]}';
+    const r = verify({
+      rawBody: body,
+      signature: 'b47aa2549805eec3a63adadfc87dbd7d3568e2931cf35afc74e0d046bdd263f0',
+      secret: 'test-secret-at-least-16-chars',
+      signedAtMs: 1730902400123,
+      nowMs: 1730902400123,
+      replayWindowMs: WINDOW,
+    });
+    expect(r).toEqual({ valid: true });
+  });
 });

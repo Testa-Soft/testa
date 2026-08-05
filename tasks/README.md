@@ -28,7 +28,8 @@ Foundation work was done in the seed commits before this task system existed. Se
 | [1.4](./phase-1/1.4-ingest-route.md) | `POST /_ingest` route + HMAC + Zod | done | 1.3 |
 | [1.5](./phase-1/1.5-consumer-worker.md) | Consumer worker (XREADGROUP → CH INSERT) | done | 1.1, 1.2, 1.3 |
 | [1.6](./phase-1/1.6-fx-rates.md) | FX rates sync + dictionary endpoint | done | 1.3 |
-| [1.7](./phase-1/1.7-tests.md) | Vitest coverage for ingest, consumer, replay | pending | 1.4, 1.5 |
+| [1.7](./phase-1/1.7-tests.md) | Vitest coverage for ingest, consumer, replay | done | 1.4, 1.5 |
+| [1.8](./phase-1/1.8-pageview-inexperiment-ttl.md) | page_view `in_experiment` column + differential TTL (PRD-002) | pending | 1.1 |
 
 ## Phase 2 — Edge worker
 
@@ -63,6 +64,8 @@ Foundation work was done in the seed commits before this task system existed. Se
 | [3.13](./phase-3/3.13-legacy-http-calls.md) | Legacy HTTP calls (`/api/leads`, `/api/leads/convert`, `/api/pixel`) | pending | 3.12 |
 | [3.14](./phase-3/3.14-bundle-build.md) | esbuild loader + runtime, content-hashed runtime URL | done | 3.1, 3.2 |
 | [3.15](./phase-3/3.15-test-coverage.md) | Vitest coverage + Playwright golden flows | pending | 3.1–3.13 |
+| [3.16](./phase-3/3.16-storage-consolidation.md) | Storage consolidation — one packed `_testa_exp` cookie (supersedes 3.3 per-experiment layout) | pending | 3.3 |
+| [3.16](./phase-3/3.16-pageview-emission.md) | page_view emission (`in_experiment`, 50/session cap, crawler guard) (PRD-002) | pending | 3.5, 3.8 |
 
 The Phase 3 corpus reflects the 2026-05-06 grilling decisions: anti-flicker is the customer's SmartCode's job (no shielding in 3.x); redirect engine is state-of-the-art and pulled forward (no 1:1 port of 3.6 redirect bugs); audience targeting uses the new `AudienceCondition` schema (`docs/reference/audience-schema.md`); event delivery uses an IndexedDB outbox + UUIDv7 + deterministic Redis stream IDs for dedup; `window.Analytica.*` is a frozen API surface (`docs/reference/legacy-globals-inventory.md`).
 
@@ -73,6 +76,36 @@ To be scoped. The write path (Phase 1.4 + 1.5, PRD-001) is done, so the read API
 ## Phase 5 — Crobot integration
 
 To be scoped (lives in `crobot` repo; tracked here for cross-repo coherence).
+
+## Phase N — Next.js split-URL middleware (`@testa/next`)
+
+Server-side, flicker-free split-URL redirects for Next.js customers (PRD [003](../docs/prds/003-nextjs-redirect-middleware.md)). **Scope grew well past the original v1** during the 2026-08-04 build: full split_url parity (traffic split + the `/100` bucketing bug fixed, targeting, rule exclusions, cross-domain inbound), the pixel⇄`experiment-core` merge (one shared impl — bucketing, packed cookie, redirect engine, cross-domain), `onVariationApplied`, and pre-prod hardening (see **Phase P**).
+
+| ID | Task | Status | Blocked by |
+|---|---|---|---|
+| [N.1](./phase-N/N.1-experiment-core-extraction.md) | Extract `packages/experiment-core` (+ pixel now imports it — full merge done) | done | — |
+| [N.2](./phase-N/N.2-testa-next-scaffold.md) | `@testa/next` scaffold + `createTestaMiddleware()` + `NextCookieStore` + `_testa_uuid` minting | done | N.1 |
+| [N.3](./phase-N/N.3-config-client.md) | `ConfigClient` — config fetch by projectId/host, in-instance TTL cache | done | N.2 |
+| [N.4](./phase-N/N.4-redirect-decision-loop.md) | Redirect decision loop (page-gate → targeting/exclusions → assign → 307 + cookies) | done | N.2, N.3 |
+| [N.5](./phase-N/N.5-soft-nav-m1-rsc.md) | Soft-nav M1 — middleware handles App-Router RSC navigation (prefetch-safe) | pending | N.4 |
+| [N.6](./phase-N/N.6-soft-nav-m2-router-guard.md) | Soft-nav M2 — `<TestaRouterGuard/>` client component (Pages-Router-static catch-all) | pending | N.4 |
+| [N.7](./phase-N/N.7-demo-app-playwright.md) | Example Next.js app — App-router demo done; Playwright moved to [P.5](./phase-P/P.5-playwright-e2e.md) | in_progress | N.5, N.6 |
+| [N.8](./phase-N/N.8-crobot-config-publish.md) | crobot publish side — `GenerateProjectScriptHandler` POSTs to the config API (done, authed) | done | N.3 |
+
+---
+
+## Phase P — Production hardening & deploy (`@testa/next` + collector)
+
+Making the split_url middleware + config API prod-ready and deployable. Envable host (`createTestaMiddleware({ projectId })`), config-API Bearer-token auth, and exposure tracking (`→ /api/leads`) already LANDED (2026-08-04); the tasks below are what remains before prod.
+
+| ID | Task | Status | Blocked by |
+|---|---|---|---|
+| [P.1](./phase-P/P.1-config-read-path-cdn.md) | Prod config read path — nginx-static + Cloudflare CDN (R2 `ConfigStore` optional) | pending | — |
+| [P.2](./phase-P/P.2-deploy-collector.md) | Deploy collector (Forge daemon + nginx + Cloudflare; Hetzner, not Fly — see task) | pending | P.1 |
+| [P.3](./phase-P/P.3-publish-testa-next.md) | Publish `@testa/next` to npm (tsup bundle ready) + client README | pending | — |
+| [P.4](./phase-P/P.4-server-pageview-conversions.md) | Server-side `page_view` goal conversions (exposure already done; click/custom = pixel) | pending | — |
+| [P.5](./phase-P/P.5-playwright-e2e.md) | Playwright browser e2e — no-flicker, sticky, targeting, traffic split, cross-domain | pending | — |
+| [P.6](./phase-P/P.6-cookie-migration-plan.md) | Live-traffic cookie migration — 3.x per-experiment → packed `_testa_exp` | pending | — |
 
 ---
 
