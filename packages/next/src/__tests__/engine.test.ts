@@ -91,9 +91,9 @@ describe('runExperiments', () => {
 describe('targeting + exclusions (entry gates only)', () => {
   const targeted = () => {
     const config = splitUrlConfig();
-    config.experiments[0]!.targeting = [
-      { dimension: 'utm_source', operator: 'contains', value: 'facebook' },
-    ];
+    const exp = config.experiments[0];
+    if (!exp) throw new Error('fixture must have at least one experiment');
+    exp.targeting = [{ dimension: 'utm_source', operator: 'contains', value: 'facebook' }];
     return config;
   };
 
@@ -120,9 +120,9 @@ describe('targeting + exclusions (entry gates only)', () => {
 
   it('excludes a FRESH visitor when an exclusion condition matches', () => {
     const config = splitUrlConfig();
-    config.experiments[0]!.exclusions = [
-      { dimension: 'utm_source', operator: 'contains', value: 'internal' },
-    ];
+    const exp = config.experiments[0];
+    if (!exp) throw new Error('fixture must have at least one experiment');
+    exp.exclusions = [{ dimension: 'utm_source', operator: 'contains', value: 'internal' }];
     const res = run(memoryStore(), { config, url: 'https://acme.com/pricing?utm_source=internal' });
     expect(res.applied).toHaveLength(0);
   });
@@ -131,7 +131,9 @@ describe('targeting + exclusions (entry gates only)', () => {
 describe('cross-domain inbound', () => {
   it('applies a carried assignment for a cross_domain experiment', () => {
     const config = splitUrlConfig();
-    config.experiments[0]!.cross_domain = true;
+    const exp = config.experiments[0];
+    if (!exp) throw new Error('fixture must have at least one experiment');
+    exp.cross_domain = true;
     // base64 of {"u":"vis","exps":[{"e":101,"v":2}]}
     const payload = btoa(JSON.stringify({ u: 'vis', exps: [{ e: 101, v: 2 }] }));
     const store = memoryStore();
