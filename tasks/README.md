@@ -76,7 +76,7 @@ Serves crobot's `MetricsProxyController` the pre-aggregated metrics in `packages
 | ID | Task | Status | Blocked by |
 |---|---|---|---|
 | [4.1](./phase-4/4.1-read-api-auth-router.md) | Read-API router skeleton + `X-Service-Token` auth + param validation | pending | — |
-| [4.2](./phase-4/4.2-statistics-module.md) | Statistics — Welch's t-test + seeded bootstrap CI/significance | pending | — |
+| [4.2](./phase-4/4.2-statistics-module.md) | Statistics — Welch's t-test + seeded bootstrap CI/significance | in_progress | — |
 | [4.3](./phase-4/4.3-query-layer-fx.md) | Metrics query layer over the MVs + FX conversion (`dictGet`) | pending | 4.1 |
 | [4.4](./phase-4/4.4-aov-endpoint.md) | `GET /api/v1/metrics/aov` → `AovSummary` (Welch significance) | pending | 4.2, 4.3 |
 | [4.5](./phase-4/4.5-rpv-endpoint.md) | `GET /api/v1/metrics/rpv` → `RpvSummary` (bootstrap, exposed-visitor denominator) | pending | 4.2, 4.3 |
