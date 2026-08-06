@@ -23,6 +23,7 @@ const envSchema = z.object({
   INGEST_REPLAY_WINDOW: z.coerce.number().int().positive().default(300),
 
   SERVICE_TOKEN: z.string().min(16).default('dev-service-token-change-me-1234'),
+  METRICS_SERVICE_TOKEN: z.string().min(16).default('dev-metrics-token-change-me-1234'),
 
   FX_API_URL: z.string().url().default('https://api.frankfurter.app'),
 
@@ -63,6 +64,10 @@ export const config = {
   },
 
   serviceToken: parsed.SERVICE_TOKEN,
+
+  metrics: {
+    serviceToken: parsed.METRICS_SERVICE_TOKEN,
+  },
 
   fxApiUrl: parsed.FX_API_URL,
 

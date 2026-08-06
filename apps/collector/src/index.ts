@@ -14,6 +14,7 @@ import { ping as pingCh } from './db/clickhouse.ts';
 import { makeFxRatesHandler } from './fx/route.ts';
 import { syncToday } from './fx/sync.ts';
 import { makeIngestHandler } from './ingest/route.ts';
+import { metricsRouter } from './metrics/router.ts';
 import { ping as pingRedis, redis } from './redis/client.ts';
 
 const app = new Hono();
@@ -35,7 +36,7 @@ app.get('/_internal/health', async (c) => {
 
 app.post('/_ingest', makeIngestHandler({ getRedis: () => redis() }));
 
-app.get('/api/v1/metrics/:metric', (c) => c.text('not implemented', 501)); // Phase 4.1
+app.route('/api/v1/metrics', metricsRouter);
 
 app.get('/_internal/fx-rates', makeFxRatesHandler());
 
