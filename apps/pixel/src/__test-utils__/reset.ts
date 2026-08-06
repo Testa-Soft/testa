@@ -12,6 +12,7 @@
  *   beforeEach(async () => { await resetPixelState(); });
  */
 
+import { vi } from 'vitest';
 import { consent } from '../runtime/consent.ts';
 import {
   __clearPendingEventsForTests,
@@ -25,6 +26,10 @@ import { __resetForTests as resetRedirectBreadcrumbs } from '../runtime/redirect
 const WINDOW_KEYS = ['_testa', '_testa_patched_v4', 'cfPrefill', 'cfGeoData', '__pixel_debug'];
 
 export async function resetPixelState(): Promise<void> {
+  // Stub fetch so fire-and-forget calls (postLead, transport) don't produce
+  // unhandled rejections in happy-dom. Tests that inspect fetch behavior
+  // override this with their own vi.stubGlobal or vi.mocked(fetch) in beforeEach.
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true }));
   resetWindowGlobals();
   clearAllCookies();
   clearStorages();
