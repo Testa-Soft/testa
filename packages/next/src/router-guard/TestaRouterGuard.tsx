@@ -20,6 +20,7 @@ import { ASSIGNMENT_COOKIE } from '@testa-platform/experiment-core';
 import type { ProjectConfig } from '@testa-platform/shared-types';
 import { useRouter } from 'next/router';
 import { useEffect } from 'react';
+import { readClientCookie } from '../client-cookie.ts';
 import { installRouterGuard } from './use-cookie-assignment.ts';
 
 export interface TestaRouterGuardProps {
@@ -33,7 +34,7 @@ export function TestaRouterGuard({ config }: TestaRouterGuardProps): null {
   useEffect(() => {
     return installRouterGuard(router, {
       config,
-      getCookieValue: () => readCookie(ASSIGNMENT_COOKIE),
+      getCookieValue: () => readClientCookie(ASSIGNMENT_COOKIE),
       toAbsoluteUrl: (path) =>
         typeof window !== 'undefined' ? new URL(path, window.location.origin).href : path,
     });
@@ -42,10 +43,4 @@ export function TestaRouterGuard({ config }: TestaRouterGuardProps): null {
   }, [router, config]);
 
   return null;
-}
-
-function readCookie(name: string): string | null {
-  if (typeof document === 'undefined') return null;
-  const match = document.cookie.match(new RegExp(`(?:^|; )${name}=([^;]*)`));
-  return match?.[1] ? decodeURIComponent(match[1]) : null;
 }

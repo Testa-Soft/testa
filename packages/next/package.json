@@ -19,6 +19,11 @@
       "types": "./dist/router-guard/index.d.ts",
       "import": "./dist/router-guard/index.js",
       "require": "./dist/router-guard/index.cjs"
+    },
+    "./experiments": {
+      "types": "./dist/experiments/index.d.ts",
+      "import": "./dist/experiments/index.js",
+      "require": "./dist/experiments/index.cjs"
     }
   },
   "files": ["dist", "README.md"],
@@ -40,10 +45,12 @@
     }
   },
   "devDependencies": {
+    "@testa-platform/dom": "workspace:*",
     "@testa-platform/experiment-core": "workspace:*",
     "@testa-platform/shared-types": "workspace:*",
     "@types/react": "18.3.12",
     "@vitest/coverage-v8": "2.1.5",
+    "happy-dom": "15.11.4",
     "next": "15.0.3",
     "react": "18.3.1",
     "tsup": "8.3.5",

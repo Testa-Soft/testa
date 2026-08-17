@@ -1,0 +1,28 @@
+{
+  "name": "@testa-platform/dom",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Browser render layer for experiments: DOM variation apply (css/html/text/attr/js/hide/insert/move) + anti-flicker shielding. Pairs with experiment-core (the host-neutral decision layer).",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "clean": "rm -rf .turbo coverage *.tsbuildinfo"
+  },
+  "devDependencies": {
+    "@testa-platform/shared-types": "workspace:*",
+    "@vitest/coverage-v8": "2.1.5",
+    "happy-dom": "15.11.4",
+    "typescript": "5.6.3",
+    "vitest": "2.1.5"
+  }
+}

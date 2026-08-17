@@ -144,3 +144,38 @@ describe('cross-domain inbound', () => {
     expect(res.redirectTo).toContain('/pricing-v2');
   });
 });
+
+describe('DOM experiments (no redirect variation) — assigned server-side', () => {
+  // A DOM-only experiment: variants carry a css change, none redirect.
+  function domConfig(): ReturnType<typeof splitUrlConfig> {
+    const config = splitUrlConfig();
+    const experiment = config.experiments[0];
+    if (experiment) {
+      experiment.variations = [
+        { variation_id: 1, weight: 0, changes: [] },
+        {
+          variation_id: 2,
+          weight: 100,
+          changes: [{ type: 'css', selector: '#hero', styles: { color: 'red' } }],
+        },
+      ];
+    }
+    return config;
+  }
+
+  it('assigns + writes the cookie for a DOM-only experiment, without redirecting', () => {
+    const store = memoryStore();
+    const res = run(store, { config: domConfig() });
+    expect(res.redirectTo).toBeUndefined(); // no redirect change → no 307
+    expect(res.applied).toHaveLength(1);
+    expect(res.applied[0]).toMatchObject({ experimentId: 101, variationId: 2, redirected: false });
+    // Sticky assignment persisted so the client applies the same variant.
+    expect(store.get(ASSIGNMENT_COOKIE)).toContain('101');
+  });
+
+  it('is sticky: a returning DOM-experiment visitor keeps the variant', () => {
+    const store = memoryStore({ [ASSIGNMENT_COOKIE]: '101.2.0.0' });
+    const res = run(store, { config: domConfig() });
+    expect(res.applied[0]).toMatchObject({ variationId: 2, firstAssignment: false });
+  });
+});

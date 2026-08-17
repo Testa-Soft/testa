@@ -102,6 +102,11 @@ Server-side, flicker-free split-URL redirects for Next.js customers (PRD [003](.
 | [N.6](./phase-N/N.6-soft-nav-m2-router-guard.md) | Soft-nav M2 — `<TestaRouterGuard/>` client component (Pages-Router-static catch-all) | done | N.4 |
 | [N.7](./phase-N/N.7-demo-app-playwright.md) | Example Next.js app — App-router demo done; Playwright moved to [P.5](./phase-P/P.5-playwright-e2e.md) | in_progress | N.5, N.6 |
 | [N.8](./phase-N/N.8-crobot-config-publish.md) | crobot publish side — `GenerateProjectScriptHandler` POSTs to the config API (done, authed) | done | N.3 |
+| [N.9](./phase-N/N.9-dom-apply-extraction.md) | Extract `packages/dom` (apply engine, ex-pixel) + anti-flicker shield | done | N.1 |
+| [N.10](./phase-N/N.10-html-experiments.md) | HTML/DOM experiments in `@testa/next` — `<TestaExperiments/>` + `<TestaShield/>`; engine assigns DOM experiments server-side | done | N.4, N.9 |
+| [N.11](./phase-N/N.11-html-experiments-e2e.md) | HTML-experiment demo + Playwright e2e (no-flicker, sticky, multi-experiment) | pending | N.10 |
+
+**HTML/DOM experiments (2026-08-17).** Extended the plugin past split-URL: `@testa-platform/dom` (the pixel's apply engine — css/html/text/attr/js/hide/insert/move — extracted to a shared package, plus a new anti-flicker shield) now backs a client `<TestaExperiments/>` that applies the visitor's assigned variant, cookie-first. The middleware assigns DOM experiments server-side (deterministic, no client coin-flip) and the client renders them; `<TestaShield/>` hides content pre-paint with a timeout fallback so there's no control→variant flash. Same `@testa-platform/dom` + `experiment-core` will back a Vite/Lovable client SDK later.
 
 ---
 

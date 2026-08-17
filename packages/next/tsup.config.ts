@@ -7,7 +7,7 @@ export default defineConfig({
   // `index` is the server/edge middleware surface (react-free). `router-guard`
   // is the optional client `<TestaRouterGuard/>` entry — kept separate so the
   // middleware bundle never pulls in react / next/router.
-  entry: ['src/index.ts', 'src/router-guard/index.ts'],
+  entry: ['src/index.ts', 'src/router-guard/index.ts', 'src/experiments/index.ts'],
   format: ['esm', 'cjs'],
   // Override the base tsconfig's `incremental` (tsup's dts tsc rejects it).
   dts: { compilerOptions: { incremental: false, composite: false } },

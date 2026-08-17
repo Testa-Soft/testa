@@ -1,11 +1,18 @@
 /**
- * Host-neutral split-URL decision engine. No Next import — pure over a
+ * Host-neutral experiment decision engine. No Next import — pure over a
  * `CookieStore` + request context, fully unit-testable with fakes.
  *
- * Per request, in split-URL order:
+ * Assigns BOTH split-URL (redirect) and DOM (css/html/text/… ) experiments in
+ * one pass: it always buckets + writes the sticky `_testa_exp` cookie so the
+ * assignment is fixed server-side, and only *redirects* when the assigned
+ * variation carries a redirect change. DOM changes aren't applied here (no DOM
+ * on the server) — the client `<TestaExperiments/>` reads the same cookie and
+ * applies them, cookie-first (no re-bucket).
+ *
+ * Per request:
  *   0. Apply inbound cross-domain assignments (`?_testa_cd=…`) so a visitor
  *      carried from another domain keeps their variation.
- *   1. For each ACTIVE experiment with a redirect variation:
+ *   1. For each ACTIVE experiment:
  *      a. Page gate — only enroll when the current URL matches the experiment's
  *         page rule (experiment's own match mode). No enrollment off-page.
  *      b. Entry gates (ONLY for a visitor not yet assigned — cookie-first wins,
@@ -13,10 +20,11 @@
  *         exclusions (any match → skip), targeting (must be eligible, AND).
  *      c. Assign (cookie-first + deterministic bucket). State lives in the packed
  *         `_testa_exp` cookie — the SAME format the v2 pixel uses, so assignment
- *         is preserved identically across the middleware and the pixel.
+ *         is preserved identically across the middleware, the client, and the pixel.
  *      d. Emit a `variation_applied` event.
  *      e. If the assigned variation is a redirect, resolve the destination
- *         (variation's match mode) and redirect. First redirect wins.
+ *         (variation's match mode) and redirect. First redirect wins; DOM-only
+ *         experiments fall through and accumulate (several can apply per page).
  *
  * The caller (middleware) MUST only invoke this on a real navigation, never a
  * prefetch — the engine commits cookies via the store and fires listener events.
@@ -36,12 +44,7 @@ import {
   passesTargeting,
   resolveRedirectDestination,
 } from '@testa-platform/experiment-core';
-import type {
-  ExperimentConfig,
-  ExperimentRule,
-  ProjectConfig,
-  VariationConfig,
-} from '@testa-platform/shared-types';
+import type { ExperimentRule, ProjectConfig, VariationConfig } from '@testa-platform/shared-types';
 
 /** Payload passed to the `onVariationApplied` listener when a visitor is enrolled. */
 export interface VariationAppliedEvent {
@@ -92,7 +95,6 @@ export function runExperiments(ctx: EngineContext, store: CookieStore): EngineRe
 
   for (const experiment of ctx.config.experiments) {
     if (experiment.status !== 'active') continue;
-    if (!hasRedirectVariation(experiment)) continue;
 
     // a. Page gate — only enroll on the experiment's page.
     if (!matchesPageRule(ctx.currentUrl, experiment.rules)) continue;
@@ -175,10 +177,6 @@ function matchesRule(url: string, rule: ExperimentRule): boolean {
   const mode =
     rule.match_type === 'contains' ? 'contains' : rule.match_type === 'regex' ? 'regex' : 'exact';
   return matchesForMode(url, rule.url_pattern, mode);
-}
-
-function hasRedirectVariation(experiment: ExperimentConfig): boolean {
-  return experiment.variations.some((v) => redirectChangeOf(v) !== undefined);
 }
 
 function redirectChangeOf(variation: VariationConfig): RedirectChange | undefined {

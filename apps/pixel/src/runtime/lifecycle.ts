@@ -29,7 +29,7 @@ import type { TestaDebugSnapshot } from '../loader/queue.ts';
 import { TRACKER_VERSION } from '../version.ts';
 import * as consentMod from './consent.ts';
 import * as cookies from './cookies.ts';
-import { type Teardown, applyVariation } from './experiments/apply/index.ts';
+import { type Teardown, applyVariation } from '@testa-platform/dom';
 import {
   type CrossDomainExperiment,
   applyInboundCrossDomain,
