@@ -70,6 +70,32 @@ describe('applyAppend', () => {
     expect(document.querySelector('.box')?.innerHTML).toBe('ab');
     expect((window as unknown as { __evil?: number }).__evil).toBeUndefined();
   });
+
+  it('teardown removes exactly the inserted nodes (idempotent re-apply)', () => {
+    document.body.innerHTML = '<div class="box"><span class="keep">orig</span></div>';
+    const teardown = applyAppend({
+      type: 'append_html',
+      selector: '.box',
+      content: '<b class="badge">x</b>',
+    });
+    expect(document.querySelectorAll('.box .badge').length).toBe(1);
+    teardown();
+    // Inserted node gone, original content untouched.
+    expect(document.querySelectorAll('.box .badge').length).toBe(0);
+    expect(document.querySelector('.box .keep')?.textContent).toBe('orig');
+  });
+
+  it('does NOT accumulate across re-applies (teardown then re-apply → one)', () => {
+    document.body.innerHTML = '<div class="box"></div>';
+    // Simulate a React effect re-running: apply, cleanup, apply, cleanup, apply.
+    let teardown = applyAppend({ type: 'append_html', selector: '.box', content: '<b>·</b>' });
+    for (let i = 0; i < 3; i++) {
+      teardown();
+      teardown = applyAppend({ type: 'append_html', selector: '.box', content: '<b>·</b>' });
+    }
+    expect(document.querySelectorAll('.box b').length).toBe(1);
+    teardown();
+  });
 });
 
 // ─── prepend_html ────────────────────────────────────────────────────────────

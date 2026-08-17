@@ -86,8 +86,11 @@ export function TestaExperiments({ config, previewApiUrl }: TestaExperimentsProp
     teardowns.push(...applyAssignedExperiments(config, readClientCookie(ASSIGNMENT_COOKIE)));
     revealShield();
     return dispose;
-    // Re-apply on route change (pathname); config/previewApiUrl identity is stable.
-  }, [config, pathname, previewApiUrl]);
+    // Keyed on `config.config_hash` (a stable string), NOT the `config` object —
+    // so a caller passing an inline config, a dev Fast Refresh, or a parent
+    // re-render doesn't re-run the effect and stack duplicate inserts. Re-runs
+    // only on a real config change or route change (pathname).
+  }, [config.config_hash, pathname, previewApiUrl]);
 
   return null;
 }
