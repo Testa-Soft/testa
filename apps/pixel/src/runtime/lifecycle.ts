@@ -48,6 +48,7 @@ import {
   assign,
   recordExposure,
 } from './experiments/traffic.ts';
+import { postLead, postLeadConvert } from './legacy-http.ts';
 import { pushLeadToDataLayer } from './legacy/data-layer.ts';
 import { fireEvent, installLegacy, publishLoaded, publishUuid } from './legacy/index.ts';
 import { snapshot as healthSnapshot } from './network/health.ts';
@@ -663,7 +664,18 @@ export function runExperimentCycle(): void {
   // Tear down last cycle's goal listeners; start a fresh controller for this
   // pass (SPA re-entry otherwise leaves stale click handlers attached).
   _goals?.teardown();
-  _goals = createGoalController({ track });
+  _goals = createGoalController({
+    track(name, props) {
+      track(name, props);
+      if (name === 'conversion' && props) {
+        const expId = props.experiment_id;
+        const goalId = props.goal_id;
+        if (typeof expId === 'number' && typeof goalId === 'number') {
+          void postLeadConvert(expId, goalId, cookies.getUuid());
+        }
+      }
+    },
+  });
 
   // Fire session_start (new session only) + page_view for this URL. These are
   // the raw events goals match against at query time; page_view also re-fires
@@ -776,6 +788,8 @@ export function runExperimentCycle(): void {
       experiment: expConfig.experiment_id,
       variation: result.variationId,
     });
+    // Mirror 3.6's POST /api/leads call on variation_applied (deduped per experiment).
+    void postLead(expConfig.experiment_id, result.variationId, ctx.visitor.uuidOrSession);
   }
 
   // Wire click + page_view goals for every assigned experiment. Click goals
