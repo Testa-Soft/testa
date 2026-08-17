@@ -11,10 +11,10 @@ const linkStyle = {
 export default function Home() {
   return (
     <main>
-      {/* Experiment 202 (HTML/DOM) targets #hero: change_html (text) + css
-          (color). The server-rendered control heading below is what a
-          non-variant visitor sees; the variant swaps it client-side, shielded. */}
-      <h1 id="hero">Welcome (control heading)</h1>
+      {/* Site-wide experiment 202 targets #hero: append_html badge + css.
+          The client applies it here and re-applies on each soft navigation —
+          watch the "✨ variant" badge appear on every page's heading. */}
+      <h1 id="hero">Home</h1>
 
       <p>
         This home page runs a <strong>client HTML experiment</strong> (crobot{' '}

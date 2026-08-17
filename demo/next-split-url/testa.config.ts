@@ -48,25 +48,30 @@ export const demoConfig: ProjectConfig = {
     },
     {
       experiment_id: 202,
-      title: 'Home hero HTML test',
+      title: 'Site-wide hero badge (HTML)',
       status: 'active',
       traffic_allocation: 100,
-      // Only enroll on the home page — URL ending in "/" (not /pricing etc.).
-      rules: [{ match_type: 'regex', url_pattern: '/$' }],
+      // Site-wide: enroll on any page. It only *shows* where #hero exists
+      // (home/features/about) — the pricing pages have no #hero, so it's a no-op
+      // there. The client re-applies on every soft navigation.
+      rules: [{ match_type: 'contains', url_pattern: '/' }],
       goals: [],
       variations: [
         { variation_id: 1, name: 'Control', weight: 0, changes: [] },
         {
           variation_id: 2,
-          name: 'Variant (crobot change_html + css)',
+          name: 'Variant (crobot append_html + css)',
           weight: 100,
           changes: [
             {
-              type: 'change_html',
+              type: 'append_html',
               selector: '#hero',
-              content: 'You’re seeing the <em>variant</em> 🎉',
+              content: ' <span class="testa-badge">✨ variant</span>',
             },
-            { type: 'css', content: '#hero{color:#c2185b}' },
+            {
+              type: 'css',
+              content: '.testa-badge{color:#c2185b;font-size:.55em;vertical-align:middle}',
+            },
           ],
         },
       ],
