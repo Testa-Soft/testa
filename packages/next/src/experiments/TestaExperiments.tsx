@@ -20,8 +20,8 @@
  * tested); this file is the React + App-Router glue.
  */
 
-import { type Teardown, applyVariation } from '@testa-platform/dom';
-import { ASSIGNMENT_COOKIE } from '@testa-platform/experiment-core';
+import { type Teardown, applyVariation } from '@testa-soft/dom';
+import { ASSIGNMENT_COOKIE } from '@testa-soft/experiment-core';
 import type { ProjectConfig } from '@testa-platform/shared-types';
 import { usePathname } from 'next/navigation';
 import { useEffect } from 'react';

@@ -43,7 +43,7 @@ import {
   matchesForMode,
   passesTargeting,
   resolveRedirectDestination,
-} from '@testa-platform/experiment-core';
+} from '@testa-soft/experiment-core';
 import type { ExperimentRule, ProjectConfig, VariationConfig } from '@testa-platform/shared-types';
 
 /** Payload passed to the `onVariationApplied` listener when a visitor is enrolled. */

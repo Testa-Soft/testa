@@ -20,7 +20,7 @@ import {
   canonicalize,
   parsePacked,
   resolveRedirectDestination,
-} from '@testa-platform/experiment-core';
+} from '@testa-soft/experiment-core';
 import type { ProjectConfig } from '@testa-platform/shared-types';
 
 export interface GuardResolveInput {

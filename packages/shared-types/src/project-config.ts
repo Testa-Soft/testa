@@ -94,7 +94,7 @@ export interface VariationConfig {
 /**
  * A variation's changes, in crobot's native shape — a flat `{ type, selector?,
  * content? }` per change, using crobot's own change-type names. The runtime
- * (`@testa-platform/dom`) consumes these verbatim, so there's NO lossy adapter
+ * (`@testa-soft/dom`) consumes these verbatim, so there's NO lossy adapter
  * between the crobot authoring model and what the browser applies.
  *
  * The split-URL `redirect` variant is the one exception: crobot's `url` change
@@ -102,7 +102,7 @@ export interface VariationConfig {
  * from the experiment's page URL and emits this engine-facing shape.
  */
 export type VariationChange =
-  // ── crobot DOM changes (applied by @testa-platform/dom) ──────────────────
+  // ── crobot DOM changes (applied by @testa-soft/dom) ──────────────────
   /** crobot `change_html` — set matched elements' innerHTML to `content`. */
   | { type: 'change_html'; selector: string; content: string }
   /** crobot `css` — inject `content` verbatim as a stylesheet (`<style>`). */

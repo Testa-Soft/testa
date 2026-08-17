@@ -1,4 +1,4 @@
-import { UUID_COOKIE } from '@testa-platform/experiment-core';
+import { UUID_COOKIE } from '@testa-soft/experiment-core';
 import { describe, expect, it } from 'vitest';
 import { ensureVisitorId } from '../uuid.ts';
 import { memoryStore } from './helpers.ts';

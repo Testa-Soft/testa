@@ -1,4 +1,4 @@
-import { ASSIGNMENT_COOKIE, UUID_COOKIE } from '@testa-platform/experiment-core';
+import { ASSIGNMENT_COOKIE, UUID_COOKIE } from '@testa-soft/experiment-core';
 import { describe, expect, it } from 'vitest';
 import { NextCookieStore } from '../cookie-store.ts';
 import { reqCookies, resCookies } from './helpers.ts';

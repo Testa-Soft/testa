@@ -1,4 +1,4 @@
-import { ASSIGNMENT_COOKIE } from '@testa-platform/experiment-core';
+import { ASSIGNMENT_COOKIE } from '@testa-soft/experiment-core';
 import { describe, expect, it } from 'vitest';
 import { runExperiments } from '../engine.ts';
 import { memoryStore, splitUrlConfig } from './helpers.ts';

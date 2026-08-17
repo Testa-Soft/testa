@@ -4,12 +4,12 @@
  * Client-side DOM apply (task: HTML experiments in @testa/next). Tests the
  * framework-agnostic core — cookie→assignment resolution + wiring into the
  * shared apply engine. The per-change appliers themselves are covered in
- * @testa-platform/dom; here we prove the cookie-first selection + end-to-end
+ * @testa-soft/dom; here we prove the cookie-first selection + end-to-end
  * "cookie → DOM mutated" wiring. The React glue (.tsx) is exercised by the demo
  * e2e.
  */
 
-import { ASSIGNMENT_COOKIE } from '@testa-platform/experiment-core';
+import { ASSIGNMENT_COOKIE } from '@testa-soft/experiment-core';
 import type { ProjectConfig, VariationChange } from '@testa-platform/shared-types';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { readClientCookie } from '../../client-cookie.ts';

@@ -4,7 +4,7 @@
  * through, prefetch is a no-op.
  */
 
-import { ASSIGNMENT_COOKIE } from '@testa-platform/experiment-core';
+import { ASSIGNMENT_COOKIE } from '@testa-soft/experiment-core';
 import { NextRequest } from 'next/server';
 import { describe, expect, it } from 'vitest';
 import { createTestaMiddleware } from '../middleware.ts';

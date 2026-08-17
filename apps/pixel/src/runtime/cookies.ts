@@ -26,7 +26,7 @@ import {
   type ExpState,
   parsePacked,
   serializePacked,
-} from '@testa-platform/experiment-core';
+} from '@testa-soft/experiment-core';
 import { SECONDS_PER_DAY, SECONDS_PER_HOUR, eraseValue, readValue, writeValue } from './storage.ts';
 
 /**

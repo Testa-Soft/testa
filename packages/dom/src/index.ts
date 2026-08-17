@@ -1,5 +1,5 @@
 /**
- * `@testa-platform/dom` — the browser render layer for experiments.
+ * `@testa-soft/dom` — the browser render layer for experiments.
  *
  * Pairs with `experiment-core` (the host-neutral decision layer): core decides
  * WHICH variation a visitor gets; this package RENDERS it in the DOM. Shared by

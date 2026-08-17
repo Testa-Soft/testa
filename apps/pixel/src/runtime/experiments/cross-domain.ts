@@ -35,7 +35,7 @@ import {
   type CrossDomainAssignment,
   decodeCrossDomain,
   encodeCrossDomainData,
-} from '@testa-platform/experiment-core';
+} from '@testa-soft/experiment-core';
 
 // Wire format (encode/decode + the `_testa_cd` param) is shared with the
 // middleware via experiment-core so pixel-tagged cross-domain links are honoured

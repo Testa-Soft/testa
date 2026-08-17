@@ -79,15 +79,15 @@ importers:
       '@playwright/test':
         specifier: 1.48.2
         version: 1.48.2
-      '@testa-platform/dom':
-        specifier: workspace:*
-        version: link:../../packages/dom
-      '@testa-platform/experiment-core':
-        specifier: workspace:*
-        version: link:../../packages/experiment-core
       '@testa-platform/shared-types':
         specifier: workspace:*
         version: link:../../packages/shared-types
+      '@testa-soft/dom':
+        specifier: workspace:*
+        version: link:../../packages/dom
+      '@testa-soft/experiment-core':
+        specifier: workspace:*
+        version: link:../../packages/experiment-core
       '@types/node':
         specifier: 22.9.0
         version: 22.9.0
@@ -170,15 +170,15 @@ importers:
 
   packages/next:
     devDependencies:
-      '@testa-platform/dom':
-        specifier: workspace:*
-        version: link:../dom
-      '@testa-platform/experiment-core':
-        specifier: workspace:*
-        version: link:../experiment-core
       '@testa-platform/shared-types':
         specifier: workspace:*
         version: link:../shared-types
+      '@testa-soft/dom':
+        specifier: workspace:*
+        version: link:../dom
+      '@testa-soft/experiment-core':
+        specifier: workspace:*
+        version: link:../experiment-core
       '@types/react':
         specifier: 18.3.12
         version: 18.3.12

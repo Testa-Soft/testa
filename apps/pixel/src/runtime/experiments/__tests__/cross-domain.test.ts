@@ -1,4 +1,4 @@
-import { decodeCrossDomain } from '@testa-platform/experiment-core';
+import { decodeCrossDomain } from '@testa-soft/experiment-core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   CROSS_DOMAIN_PARAM,

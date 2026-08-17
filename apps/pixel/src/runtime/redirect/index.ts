@@ -37,7 +37,7 @@ import {
   matchesUrl,
   mergeParams,
   resolveMode,
-} from '@testa-platform/experiment-core';
+} from '@testa-soft/experiment-core';
 import type { VariationChange } from '@testa-platform/shared-types';
 import { cookieStore } from '../cookies.ts';
 import { type RedirectBreadcrumb, logRedirect } from './breadcrumbs.ts';

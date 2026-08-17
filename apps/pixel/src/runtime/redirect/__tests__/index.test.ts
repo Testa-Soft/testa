@@ -1,4 +1,4 @@
-import { clearRedirected, markRedirected } from '@testa-platform/experiment-core';
+import { clearRedirected, markRedirected } from '@testa-soft/experiment-core';
 import type { VariationChange } from '@testa-platform/shared-types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { clearAllCookies, clearStorages } from '../../../__test-utils__/reset.ts';

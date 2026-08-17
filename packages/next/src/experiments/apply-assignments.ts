@@ -4,7 +4,7 @@
  * The middleware already bucketed the visitor and wrote the sticky `_testa_exp`
  * cookie (server-side, deterministic — no client coin-flip). This reads that
  * cookie, finds each experiment the visitor is assigned to a variant of, and
- * applies the variant's DOM changes via `@testa-platform/dom` — the same apply
+ * applies the variant's DOM changes via `@testa-soft/dom` — the same apply
  * engine the pixel uses. It NEVER re-buckets and never writes the cookie.
  *
  * Redirect changes are skipped here: those are the middleware's job (server-side
@@ -12,8 +12,8 @@
  * changes only.
  */
 
-import { type Teardown, applyVariation } from '@testa-platform/dom';
-import { EXCLUDED_VARIATION_ID, parsePacked } from '@testa-platform/experiment-core';
+import { type Teardown, applyVariation } from '@testa-soft/dom';
+import { EXCLUDED_VARIATION_ID, parsePacked } from '@testa-soft/experiment-core';
 import type { ProjectConfig, VariationChange } from '@testa-platform/shared-types';
 
 export interface AssignedExperiment {

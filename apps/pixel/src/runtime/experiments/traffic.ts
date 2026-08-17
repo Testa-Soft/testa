@@ -26,7 +26,7 @@
  *                                                  variations' cumulative weights.
  */
 
-import { bucketOf, pickByWeight } from '@testa-platform/experiment-core';
+import { bucketOf, pickByWeight } from '@testa-soft/experiment-core';
 import * as cookies from '../cookies.ts';
 
 // Re-exported for the pixel's public API; the implementation is shared with the

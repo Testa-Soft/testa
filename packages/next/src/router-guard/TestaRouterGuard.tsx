@@ -16,7 +16,7 @@
  * tested); this file is only the React + `next/router` glue.
  */
 
-import { ASSIGNMENT_COOKIE } from '@testa-platform/experiment-core';
+import { ASSIGNMENT_COOKIE } from '@testa-soft/experiment-core';
 import type { ProjectConfig } from '@testa-platform/shared-types';
 import { useRouter } from 'next/router';
 import { useEffect } from 'react';

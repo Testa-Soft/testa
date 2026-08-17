@@ -6,7 +6,7 @@
  * hard load produce the same variant for the same visitor.
  */
 
-import { ASSIGNMENT_COOKIE } from '@testa-platform/experiment-core';
+import { ASSIGNMENT_COOKIE } from '@testa-soft/experiment-core';
 import { describe, expect, it } from 'vitest';
 import { memoryStore, splitUrlConfig } from '../../__tests__/helpers.ts';
 import { computePrefetchRedirect } from '../prefetch-guard.ts';

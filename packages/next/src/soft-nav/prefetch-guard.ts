@@ -21,7 +21,7 @@
  * cache so the eventual click lands flash-free — all without a side effect.
  */
 
-import type { CookieStore } from '@testa-platform/experiment-core';
+import type { CookieStore } from '@testa-soft/experiment-core';
 import { type EngineContext, runExperiments } from '../engine.ts';
 
 export interface PrefetchComputeInput {

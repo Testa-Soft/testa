@@ -7,7 +7,7 @@
  * is available in both the Edge Runtime and Node.
  */
 
-import { type CookieStore, UUID_COOKIE, UUID_TTL_SEC } from '@testa-platform/experiment-core';
+import { type CookieStore, UUID_COOKIE, UUID_TTL_SEC } from '@testa-soft/experiment-core';
 
 /** Return the existing visitor id, or mint + persist a new one. */
 export function ensureVisitorId(store: CookieStore): string {

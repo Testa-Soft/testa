@@ -11,7 +11,7 @@
  *   export const config = { matcher: ['/((?!_next/static|_next/image|favicon.ico|api).*)'] }
  */
 
-import { UUID_COOKIE } from '@testa-platform/experiment-core';
+import { UUID_COOKIE } from '@testa-soft/experiment-core';
 import { NextResponse } from 'next/server';
 import type { NextFetchEvent, NextRequest } from 'next/server';
 import { ConfigClient, type ConfigSource } from './config.ts';

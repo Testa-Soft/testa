@@ -13,7 +13,7 @@
  * experiment-core's `CookieStore` requires.
  */
 
-import type { CookieSetOptions, CookieStore } from '@testa-platform/experiment-core';
+import type { CookieSetOptions, CookieStore } from '@testa-soft/experiment-core';
 
 export interface ReadableCookies {
   get(name: string): { value: string } | undefined;

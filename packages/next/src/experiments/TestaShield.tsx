@@ -12,7 +12,7 @@
  * deployments don't need it — the middleware's 307 is already flicker-free.
  */
 
-import { type ShieldOptions, buildShieldSnippet } from '@testa-platform/dom';
+import { type ShieldOptions, buildShieldSnippet } from '@testa-soft/dom';
 
 export type TestaShieldProps = ShieldOptions;
 
