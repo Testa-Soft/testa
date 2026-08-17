@@ -44,8 +44,11 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           </Link>
         </nav>
         {children}
-        {/* Applies the visitor's assigned DOM experiments (cookie-first) + reveals the shield. */}
-        <TestaExperiments config={demoConfig} />
+        {/* Applies the visitor's assigned DOM experiments (cookie-first) + reveals the shield.
+            `previewApiUrl` enables `?testa_preview=true&testa_preview_token=…` to fetch + apply
+            draft changes from the backend (crobot). Here it points at the demo origin so the
+            preview endpoint can be stubbed; in production it's the crobot app URL. */}
+        <TestaExperiments config={demoConfig} previewApiUrl="http://localhost:3100" />
         <ReloadSentinel />
       </body>
     </html>

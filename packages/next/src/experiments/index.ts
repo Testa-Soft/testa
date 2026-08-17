@@ -15,3 +15,12 @@ export {
   revealShield,
 } from './apply-assignments.ts';
 export type { AssignedExperiment } from './apply-assignments.ts';
+export {
+  isPreviewRequested,
+  getPreviewToken,
+  fetchPreviewChanges,
+  normalizeChanges,
+  PREVIEW_FLAG,
+  PREVIEW_TOKEN,
+  PREVIEW_VARIATION_ID,
+} from './preview.ts';
