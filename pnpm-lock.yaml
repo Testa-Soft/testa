@@ -211,6 +211,40 @@ importers:
         specifier: 2.1.5
         version: 2.1.5(@types/node@22.9.0)(happy-dom@15.11.4)
 
+  packages/react:
+    dependencies:
+      '@testa-soft/dom':
+        specifier: workspace:*
+        version: link:../dom
+      '@testa-soft/experiment-core':
+        specifier: workspace:*
+        version: link:../experiment-core
+    devDependencies:
+      '@testa-platform/shared-types':
+        specifier: workspace:*
+        version: link:../shared-types
+      '@types/react':
+        specifier: 18.3.12
+        version: 18.3.12
+      '@vitest/coverage-v8':
+        specifier: 2.1.5
+        version: 2.1.5(vitest@2.1.5(@types/node@22.9.0)(happy-dom@15.11.4))
+      happy-dom:
+        specifier: 15.11.4
+        version: 15.11.4
+      react:
+        specifier: 18.3.1
+        version: 18.3.1
+      tsup:
+        specifier: 8.3.5
+        version: 8.3.5(postcss@8.5.14)(typescript@5.6.3)
+      typescript:
+        specifier: 5.6.3
+        version: 5.6.3
+      vitest:
+        specifier: 2.1.5
+        version: 2.1.5(@types/node@22.9.0)(happy-dom@15.11.4)
+
   packages/shared-types:
     devDependencies:
       typescript:

@@ -45,7 +45,7 @@
   },
   "publishConfig": {
     "access": "public",
-    "tag": "dev-master"
+    "tag": "latest"
   },
   "dependencies": {
     "@testa-soft/dom": "workspace:*",

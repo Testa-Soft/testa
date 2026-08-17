@@ -1,19 +1,25 @@
 {
-  "name": "@testa-soft/dom",
+  "name": "@testa-soft/react",
   "version": "0.0.1-dev.0",
   "type": "module",
-  "description": "Browser render layer for experiments: crobot-native DOM variation apply (change_html/css/hide_element/append_html/prepend_html/move_element_*) + anti-flicker shielding. Pairs with @testa-soft/experiment-core.",
+  "description": "Testa client-side A/B testing for React + Vite SPAs (Lovable and other no-server apps).",
   "license": "UNLICENSED",
   "sideEffects": false,
   "main": "./src/index.ts",
+  "module": "./src/index.ts",
   "types": "./src/index.ts",
-  "exports": {
-    ".": {
-      "types": "./src/index.ts",
-      "default": "./src/index.ts"
-    }
-  },
   "files": ["dist"],
+  "scripts": {
+    "build": "rm -rf dist && tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepublishOnly": "npm run build",
+    "clean": "rm -rf dist .turbo coverage *.tsbuildinfo"
+  },
+  "peerDependencies": {
+    "react": ">=18"
+  },
   "publishConfig": {
     "access": "public",
     "tag": "latest",
@@ -28,18 +34,16 @@
       }
     }
   },
-  "scripts": {
-    "build": "tsup",
-    "typecheck": "tsc --noEmit",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "prepublishOnly": "npm run build",
-    "clean": "rm -rf dist .turbo coverage *.tsbuildinfo"
+  "dependencies": {
+    "@testa-soft/dom": "workspace:*",
+    "@testa-soft/experiment-core": "workspace:*"
   },
   "devDependencies": {
     "@testa-platform/shared-types": "workspace:*",
+    "@types/react": "18.3.12",
     "@vitest/coverage-v8": "2.1.5",
     "happy-dom": "15.11.4",
+    "react": "18.3.1",
     "tsup": "8.3.5",
     "typescript": "5.6.3",
     "vitest": "2.1.5"
