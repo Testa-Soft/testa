@@ -5,7 +5,7 @@ const nextConfig = {
   reactStrictMode: true,
   // The workspace packages ship raw .ts (no build step) — let Next transpile them.
   transpilePackages: [
-    '@testa/next',
+    '@testa-soft/next',
     '@testa-platform/experiment-core',
     '@testa-platform/shared-types',
   ],

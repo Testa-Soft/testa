@@ -1,4 +1,4 @@
-# Testa split-URL demo (`@testa/next`)
+# Testa split-URL demo (`@testa-soft/next`)
 
 A minimal Next.js App Router app wired to the Testa split-URL middleware.
 

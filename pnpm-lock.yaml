@@ -109,7 +109,7 @@ importers:
 
   demo/next-split-url:
     dependencies:
-      '@testa/next':
+      '@testa-soft/next':
         specifier: workspace:*
         version: link:../../packages/next
       next:

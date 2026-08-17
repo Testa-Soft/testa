@@ -1,7 +1,7 @@
 /**
  * @testa-platform/experiment-core — host-agnostic experiment decision core.
  *
- * Consumed by `@testa/next` (server) and (as a follow-up) the pixel (browser),
+ * Consumed by `@testa-soft/next` (server) and (as a follow-up) the pixel (browser),
  * both supplying their own `CookieStore`. Keep this module free of any host
  * globals (`window`, `document`, `NextRequest`, …).
  */

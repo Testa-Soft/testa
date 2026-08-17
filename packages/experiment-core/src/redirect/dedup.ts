@@ -6,7 +6,7 @@
  * already redirected for experiment X" and skips re-entry.
  *
  * Storage: `_testa_redirected_<expId>` cookie. `markRedirected` is a COMMITTING
- * write — the caller must skip it on prefetch requests (see @testa/next).
+ * write — the caller must skip it on prefetch requests (see @testa-soft/next).
  */
 
 import { type CookieStore, REDIRECTED_TTL_SEC, redirectedName } from '../cookie-store.ts';

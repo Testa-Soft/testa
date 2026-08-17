@@ -1,4 +1,4 @@
-import { TestaExperiments, TestaShield } from '@testa/next/experiments';
+import { TestaExperiments, TestaShield } from '@testa-soft/next/experiments';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { demoConfig } from '../testa.config.ts';
@@ -6,7 +6,7 @@ import { ReloadSentinel } from './reload-sentinel.tsx';
 
 export const metadata = {
   title: 'Testa split-URL + HTML demo',
-  description: '@testa/next split-URL redirects + client HTML/DOM experiments',
+  description: '@testa-soft/next split-URL redirects + client HTML/DOM experiments',
 };
 
 const navLink = { marginRight: 16, textDecoration: 'none' };

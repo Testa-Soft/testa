@@ -1,4 +1,4 @@
-import { createTestaMiddleware } from '@testa/next';
+import { createTestaMiddleware } from '@testa-soft/next';
 import { demoConfig } from './testa.config.ts';
 
 export const middleware = createTestaMiddleware({

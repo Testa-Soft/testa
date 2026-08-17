@@ -1,7 +1,7 @@
 /**
  * The `CookieStore` seam — the single abstraction that lets the same decision
  * core run in the browser (pixel, `document.cookie`) and on the server
- * (`@testa/next`, `NextRequest`/`NextResponse`) without either host leaking
+ * (`@testa-soft/next`, `NextRequest`/`NextResponse`) without either host leaking
  * into the core logic.
  *
  * Implementations MUST make writes visible to subsequent reads within the same
