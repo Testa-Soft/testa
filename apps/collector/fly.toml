@@ -1,0 +1,59 @@
+# Fly.io config for the Testa collector (config API + ingest).
+#
+# Deploy from the REPO ROOT so the Docker build context is the repo root
+# (the Dockerfile does `COPY apps/collector/src`):
+#
+#   fly deploy --config apps/collector/fly.toml --dockerfile apps/collector/Dockerfile
+#
+# One-time setup:
+#   fly apps create testa-collector
+#   fly volumes create testa_config --size 1 --region <your-region>   # config bucket
+#   fly secrets set CONFIG_WRITE_TOKEN=<long-random>                    # crobot's Bearer token
+#   # optional (only if this instance also runs ingest/metrics):
+#   # fly secrets set CLICKHOUSE_URL=... REDIS_URL=...
+#
+# Then point config.testa-soft.tech at the app (Cloudflare CNAME -> testa-collector.fly.dev),
+# ideally with caching ON for GET /api/v1/config/* so reads are served from the edge.
+
+app = "testa-collector"
+primary_region = "fra"  # pick one near crobot / your users
+
+[build]
+  dockerfile = "Dockerfile"  # resolved relative to this file; context is the deploy cwd (repo root)
+
+[env]
+  ENVIRONMENT = "production"
+  PORT = "8090"
+  CONFIG_DIR = "/app/.data/configs"
+  # CONFIG_WRITE_TOKEN is a SECRET — set via `fly secrets set`, never here.
+
+# Persist the config bucket ({projectId}.json files) across deploys/restarts.
+[[mounts]]
+  source = "testa_config"
+  destination = "/app/.data/configs"
+
+[http_service]
+  internal_port = 8090
+  force_https = true
+  # Cost control: idle machines suspend (fast resume), so you only pay while
+  # serving. Safe here because reads are cacheable at the CDN and writes are rare.
+  auto_stop_machines = "suspend"
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [http_service.concurrency]
+    type = "requests"
+    soft_limit = 200
+    hard_limit = 250
+
+# Health check hits the collector's existing endpoint.
+[[http_service.checks]]
+  method = "get"
+  path = "/_internal/health"
+  interval = "30s"
+  timeout = "5s"
+  grace_period = "10s"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"
