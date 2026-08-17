@@ -1,25 +1,24 @@
 /**
- * Variation apply — composition root that walks `change[]` and dispatches to
- * the per-type appliers (css/html/text/attribute/js).
+ * Variation apply — composition root that walks a variation's `change[]` and
+ * dispatches to the per-type appliers. Change shapes are crobot-native
+ * (`@testa-platform/shared-types` `VariationChange`): the runtime consumes what
+ * crobot authors, no adapter in between.
  *
- * Returns a list of teardown functions for the appliers that watch the DOM
- * (text, attribute, html). The caller (lifecycle's experiment cycle) collects
- * these and disconnects the observers when the next cycle starts, so a SPA
- * route change doesn't leave stale watchers piling up.
+ * Returns teardown functions for the appliers that watch the DOM; the caller
+ * (the pixel's lifecycle / the `@testa/next` client) collects these and
+ * disconnects the observers when the next cycle starts, so a SPA route change
+ * doesn't leave stale watchers piling up.
  *
- * `redirect` change type is NOT handled here. The redirect engine (Phase 3.10)
- * is a separate concern that runs BEFORE variation apply.
+ * The `redirect` change (crobot `url`) is NOT applied here — the split-URL
+ * redirect engine (experiment-core) runs BEFORE variation apply.
  */
 
 import type { VariationChange } from '@testa-platform/shared-types';
-import { type AttributeChange, applyAttribute } from './attribute.ts';
 import { type CssChange, applyCss } from './css.ts';
 import { type HideChange, applyHide } from './hide.ts';
-import { type HtmlChange, applyHtml } from './html.ts';
+import { type ChangeHtmlChange, applyChangeHtml } from './html.ts';
 import { type AppendChange, type PrependChange, applyAppend, applyPrepend } from './insert.ts';
-import { type JsChange, applyJs } from './js.ts';
 import { type MoveChange, applyMove } from './move.ts';
-import { type TextChange, applyText } from './text.ts';
 
 export type Teardown = () => void;
 
@@ -37,7 +36,7 @@ export function applyVariation(
       const teardown = applyOne(variationId, change);
       if (teardown) teardowns.push(teardown);
     } catch (err) {
-      // eslint-disable-next-line no-console
+      // biome-ignore lint/suspicious/noConsole: applier failure must be visible but non-fatal
       console.error('[testa] applier threw:', err);
     }
   }
@@ -47,51 +46,35 @@ export function applyVariation(
 function applyOne(variationId: number | string, change: VariationChange): Teardown | null {
   switch (change.type) {
     case 'css':
+      // CSS uses a global <style> tag — no DOM watcher, no teardown.
       applyCss(variationId, change as CssChange);
-      // CSS doesn't watch the DOM (uses a global <style> tag). No teardown.
       return null;
 
-    case 'text':
-      return applyText(change as TextChange);
+    case 'change_html':
+      return applyChangeHtml(change as ChangeHtmlChange);
 
-    case 'attribute':
-      return applyAttribute(change as AttributeChange);
-
-    case 'html':
-      return applyHtml(change as HtmlChange);
-
-    case 'js':
-      applyJs(change as JsChange);
-      return null;
-
-    case 'hide':
-      // Watches the DOM (late-render parity with 3.3.3's retry loop); returns
-      // a teardown the caller disposes on the next cycle.
+    case 'hide_element':
       return applyHide(change as HideChange);
 
-    case 'append':
+    case 'append_html':
       return applyAppend(change as AppendChange);
 
-    case 'prepend':
+    case 'prepend_html':
       return applyPrepend(change as PrependChange);
 
-    case 'move':
+    case 'move_element_append':
+    case 'move_element_prepend':
       return applyMove(change as MoveChange);
 
     case 'redirect':
-      // Phase 3.10 owns redirect application. Variation apply ignores it.
+      // Split-URL redirect (crobot `url`) is the experiment-core engine's job.
       return null;
   }
 }
 
-export {
-  applyAppend,
-  applyAttribute,
-  applyCss,
-  applyHide,
-  applyHtml,
-  applyJs,
-  applyMove,
-  applyPrepend,
-  applyText,
-};
+export { applyCss } from './css.ts';
+export { applyChangeHtml, stripScriptTags } from './html.ts';
+export { applyHide } from './hide.ts';
+export { applyAppend, applyPrepend } from './insert.ts';
+export { applyMove } from './move.ts';
+export { eachMatching, safeQuerySelectorAll } from './dom.ts';

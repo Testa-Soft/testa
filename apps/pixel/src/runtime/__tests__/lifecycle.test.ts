@@ -158,12 +158,12 @@ describe('runExperimentCycle — DOM mutation (3.9 integration)', () => {
       {
         variation_id: 100,
         weight: 50,
-        changes: [{ type: 'css', selector: '.cta', styles: { color: 'red' } }],
+        changes: [{ type: 'css', content: '.cta{color:red}' }],
       },
       {
         variation_id: 200,
         weight: 50,
-        changes: [{ type: 'css', selector: '.cta', styles: { color: 'blue' } }],
+        changes: [{ type: 'css', content: '.cta{color:blue}' }],
       },
     ];
     (window as unknown as { cfPrefill: unknown }).cfPrefill = { project: config };
@@ -172,7 +172,8 @@ describe('runExperimentCycle — DOM mutation (3.9 integration)', () => {
     const styleTag = document.querySelector('style[data-testa-css]');
     expect(styleTag).not.toBeNull();
     expect(styleTag?.textContent).toContain('.cta');
-    expect(styleTag?.textContent).toMatch(/color: (red|blue)/);
+    // crobot `css` content is injected verbatim (no reformatting).
+    expect(styleTag?.textContent).toMatch(/color:(red|blue)/);
   });
 });
 

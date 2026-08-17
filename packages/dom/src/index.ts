@@ -6,6 +6,11 @@
  * the standalone pixel, the `@testa/next` client component, and any future
  * client SDK, so every surface applies variations identically.
  *
+ * Change shapes are crobot-native (`shared-types` `VariationChange`):
+ * `change_html`, `css`, `hide_element`, `append_html`, `prepend_html`,
+ * `move_element_append`, `move_element_prepend` — same names + `content` field
+ * crobot authors, so there's no adapter between authoring and apply.
+ *
  * v1 surface:
  *   - `applyVariation` — walk a variation's `change[]` and mutate the DOM;
  *     returns teardowns for the DOM-watching appliers (caller disposes them on
@@ -26,14 +31,11 @@ export { applyVariation } from './apply/index.ts';
 export type { Teardown } from './apply/index.ts';
 export {
   applyAppend,
-  applyAttribute,
+  applyChangeHtml,
   applyCss,
   applyHide,
-  applyHtml,
-  applyJs,
   applyMove,
   applyPrepend,
-  applyText,
 } from './apply/index.ts';
 export { eachMatching, safeQuerySelectorAll } from './apply/dom.ts';
 export { stripScriptTags } from './apply/html.ts';

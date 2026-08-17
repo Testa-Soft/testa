@@ -28,7 +28,7 @@
   },
   "files": ["dist", "README.md"],
   "scripts": {
-    "build": "tsup",
+    "build": "rm -rf dist && tsup && node scripts/add-use-client.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",

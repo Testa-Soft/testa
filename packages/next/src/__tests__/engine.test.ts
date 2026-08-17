@@ -156,7 +156,7 @@ describe('DOM experiments (no redirect variation) — assigned server-side', () 
         {
           variation_id: 2,
           weight: 100,
-          changes: [{ type: 'css', selector: '#hero', styles: { color: 'red' } }],
+          changes: [{ type: 'css', content: '#hero{color:red}' }],
         },
       ];
     }

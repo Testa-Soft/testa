@@ -65,7 +65,7 @@ function projectWithRedirect(opts: { fromUrl: string; toUrl: string }): ProjectC
             weight: 100,
             changes: [
               { type: 'redirect', from_url: opts.fromUrl, to_url: opts.toUrl },
-              { type: 'css', selector: '#never-applied', styles: { color: 'red' } },
+              { type: 'css', content: '#never-applied{color:red}' },
             ],
           },
         ],

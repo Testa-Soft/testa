@@ -11,10 +11,20 @@ const linkStyle = {
 export default function Home() {
   return (
     <main>
-      <h1>Testa split-URL demo</h1>
+      {/* Experiment 202 (HTML/DOM) targets #hero: change_html (text) + css
+          (color). The server-rendered control heading below is what a
+          non-variant visitor sees; the variant swaps it client-side, shielded. */}
+      <h1 id="hero">Welcome (control heading)</h1>
+
       <p>
-        The middleware runs an active split-URL experiment on <code>/pricing</code>. If you're
-        bucketed to the variant, you're redirected server-side to <code>/pricing-v2</code>.
+        This home page runs a <strong>client HTML experiment</strong> (crobot{' '}
+        <code>change_html</code> + <code>css</code>). The middleware assigns it server-side; the{' '}
+        <code>&lt;TestaExperiments/&gt;</code> component applies it, shielded against flicker — so
+        you should never see the control heading flash.
+      </p>
+
+      <p>
+        <code>/pricing</code> runs a separate <strong>split-URL</strong> experiment (server 307).
       </p>
 
       <p style={{ display: 'flex', gap: 12, margin: '20px 0' }}>
@@ -24,12 +34,6 @@ export default function Home() {
         <a href="/pricing" style={linkStyle}>
           Go to /pricing (hard nav — a)
         </a>
-      </p>
-
-      <p style={{ color: '#666', fontSize: 14 }}>
-        Click the <strong>soft nav</strong> link and watch the client session id below: if it stays
-        the same when you land on the variant, the middleware redirect was followed without a full
-        reload. Compare with the <strong>hard nav</strong> link (always reloads).
       </p>
     </main>
   );

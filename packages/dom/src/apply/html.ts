@@ -1,36 +1,29 @@
 /**
- * HTML variation: replace `el.innerHTML` with the customer-supplied HTML.
+ * crobot `change_html` change: replace `el.innerHTML` with `content` for every
+ * match (current + late-rendered). crobot uses this for both copy and markup
+ * changes — `content` is treated as HTML.
  *
- * Customers using this know they're injecting HTML — that's the contract.
- * We do strip `<script>` tags as a defense-in-depth measure: a script tag
- * inside innerHTML doesn't execute (browsers ignore it for security), but
- * we strip it anyway so customers don't get confused why their JS isn't
- * running and so a future change to that browser behavior doesn't surprise
- * us. Customers who need JS use the `js` change type.
- *
- * `<iframe>`, `<object>`, `<embed>` are NOT stripped — customers legitimately
- * embed YouTube and similar.
+ * `<script>` tags are stripped (defense-in-depth): a script inside innerHTML
+ * doesn't execute anyway, but stripping keeps behaviour predictable. `<iframe>`/
+ * `<object>`/`<embed>` are NOT stripped (customers embed YouTube etc.).
  */
 
+import type { VariationChange } from '@testa-platform/shared-types';
 import { eachMatching } from './dom.ts';
 
-export interface HtmlChange {
-  type: 'html';
-  selector: string;
-  html: string;
-}
+export type ChangeHtmlChange = Extract<VariationChange, { type: 'change_html' }>;
 
-export function applyHtml(change: HtmlChange): () => void {
-  const sanitized = stripScriptTags(change.html);
+export function applyChangeHtml(change: ChangeHtmlChange): () => void {
+  const sanitized = stripScriptTags(change.content);
   return eachMatching(change.selector, (el) => {
     el.innerHTML = sanitized;
   });
 }
 
 /**
- * Strip `<script>...</script>` (any case, any attributes) from the HTML.
- * A regex is sufficient — it's a defense-in-depth measure on top of the
- * browser's own innerHTML behavior, not the only line of defense.
+ * Strip `<script>...</script>` (any case/attributes) from the HTML. A regex is
+ * sufficient — a defense-in-depth measure on top of the browser's own innerHTML
+ * behaviour, not the only line of defense.
  */
 export function stripScriptTags(html: string): string {
   return html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '');

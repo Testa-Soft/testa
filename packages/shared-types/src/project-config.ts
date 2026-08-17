@@ -91,11 +91,33 @@ export interface VariationConfig {
   changes: VariationChange[];
 }
 
+/**
+ * A variation's changes, in crobot's native shape — a flat `{ type, selector?,
+ * content? }` per change, using crobot's own change-type names. The runtime
+ * (`@testa-platform/dom`) consumes these verbatim, so there's NO lossy adapter
+ * between the crobot authoring model and what the browser applies.
+ *
+ * The split-URL `redirect` variant is the one exception: crobot's `url` change
+ * carries only the destination (`content`), so the collector derives `from_url`
+ * from the experiment's page URL and emits this engine-facing shape.
+ */
 export type VariationChange =
-  | { type: 'css'; selector: string; styles: Record<string, string> }
-  | { type: 'html'; selector: string; html: string }
-  | { type: 'text'; selector: string; text: string }
-  | { type: 'js'; code: string }
+  // ── crobot DOM changes (applied by @testa-platform/dom) ──────────────────
+  /** crobot `change_html` — set matched elements' innerHTML to `content`. */
+  | { type: 'change_html'; selector: string; content: string }
+  /** crobot `css` — inject `content` verbatim as a stylesheet (`<style>`). */
+  | { type: 'css'; content: string; global?: boolean }
+  /** crobot `hide_element` — `display:none` on matched elements. */
+  | { type: 'hide_element'; selector: string }
+  /** crobot `append_html` — `insertAdjacentHTML('beforeend', content)`. */
+  | { type: 'append_html'; selector: string; content: string }
+  /** crobot `prepend_html` — `insertAdjacentHTML('afterbegin', content)`. */
+  | { type: 'prepend_html'; selector: string; content: string }
+  /** crobot `move_element_append` — move matched els under target selector `content` (append). */
+  | { type: 'move_element_append'; selector: string; content: string }
+  /** crobot `move_element_prepend` — move matched els under target selector `content` (prepend). */
+  | { type: 'move_element_prepend'; selector: string; content: string }
+  // ── split-URL redirect (crobot `url`; `from_url` derived from the page rule) ──
   | {
       type: 'redirect';
       from_url: string;
@@ -108,16 +130,7 @@ export type VariationChange =
        * - `regex`: treat `from_url` as a regex; expand `$1..$n` backrefs into `to_url`.
        */
       url_match_type?: 'exact' | 'contains' | 'query' | 'regex';
-    }
-  | { type: 'attribute'; selector: string; name: string; value: string }
-  /** 3.3.3 `hide_element` — sets `display:none` on matched elements. */
-  | { type: 'hide'; selector: string }
-  /** 3.3.3 `append_html` — `insertAdjacentHTML('beforeend')`. */
-  | { type: 'append'; selector: string; html: string }
-  /** 3.3.3 `prepend_html` — `insertAdjacentHTML('afterbegin')`. */
-  | { type: 'prepend'; selector: string; html: string }
-  /** 3.3.3 `move_element_append`/`move_element_prepend` — relocate matched els under `target`. */
-  | { type: 'move'; selector: string; target: string; position: 'append' | 'prepend' };
+    };
 
 export interface GoalConfig {
   goal_id: number;

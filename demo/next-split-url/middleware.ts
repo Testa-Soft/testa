@@ -1,12 +1,13 @@
 import { createTestaMiddleware } from '@testa/next';
+import { demoConfig } from './testa.config.ts';
 
 export const middleware = createTestaMiddleware({
-  // A real client integration is just this line (host defaults to the package's
-  // built-in prod host). Here we point `host` at the local collector.
+  // Inline config → zero infra (no collector/crobot needed to run the demo).
+  // A real integration passes only `{ projectId }` and fetches from the config
+  // host; the middleware assigns split-URL AND DOM experiments the same way.
   projectId: '12345',
-  host: 'http://localhost:8090',
-  trackingHost: 'http://localhost', // local crobot serves /api/leads
-  cacheTtlMs: 1000,
+  config: demoConfig,
+  tracking: false, // no local /api/leads in the zero-infra demo
   secureCookies: false, // local http dev
 });
 

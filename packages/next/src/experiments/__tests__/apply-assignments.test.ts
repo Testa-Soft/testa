@@ -19,15 +19,11 @@ import {
   revealShield,
 } from '../apply-assignments.ts';
 
-const cssChange = (selector: string, styles: Record<string, string>): VariationChange => ({
-  type: 'css',
+const cssChange = (content: string): VariationChange => ({ type: 'css', content });
+const htmlChange = (selector: string, content: string): VariationChange => ({
+  type: 'change_html',
   selector,
-  styles,
-});
-const textChange = (selector: string, text: string): VariationChange => ({
-  type: 'text',
-  selector,
-  text,
+  content,
 });
 const redirectChange = (): VariationChange => ({
   type: 'redirect',
@@ -35,7 +31,7 @@ const redirectChange = (): VariationChange => ({
   to_url: 'https://acme.com/b',
 });
 
-/** Config with a single active DOM experiment: v1 control (no changes), v2 = css+text. */
+/** Config with a single active DOM experiment: v1 control (no changes), v2 = css+change_html. */
 function domConfig(over: { status?: 'active' | 'paused' } = {}): ProjectConfig {
   return {
     project_id: 1,
@@ -56,7 +52,7 @@ function domConfig(over: { status?: 'active' | 'paused' } = {}): ProjectConfig {
           {
             variation_id: 2,
             weight: 50,
-            changes: [cssChange('#hero', { color: 'red' }), textChange('#cta', 'Buy now')],
+            changes: [cssChange('#hero{color:red}'), htmlChange('#cta', 'Buy now')],
           },
         ],
       },
@@ -103,7 +99,7 @@ describe('resolveAssignedExperiments — cookie-first selection', () => {
   it('filters out redirect changes (those are the middleware’s job)', () => {
     const config = domConfig();
     const variant = config.experiments[0]?.variations[1];
-    if (variant) variant.changes = [redirectChange(), cssChange('#x', { top: '0' })];
+    if (variant) variant.changes = [redirectChange(), cssChange('#x{top:0}')];
     const assigned = resolveAssignedExperiments(config, '101.2.0.0');
     expect(assigned[0]?.changes).toHaveLength(1);
     expect(assigned[0]?.changes[0]?.type).toBe('css');
