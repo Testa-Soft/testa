@@ -47,9 +47,11 @@
     "access": "public",
     "tag": "dev-master"
   },
-  "devDependencies": {
+  "dependencies": {
     "@testa-soft/dom": "workspace:*",
-    "@testa-soft/experiment-core": "workspace:*",
+    "@testa-soft/experiment-core": "workspace:*"
+  },
+  "devDependencies": {
     "@testa-platform/shared-types": "workspace:*",
     "@types/react": "18.3.12",
     "@vitest/coverage-v8": "2.1.5",

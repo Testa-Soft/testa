@@ -20,6 +20,10 @@ export default defineConfig({
   clean: true,
   sourcemap: true,
   treeshake: true,
-  noExternal: [/@testa-platform\//],
-  external: ['next', 'react'],
+  // shared-types is types-only → bundle it (inlined into the dts). The engine
+  // packages are real runtime dependencies now (@testa-soft/experiment-core +
+  // @testa-soft/dom), so keep them EXTERNAL — consumers install them alongside
+  // @testa-soft/next, no duplicated engine code.
+  noExternal: [/@testa-platform\/shared-types/],
+  external: ['next', 'react', '@testa-soft/experiment-core', '@testa-soft/dom'],
 });

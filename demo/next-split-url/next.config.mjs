@@ -7,6 +7,7 @@ const nextConfig = {
   transpilePackages: [
     '@testa-soft/next',
     '@testa-soft/experiment-core',
+    '@testa-soft/dom',
     '@testa-platform/shared-types',
   ],
 };
