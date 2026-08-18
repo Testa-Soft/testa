@@ -46,10 +46,12 @@ primary_region = "fra"  # pick one near crobot / your users
     soft_limit = 200
     hard_limit = 250
 
-# Health check hits the collector's existing endpoint.
+# Fly health check = LIVENESS only (always 200, no deps). The deep readiness
+# probe `/_internal/health` pings Redis+CH, which a config-only instance lacks,
+# so it must NOT gate the deploy.
 [[http_service.checks]]
   method = "get"
-  path = "/_internal/health"
+  path = "/_internal/live"
   interval = "30s"
   timeout = "5s"
   grace_period = "10s"
