@@ -13,7 +13,7 @@
 import type { ProjectConfig } from '@testa-platform/shared-types';
 import type { Teardown } from '@testa-soft/dom';
 import { ASSIGNMENT_COOKIE } from '@testa-soft/experiment-core';
-import { type ReactNode, useEffect, useState } from 'react';
+import { type ReactNode, useEffect, useLayoutEffect, useState } from 'react';
 import { revealShield } from './apply-assignments.ts';
 import { ConfigClient } from './config.ts';
 import { TestaContext, type TestaContextValue } from './context.ts';
@@ -47,6 +47,7 @@ export function TestaProvider(props: TestaProviderProps): JSX.Element {
     config: null,
     assignments: new Map(),
   });
+  const [settled, setSettled] = useState(false);
 
   // Mount-once: config + options are captured on first render. A config swap is
   // rare in an SPA; remount the provider (or reload) to pick up a new one.
@@ -94,14 +95,14 @@ export function TestaProvider(props: TestaProviderProps): JSX.Element {
       if (result.redirected) return; // navigating away — leave the shield up
       teardowns = result.teardowns;
       setValue({ config, assignments: buildAssignmentMap(store.get(ASSIGNMENT_COOKIE)) });
-      revealShield();
+      setSettled(true); // shield revealed post-commit (useLayoutEffect below), after the variant paints
     };
 
     void (async () => {
       const config = await client.get(Date.now());
       if (disposed) return;
       if (!config) {
-        revealShield(); // fail open — never leave the page hidden
+        setSettled(true); // fail open — never leave the page hidden
         return;
       }
       await cycle(config);
@@ -117,6 +118,12 @@ export function TestaProvider(props: TestaProviderProps): JSX.Element {
       uninstallNav();
     };
   }, []);
+
+  // Reveal the shield only AFTER the assigned variant has been committed +
+  // painted (a synchronous reveal races the code-based useTestaVariant render).
+  useLayoutEffect(() => {
+    if (settled) revealShield();
+  }, [settled]);
 
   return <TestaContext.Provider value={value}>{props.children}</TestaContext.Provider>;
 }

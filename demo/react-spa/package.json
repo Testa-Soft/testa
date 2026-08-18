@@ -1,0 +1,26 @@
+{
+  "name": "@testa-demo/react-spa",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Runnable Vite + React SPA demo for @testa-soft/react (Lovable-style, no server).",
+  "scripts": {
+    "dev": "vite --port 3200",
+    "build": "vite build",
+    "preview": "vite preview --port 3200"
+  },
+  "dependencies": {
+    "@testa-soft/react": "workspace:*",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "react-router-dom": "6.28.0"
+  },
+  "devDependencies": {
+    "@testa-platform/shared-types": "workspace:*",
+    "@types/react": "18.3.12",
+    "@types/react-dom": "18.3.1",
+    "@vitejs/plugin-react": "4.3.4",
+    "typescript": "5.6.3",
+    "vite": "5.4.11"
+  }
+}

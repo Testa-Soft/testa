@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@testa-soft/react demo</title>
+    <!-- Anti-flicker shield: hides the page before React paints control, until
+         <TestaProvider> applies the variant and calls window.__testa_shield.reveal().
+         In a Vite SPA this belongs in index.html <head> (a React <script> would run
+         after first paint). This is the fallback snippet from the package README;
+         you can also paste the output of buildShieldSnippet() from @testa-soft/dom. -->
+    <script>
+      (function () {
+        var s = document.createElement('style');
+        s.id = '__testa_shield';
+        s.textContent = 'body{opacity:0 !important}';
+        (document.head || document.documentElement).appendChild(s);
+        function reveal() { var e = document.getElementById('__testa_shield'); if (e) e.remove(); }
+        var t = setTimeout(reveal, 4000);
+        window.__testa_shield = { reveal: function () { clearTimeout(t); reveal(); } };
+      })();
+    </script>
+  </head>
+  <body style="font-family: system-ui, sans-serif; max-width: 640px; margin: 3rem auto; padding: 0 1rem;">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
