@@ -150,10 +150,18 @@ export function makeConfigGetHandler(deps: ConfigRouteDeps) {
       config = await deps.store.get(projectId);
     } catch (err) {
       console.error('[config] store.get failed', { projectId, err: (err as Error).message });
+      // Never let an error response be cached (CDN or client) — a transient blip
+      // must not stick. Pair with a CF cache rule that respects origin cache-control.
+      c.header('Cache-Control', 'no-store');
       return c.json({ ok: false, error: 'failed to read config' }, 503);
     }
 
-    if (!config) return c.json({ ok: false, error: 'config not found' }, 404);
+    // A not-yet-published project 404s; do NOT cache it, or the config stays
+    // "missing" at the edge until TTL even after the first publish.
+    if (!config) {
+      c.header('Cache-Control', 'no-store');
+      return c.json({ ok: false, error: 'config not found' }, 404);
+    }
 
     // ETag = config_hash so Cloudflare (and clients) can revalidate cheaply.
     // Purge-on-publish (crobot) is the authoritative invalidation; the short
