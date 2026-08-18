@@ -105,10 +105,19 @@ export function TestaProvider(props: TestaProviderProps): JSX.Element {
         setSettled(true); // fail open — never leave the page hidden
         return;
       }
-      await cycle(config);
+      try {
+        await cycle(config);
+      } catch {
+        // initTesta threw (bad config, DOM apply error): fail open so a broken
+        // experiment never leaves the page shielded/blank.
+        if (!disposed) setSettled(true);
+        return;
+      }
       if (disposed) return;
       uninstallNav = installSpaNav(() => {
-        void cycle(config);
+        // Later cycles run after the shield is already down; swallow so a nav-time
+        // failure never becomes an unhandled rejection.
+        void cycle(config).catch(() => undefined);
       });
     })();
 
