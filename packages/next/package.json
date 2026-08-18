@@ -1,6 +1,6 @@
 {
   "name": "@testa-soft/next",
-  "version": "0.0.2-dev.0",
+  "version": "0.0.2-dev.2",
   "type": "module",
   "description": "Testa split-URL A/B testing for Next.js — server-side, flicker-free redirects via middleware.",
   "license": "UNLICENSED",
@@ -25,7 +25,10 @@
       "require": "./dist/experiments/index.cjs"
     }
   },
-  "files": ["dist", "README.md"],
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "scripts": {
     "build": "rm -rf dist && tsup && node scripts/add-use-client.mjs",
     "typecheck": "tsc --noEmit",
