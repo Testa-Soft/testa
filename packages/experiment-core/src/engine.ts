@@ -1,66 +1,64 @@
 /**
- * Host-neutral experiment decision engine for the client SDK. No `window` /
- * `document` import — pure over a `CookieStore` + request context, fully
- * unit-testable with fakes. Shares the exact orchestration of the middleware's
- * engine (`@testa-soft/next`) so a visitor buckets identically whichever host
- * they hit; only the redirect *action* differs (the caller does a client-side
- * `location.replace`, not a server 307).
+ * Host-neutral experiment decision engine. No Next import — pure over a
+ * `CookieStore` + request context, fully unit-testable with fakes.
  *
- * Assigns BOTH split-URL (redirect) and DOM (css/html/text/…) experiments in one
- * pass: it always buckets + writes the sticky `_testa_exp` cookie so the
- * assignment is fixed, and only *flags* a redirect when the assigned variation
- * carries a redirect change. DOM changes aren't applied here — `initTesta` reads
- * the same cookie and applies them cookie-first (no re-bucket).
+ * Assigns BOTH split-URL (redirect) and DOM (css/html/text/… ) experiments in
+ * one pass: it always buckets + writes the sticky `_testa_exp` cookie so the
+ * assignment is fixed server-side, and only *redirects* when the assigned
+ * variation carries a redirect change. DOM changes aren't applied here (no DOM
+ * on the server) — the client `<TestaExperiments/>` reads the same cookie and
+ * applies them, cookie-first (no re-bucket).
  *
- * Per call:
- *   0. Apply inbound cross-domain assignments (`?_testa_cd=…`).
+ * Per request:
+ *   0. Apply inbound cross-domain assignments (`?_testa_cd=…`) so a visitor
+ *      carried from another domain keeps their variation.
  *   1. For each ACTIVE experiment:
- *      a. Page gate — only enroll when the current URL matches the page rule.
- *      b. Entry gates (ONLY when not yet assigned — cookie-first wins):
+ *      a. Page gate — only enroll when the current URL matches the experiment's
+ *         page rule (experiment's own match mode). No enrollment off-page.
+ *      b. Entry gates (ONLY for a visitor not yet assigned — cookie-first wins,
+ *         so a returning enrolled visitor is never re-gated by targeting):
  *         exclusions (any match → skip), targeting (must be eligible, AND).
- *      c. Assign (cookie-first + deterministic bucket) into packed `_testa_exp`.
+ *      c. Assign (cookie-first + deterministic bucket). State lives in the packed
+ *         `_testa_exp` cookie — the SAME format the v2 pixel uses, so assignment
+ *         is preserved identically across the middleware, the client, and the pixel.
  *      d. Emit a `variation_applied` event.
- *      e. If the assigned variation is a redirect, resolve the destination and
- *         flag it. First redirect wins; DOM-only experiments fall through.
+ *      e. If the assigned variation is a redirect, resolve the destination
+ *         (variation's match mode) and redirect. First redirect wins; DOM-only
+ *         experiments fall through and accumulate (several can apply per page).
+ *
+ * The caller (middleware) MUST only invoke this on a real navigation, never a
+ * prefetch — the engine commits cookies via the store and fires listener events.
  */
 
 import type { ExperimentRule, ProjectConfig, VariationConfig } from '@testa-platform/shared-types';
-import {
-  CROSS_DOMAIN_PARAM,
-  type CookieStore,
-  type RedirectChange,
-  type TargetingContext,
-  applyAssignment,
-  assign,
-  decodeCrossDomain,
-  hasCachedAssignment,
-  isExcludedByRules,
-  matchesForMode,
-  passesTargeting,
-  resolveRedirectDestination,
-} from '@testa-soft/experiment-core';
+import { applyAssignment, assign, hasCachedAssignment } from './assign.ts';
+import type { CookieStore } from './cookie-store.ts';
+import { CROSS_DOMAIN_PARAM, decodeCrossDomain } from './cross-domain.ts';
+import { type RedirectChange, resolveRedirectDestination } from './redirect/decide.ts';
+import { matchesForMode } from './redirect/match.ts';
+import { type TargetingContext, isExcludedByRules, passesTargeting } from './targeting.ts';
 
-/** Payload emitted for each variation applied on a run (control + variant). */
+/** Payload passed to the `onVariationApplied` listener when a visitor is enrolled. */
 export interface VariationAppliedEvent {
   experimentId: number;
   variationId: number;
   /** Experiment title, when set (for the exposure payload / listener). */
   title?: string;
-  /** True when the applied variation triggered a redirect. */
+  /** True when the applied variation triggered a server-side redirect. */
   redirected: boolean;
   /** Resolved destination URL, present when `redirected`. */
   destinationUrl?: string;
   visitorId: string;
-  /** The URL the variation was applied on. */
+  /** The request URL the variation was applied on. */
   url: string;
-  /** True when freshly bucketed on this run; false when served from the sticky cookie. */
+  /** True when freshly bucketed on this request; false when served from the sticky cookie. */
   firstAssignment: boolean;
 }
 
 export interface EngineResult {
-  /** Destination to client-redirect to, if a split-URL experiment fired. */
+  /** Destination to 307-redirect to, if an experiment fired. */
   redirectTo?: string;
-  /** Every variation applied on this run (control + variant), in order. */
+  /** Every variation applied on this request (control + variant), in order. */
   applied: VariationAppliedEvent[];
 }
 
@@ -69,10 +67,10 @@ export interface EngineContext {
   currentUrl: string;
   visitorId: string;
   now: number;
-  /** Read a cookie (for `cookie` targeting). */
+  /** Read a request cookie (for `cookie` targeting). */
   getCookie: (name: string) => string | null;
   userAgent?: string;
-  /** ISO country code, when available. */
+  /** ISO country code from a geo header, when available. */
   country?: string;
 }
 
@@ -100,7 +98,7 @@ export function runExperiments(ctx: EngineContext, store: CookieStore): EngineRe
       if (!passesTargeting(experiment.targeting, targetingCtx)) continue;
     }
 
-    // c. Assign (packed `_testa_exp` — same format as the middleware + pixel).
+    // c. Assign (packed `_testa_exp` — same format as the v2 pixel).
     const result = assign(
       {
         experiment_id: experiment.experiment_id,

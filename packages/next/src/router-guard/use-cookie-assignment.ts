@@ -14,6 +14,7 @@
  * `TestaRouterGuard.tsx` on top.
  */
 
+import type { ProjectConfig } from '@testa-platform/shared-types';
 import {
   EXCLUDED_VARIATION_ID,
   type RedirectChange,
@@ -21,7 +22,6 @@ import {
   parsePacked,
   resolveRedirectDestination,
 } from '@testa-soft/experiment-core';
-import type { ProjectConfig } from '@testa-platform/shared-types';
 
 export interface GuardResolveInput {
   config: ProjectConfig;

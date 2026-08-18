@@ -9,8 +9,8 @@
  * e2e.
  */
 
-import { ASSIGNMENT_COOKIE } from '@testa-soft/experiment-core';
 import type { ProjectConfig, VariationChange } from '@testa-platform/shared-types';
+import { ASSIGNMENT_COOKIE } from '@testa-soft/experiment-core';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { readClientCookie } from '../../client-cookie.ts';
 import {

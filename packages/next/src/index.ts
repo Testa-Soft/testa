@@ -13,8 +13,12 @@ export {
 export type { TestaMiddleware, TestaMiddlewareOptions } from './middleware.ts';
 export { emitExposure } from './tracking.ts';
 export type { ExposurePayload } from './tracking.ts';
-export { runExperiments } from './engine.ts';
-export type { EngineResult, EngineContext, VariationAppliedEvent } from './engine.ts';
+export { runExperiments } from '@testa-soft/experiment-core';
+export type {
+  EngineResult,
+  EngineContext,
+  VariationAppliedEvent,
+} from '@testa-soft/experiment-core';
 export { ConfigClient } from './config.ts';
 export type { ConfigSource } from './config.ts';
 export { NextCookieStore } from './cookie-store.ts';

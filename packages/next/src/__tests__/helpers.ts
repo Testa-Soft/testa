@@ -1,5 +1,5 @@
-import type { CookieStore } from '@testa-soft/experiment-core';
 import type { ProjectConfig, VariationChange } from '@testa-platform/shared-types';
+import type { CookieStore } from '@testa-soft/experiment-core';
 import type { ReadableCookies } from '../cookie-store.ts';
 
 export function memoryStore(initial: Record<string, string> = {}): CookieStore & {

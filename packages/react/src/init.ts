@@ -28,8 +28,8 @@ import {
   hasRedirected,
   markRedirected,
 } from '@testa-soft/experiment-core';
+import { type VariationAppliedEvent, runExperiments } from '@testa-soft/experiment-core';
 import { applyAssignedExperiments } from './apply-assignments.ts';
-import { type VariationAppliedEvent, runExperiments } from './engine.ts';
 import {
   PREVIEW_VARIATION_ID,
   fetchPreviewChanges,

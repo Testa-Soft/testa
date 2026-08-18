@@ -12,12 +12,12 @@
  */
 
 import { UUID_COOKIE } from '@testa-soft/experiment-core';
+import { type VariationAppliedEvent, runExperiments } from '@testa-soft/experiment-core';
 import { NextResponse } from 'next/server';
 import type { NextFetchEvent, NextRequest } from 'next/server';
 import { ConfigClient, type ConfigSource } from './config.ts';
 import { NextCookieStore } from './cookie-store.ts';
 import { resolveCookieDomain } from './domain.ts';
-import { type VariationAppliedEvent, runExperiments } from './engine.ts';
 import { computePrefetchRedirect } from './soft-nav/prefetch-guard.ts';
 import { isPrefetchRequest } from './soft-nav/rsc-redirect.ts';
 import { emitExposure } from './tracking.ts';

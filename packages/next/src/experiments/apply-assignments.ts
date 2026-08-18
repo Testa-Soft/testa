@@ -12,9 +12,9 @@
  * changes only.
  */
 
+import type { ProjectConfig, VariationChange } from '@testa-platform/shared-types';
 import { type Teardown, applyVariation } from '@testa-soft/dom';
 import { EXCLUDED_VARIATION_ID, parsePacked } from '@testa-soft/experiment-core';
-import type { ProjectConfig, VariationChange } from '@testa-platform/shared-types';
 
 export interface AssignedExperiment {
   experimentId: number;

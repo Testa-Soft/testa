@@ -19,8 +19,12 @@ export type { TestaContextValue } from './context.ts';
 
 export { initTesta, ensureVisitorId } from './init.ts';
 export type { InitOptions, InitResult } from './init.ts';
-export { runExperiments } from './engine.ts';
-export type { EngineContext, EngineResult, VariationAppliedEvent } from './engine.ts';
+export { runExperiments } from '@testa-soft/experiment-core';
+export type {
+  EngineContext,
+  EngineResult,
+  VariationAppliedEvent,
+} from '@testa-soft/experiment-core';
 export { DocumentCookieStore } from './cookie-store.ts';
 export type { DocumentCookieStoreOptions } from './cookie-store.ts';
 export { ConfigClient, DEFAULT_CONFIG_HOST, resolveConfigUrl } from './config.ts';

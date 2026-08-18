@@ -22,7 +22,7 @@
  */
 
 import type { CookieStore } from '@testa-soft/experiment-core';
-import { type EngineContext, runExperiments } from '../engine.ts';
+import { type EngineContext, runExperiments } from '@testa-soft/experiment-core';
 
 export interface PrefetchComputeInput {
   config: EngineContext['config'];

@@ -1,7 +1,8 @@
-import { ASSIGNMENT_COOKIE } from '@testa-soft/experiment-core';
 import { describe, expect, it } from 'vitest';
-import { runExperiments } from '../engine.ts';
-import { memoryStore, splitUrlConfig } from './helpers.ts';
+import { ASSIGNMENT_COOKIE } from '../index.ts';
+import { runExperiments } from '../index.ts';
+import { memoryStore } from './memory-store.ts';
+import { splitUrlConfig } from './split-url-config.ts';
 
 const CURRENT = 'https://acme.com/pricing';
 
