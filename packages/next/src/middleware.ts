@@ -37,7 +37,7 @@ export type { VariationAppliedEvent };
 export const DEFAULT_CONFIG_HOST = 'https://config.testa-soft.tech';
 
 /** Default host for exposure/conversion tracking (crobot's `/api/leads`). */
-export const DEFAULT_TRACKING_HOST = 'https://app.testa-soft.tech';
+export const DEFAULT_TRACKING_HOST = 'https://new.testa-soft.tech';
 
 export interface TestaMiddlewareOptions extends ConfigSource {
   /**

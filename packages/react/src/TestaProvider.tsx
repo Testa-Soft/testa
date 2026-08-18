@@ -34,7 +34,7 @@ export interface TestaProviderProps {
   previewApiUrl?: string;
   /** Emit exposures on fresh enrollment. Default true. */
   tracking?: boolean;
-  /** Host for exposure tracking. Default `https://app.testa-soft.tech`. */
+  /** Host for exposure tracking. Default `https://new.testa-soft.tech`. */
   trackingHost?: string;
   /** Emit `Secure` cookies. Default true; set false for local http dev. */
   secureCookies?: boolean;

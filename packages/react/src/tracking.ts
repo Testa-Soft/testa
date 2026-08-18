@@ -9,7 +9,7 @@
  */
 
 /** Default host for exposure/conversion tracking (crobot's `/api/leads`). */
-export const DEFAULT_TRACKING_HOST = 'https://app.testa-soft.tech';
+export const DEFAULT_TRACKING_HOST = 'https://new.testa-soft.tech';
 
 export interface ExposurePayload {
   /** crobot numeric project id (ProjectConfig.project_id). */
