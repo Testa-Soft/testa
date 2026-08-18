@@ -34,6 +34,7 @@ import type { ExperimentRule, ProjectConfig, VariationConfig } from '@testa-plat
 import { applyAssignment, assign, hasCachedAssignment } from './assign.ts';
 import type { CookieStore } from './cookie-store.ts';
 import { CROSS_DOMAIN_PARAM, decodeCrossDomain } from './cross-domain.ts';
+import { EXCLUDED_VARIATION_ID, parsePacked } from './packed-cookie.ts';
 import { type RedirectChange, resolveRedirectDestination } from './redirect/decide.ts';
 import { matchesForMode } from './redirect/match.ts';
 import { type TargetingContext, isExcludedByRules, passesTargeting } from './targeting.ts';
@@ -55,11 +56,36 @@ export interface VariationAppliedEvent {
   firstAssignment: boolean;
 }
 
+/** Why a given experiment reached the outcome it did (only collected when `debug`). */
+export type DecisionReason =
+  | 'inactive' // status !== 'active'
+  | 'page_no_match' // current URL doesn't match the experiment's page rule
+  | 'excluded_by_rules' // an exclusion rule matched
+  | 'targeting_failed' // a targeting rule was not satisfied
+  | 'traffic_excluded' // bucketed out by traffic_allocation
+  | 'assigned_dom' // assigned a variation with DOM/no changes (no redirect)
+  | 'redirect' // assigned a redirect variation and will navigate
+  | 'redirect_skipped'; // redirect variation but no navigation (already there / invalid / no match)
+
+export interface DecisionTrace {
+  experimentId: number;
+  title?: string;
+  reason: DecisionReason;
+  /** Assigned variation when the experiment enrolled the visitor. */
+  variationId?: number;
+  /** True when freshly bucketed this run; false when read from the sticky cookie. */
+  fromCookie?: boolean;
+  /** Extra context, e.g. the page rule that failed or the redirect skip reason. */
+  detail?: string;
+}
+
 export interface EngineResult {
   /** Destination to 307-redirect to, if an experiment fired. */
   redirectTo?: string;
   /** Every variation applied on this request (control + variant), in order. */
   applied: VariationAppliedEvent[];
+  /** Per-experiment decision trace — populated only when `ctx.debug` is true. */
+  trace?: DecisionTrace[];
 }
 
 export interface EngineContext {
@@ -72,10 +98,18 @@ export interface EngineContext {
   userAgent?: string;
   /** ISO country code from a geo header, when available. */
   country?: string;
+  /** Collect a per-experiment `DecisionTrace` into the result. Default false. */
+  debug?: boolean;
 }
 
 export function runExperiments(ctx: EngineContext, store: CookieStore): EngineResult {
   const applied: VariationAppliedEvent[] = [];
+  const trace: DecisionTrace[] = [];
+  const note = (t: DecisionTrace): void => {
+    if (ctx.debug) trace.push(t);
+  };
+  const withTrace = (r: EngineResult): EngineResult => (ctx.debug ? { ...r, trace } : r);
+
   applyInboundCrossDomain(ctx.currentUrl, ctx.config, store);
 
   const targetingCtx: TargetingContext = {
@@ -86,16 +120,32 @@ export function runExperiments(ctx: EngineContext, store: CookieStore): EngineRe
   };
 
   for (const experiment of ctx.config.experiments) {
-    if (experiment.status !== 'active') continue;
+    const id = experiment.experiment_id;
+    const title = experiment.title;
+    const base = { experimentId: id, ...(title ? { title } : {}) };
+
+    if (experiment.status !== 'active') {
+      note({ ...base, reason: 'inactive', detail: `status=${experiment.status}` });
+      continue;
+    }
 
     // a. Page gate — only enroll on the experiment's page.
-    if (!matchesPageRule(ctx.currentUrl, experiment.rules)) continue;
+    if (!matchesPageRule(ctx.currentUrl, experiment.rules)) {
+      note({ ...base, reason: 'page_no_match', detail: describeRules(experiment.rules) });
+      continue;
+    }
 
     // b. Entry gates — ONLY for a visitor not yet assigned. Cookie-first wins:
     // a returning enrolled visitor stays in even if their utm/etc. changed.
     if (!hasCachedAssignment(store, experiment.experiment_id)) {
-      if (isExcludedByRules(experiment.exclusions, targetingCtx)) continue;
-      if (!passesTargeting(experiment.targeting, targetingCtx)) continue;
+      if (isExcludedByRules(experiment.exclusions, targetingCtx)) {
+        note({ ...base, reason: 'excluded_by_rules' });
+        continue;
+      }
+      if (!passesTargeting(experiment.targeting, targetingCtx)) {
+        note({ ...base, reason: 'targeting_failed' });
+        continue;
+      }
     }
 
     // c. Assign (packed `_testa_exp` — same format as the v2 pixel).
@@ -111,7 +161,10 @@ export function runExperiments(ctx: EngineContext, store: CookieStore): EngineRe
       { visitorId: ctx.visitorId, now: ctx.now },
       store,
     );
-    if (result.isExcluded) continue;
+    if (result.isExcluded) {
+      note({ ...base, reason: 'traffic_excluded', detail: `traffic=${experiment.traffic_allocation}` });
+      continue;
+    }
 
     // d/e. Resolve redirect (if the applied variation is a redirect) + emit event.
     const variation = experiment.variations.find((v) => v.variation_id === result.variationId);
@@ -131,11 +184,32 @@ export function runExperiments(ctx: EngineContext, store: CookieStore): EngineRe
     });
 
     if (redirected && dest?.finalUrl) {
-      return { redirectTo: dest.finalUrl, applied };
+      note({
+        ...base,
+        reason: 'redirect',
+        variationId: result.variationId,
+        fromCookie: result.fromCookie,
+        detail: `-> ${dest.finalUrl}`,
+      });
+      return withTrace({ redirectTo: dest.finalUrl, applied });
     }
+
+    note({
+      ...base,
+      reason: change ? 'redirect_skipped' : 'assigned_dom',
+      variationId: result.variationId,
+      fromCookie: result.fromCookie,
+      ...(change && dest ? { detail: dest.reason } : {}),
+    });
   }
 
-  return { applied };
+  return withTrace({ applied });
+}
+
+/** Human-readable page-rule summary for the debug trace. */
+function describeRules(rules: ExperimentRule[]): string {
+  if (!rules || rules.length === 0) return '(no rules — matches everywhere)';
+  return rules.map((r) => `${r.match_type} "${r.url_pattern}"`).join(' AND ');
 }
 
 function applyInboundCrossDomain(url: string, config: ProjectConfig, store: CookieStore): void {
@@ -157,6 +231,41 @@ function applyInboundCrossDomain(url: string, config: ProjectConfig, store: Cook
       applyAssignment(store, a.experimentId, a.variationId);
     }
   }
+}
+
+/**
+ * Should the anti-flicker shield be raised for THIS request? True iff some
+ * active experiment whose page rule matches `url` assigns this visitor (via the
+ * packed `_testa_exp` cookie) a variation carrying a NON-redirect (DOM) change.
+ *
+ * Split-URL redirects need no shield — the 307 happens before any HTML is sent,
+ * so the control page is never painted. Pages the experiment doesn't target, and
+ * excluded/unassigned visitors, also return false. So the shield is raised ONLY
+ * when there's genuinely control content about to be mutated — never on a
+ * split-URL-only project, and never on a page with nothing to change.
+ *
+ * Call it AFTER assignment (the packed cookie must reflect this request's
+ * bucketing) — e.g. right before the middleware returns its pass-through.
+ */
+export function hasPendingDomChange(
+  config: ProjectConfig,
+  url: string,
+  cookieValue: string | null,
+): boolean {
+  const map = parsePacked(cookieValue);
+  if (map.size === 0) return false;
+
+  for (const experiment of config.experiments) {
+    if (experiment.status !== 'active') continue;
+    if (!matchesPageRule(url, experiment.rules)) continue;
+
+    const state = map.get(Number(experiment.experiment_id));
+    if (!state || state.excluded || state.variation === EXCLUDED_VARIATION_ID) continue;
+
+    const variation = experiment.variations.find((v) => v.variation_id === state.variation);
+    if (variation?.changes.some((c) => c.type !== 'redirect')) return true;
+  }
+  return false;
 }
 
 function matchesPageRule(url: string, rules: ExperimentRule[]): boolean {

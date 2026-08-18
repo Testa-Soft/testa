@@ -9,7 +9,9 @@ export {
   createTestaMiddleware,
   DEFAULT_CONFIG_HOST,
   DEFAULT_TRACKING_HOST,
+  SHIELD_HEADER,
 } from './middleware.ts';
+export { hasPendingDomChange } from '@testa-soft/experiment-core';
 export type { TestaMiddleware, TestaMiddlewareOptions } from './middleware.ts';
 export { emitExposure } from './tracking.ts';
 export type { ExposurePayload } from './tracking.ts';

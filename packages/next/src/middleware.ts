@@ -11,8 +11,12 @@
  *   export const config = { matcher: ['/((?!_next/static|_next/image|favicon.ico|api).*)'] }
  */
 
-import { UUID_COOKIE } from '@testa-soft/experiment-core';
-import { type VariationAppliedEvent, runExperiments } from '@testa-soft/experiment-core';
+import { ASSIGNMENT_COOKIE, UUID_COOKIE } from '@testa-soft/experiment-core';
+import {
+  type VariationAppliedEvent,
+  hasPendingDomChange,
+  runExperiments,
+} from '@testa-soft/experiment-core';
 import { NextResponse } from 'next/server';
 import type { NextFetchEvent, NextRequest } from 'next/server';
 import { ConfigClient, type ConfigSource } from './config.ts';
@@ -171,11 +175,23 @@ export function createTestaMiddleware(options: TestaMiddlewareOptions): TestaMid
       return res;
     }
 
-    const res = NextResponse.next();
+    // Tell the app whether to raise the anti-flicker shield for THIS request:
+    // only when the visitor has a pending DOM change on this page. Split-URL-only
+    // projects and pages with nothing to change get `0`, so `<TestaShield/>`
+    // never overlays needlessly. Passed as a request header the RSC layout reads
+    // via `headers()`. Runs on soft-nav RSC requests too, so it stays per-page.
+    const shield = hasPendingDomChange(config, req.url, store.get(ASSIGNMENT_COOKIE));
+    const requestHeaders = new Headers(req.headers);
+    requestHeaders.set(SHIELD_HEADER, shield ? '1' : '0');
+
+    const res = NextResponse.next({ request: { headers: requestHeaders } });
     store.applyTo(res.cookies);
     return res;
   };
 }
+
+/** Request header the middleware sets so the layout can gate `<TestaShield/>`. */
+export const SHIELD_HEADER = 'x-testa-shield';
 
 /** Invoke the listener without ever letting it break the request. */
 function emitVariationApplied(
