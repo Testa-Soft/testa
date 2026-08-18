@@ -36,10 +36,29 @@ fly deploy --config apps/collector/fly.toml --dockerfile apps/collector/Dockerfi
 Point the SDK's config host at the app via Cloudflare:
 
 1. **CNAME** `config.testa-soft.tech` → `testa-collector.fly.dev` (proxied / orange-cloud).
-2. **Cache the reads** — add a cache rule for `GET /api/v1/config/*` (respect the
+2. **TLS cert on Fly (REQUIRED — else Cloudflare→origin returns `525`).** Because the
+   record is proxied, Cloudflare terminates TLS at the edge and re-negotiates TLS to
+   the Fly origin using SNI `config.testa-soft.tech`. Fly only has a cert for
+   `*.fly.dev`, so the handshake fails (`525`) until you add the hostname:
+
+   ```bash
+   fly certs add config.testa-soft.tech --app testa-collector
+   fly certs check config.testa-soft.tech --app testa-collector   # shows the challenge
+   ```
+
+   Fly's HTTP-01 validation can't complete *through* the proxy (chicken-and-egg: no
+   cert yet → 525 → challenge unreachable), so validate via **DNS-01**: add a
+   **DNS-only (grey-cloud)** CNAME `_acme-challenge.config.testa-soft.tech` →
+   `<...>.flydns.net` (target shown by `fly certs check`). Keep Cloudflare SSL/TLS
+   mode at **Full (strict)** — Fly serves a real Let's Encrypt cert. Cert issues in
+   ~1 min; then `curl https://config.testa-soft.tech/_internal/live` → `200`.
+3. **Cache the reads** — add a cache rule for `GET /api/v1/config/*` (respect the
    response's ETag/`config_hash`). This serves config reads from Cloudflare's edge,
    so the Fly machine stays suspended (near-zero cost) and reads are fast. Writes
-   (`POST`) bypass cache automatically (non-GET).
+   (`POST`) bypass cache automatically (non-GET). **crobot purges the exact URL
+   `{config host}/api/v1/config/{uuid}` on publish** (`GenerateProjectScriptHandler::warmCache`),
+   so a new config propagates immediately; the origin's `max-age` is only a
+   missed-purge safety net.
 
 The SDKs default to `https://config.testa-soft.tech`; with the CNAME in place no
 client config change is needed. (Override per-deploy with the `host` option or
