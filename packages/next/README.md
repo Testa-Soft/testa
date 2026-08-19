@@ -15,15 +15,15 @@ Peer dependencies (you almost certainly already have these):
 
 ## Quick start — split-URL redirects
 
-Split-URL tests send a bucketed visitor to a different URL. The middleware decides server-side and issues a `307` **before any HTML is sent**, so there is no flicker and no client JS required.
+Split-URL tests send a bucketed visitor to a different URL. It's decided server-side and issued as a `307` **before any HTML is sent**, so there is no flicker and no client JS required.
 
-Create `middleware.ts` at your project root (or under `src/`):
+Create `proxy.ts` at your project root (or under `src/`):
 
 ```ts
-// middleware.ts
+// proxy.ts
 import { createTestaMiddleware } from '@testa-soft/next'
 
-export const middleware = createTestaMiddleware({ projectId: 'acme' })
+export const proxy = createTestaMiddleware({ projectId: '3fa85f64e1c2b' })
 
 export const config = {
   // Run on real pages; skip Next internals, static assets, and API routes.
@@ -31,9 +31,14 @@ export const config = {
 }
 ```
 
-That is the whole integration. With just `projectId`, the package fetches your
-project config from the built-in config host
-(`https://config.testa-soft.tech/api/v1/config/{projectId}`).
+> **Next.js version.** Next 16 renamed the middleware file convention to
+> `proxy` — use `proxy.ts` with `export const proxy = …` (above). On **Next
+> 13–15**, name the file `middleware.ts` and the export `middleware` instead;
+> everything else is identical. `createTestaMiddleware` is unchanged either way.
+
+That is the whole integration. `projectId` is your **crobot project UUID**. With
+just `projectId`, the package fetches your project config from the built-in
+config host (`https://config.testa-soft.tech/api/v1/config/{projectId}`).
 
 ### Inline-config mode
 
@@ -42,12 +47,12 @@ resolves config from its own source), pass a `config` object instead of relying
 on the config host:
 
 ```ts
-// middleware.ts
+// proxy.ts  (Next 13–15: middleware.ts, export `middleware`)
 import { createTestaMiddleware } from '@testa-soft/next'
 import projectConfig from './testa.config.json'
 
-export const middleware = createTestaMiddleware({
-  projectId: 'acme',
+export const proxy = createTestaMiddleware({
+  projectId: '3fa85f64e1c2b',
   config: projectConfig, // a ProjectConfig — zero-latency, no network fetch
 })
 
@@ -130,7 +135,7 @@ real visitors. Pass `previewApiUrl` (your crobot backend base URL) to
 `<TestaExperiments/>`:
 
 ```tsx
-<TestaExperiments config={projectConfig} previewApiUrl="https://app.testa-soft.tech" />
+<TestaExperiments config={projectConfig} previewApiUrl="https://new.testa-soft.tech" />
 ```
 
 Then open any page with the preview query params:
@@ -195,10 +200,10 @@ Returns a Next.js middleware function. Import from `@testa-soft/next`.
 | `cacheTtlMs`         | `number`                                       | `30000`                              | Cache lifetime for `configUrl` / `loadConfig` results.                                                       |
 | `host`               | `string`                                       | `https://config.testa-soft.tech`     | Config host. Also settable via the `TESTA_CONFIG_HOST` env var. Override for local/staging.                   |
 | `secureCookies`      | `boolean`                                      | `true`                               | Emit `Secure` cookies. Set `false` for local http dev.                                                       |
-| `cookieDomain`       | `string`                                       | —                                    | Explicit cookie `Domain` for cross-subdomain tracking (e.g. `.acme.com`). Wins over `discoverRootDomain`.     |
+| `cookieDomain`       | `string`                                       | —                                    | Explicit cookie `Domain` for cross-subdomain tracking (e.g. `.example.com`). Wins over `discoverRootDomain`.     |
 | `discoverRootDomain` | `boolean`                                      | `false`                              | Auto-derive the registrable domain from the request host for cookies.                                        |
 | `tracking`           | `boolean`                                      | `true`                               | Emit exposures (impressions) so experiment results populate. Set `false` for redirects-only, or if a pixel owns tracking. |
-| `trackingHost`       | `string`                                       | `https://app.testa-soft.tech`        | Host for exposure tracking. Also settable via the `TESTA_TRACKING_HOST` env var.                             |
+| `trackingHost`       | `string`                                       | `https://new.testa-soft.tech`        | Host for exposure tracking (`{trackingHost}/api/leads`). Also settable via the `TESTA_TRACKING_HOST` env var. |
 | `onVariationApplied` | `(event) => void \| Promise<void>`            | —                                    | Called for each variation applied on a request. Errors/rejections are swallowed; not awaited — keep it fast.  |
 
 Exported constants: `DEFAULT_CONFIG_HOST`, `DEFAULT_TRACKING_HOST`. Exported

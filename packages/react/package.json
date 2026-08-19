@@ -2,7 +2,7 @@
   "name": "@testa-soft/react",
   "version": "0.0.2-dev.3",
   "type": "module",
-  "description": "Testa client-side A/B testing for React + Vite SPAs (Lovable and other no-server apps).",
+  "description": "Testa client-side A/B testing for React + Vite SPAs (single-page apps with no server).",
   "license": "UNLICENSED",
   "sideEffects": false,
   "main": "./src/index.ts",

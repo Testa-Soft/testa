@@ -1,6 +1,6 @@
 /**
  * @testa-soft/react — client-side Testa A/B testing for React + Vite SPAs
- * (Lovable and other apps with no server).
+ * (single-page apps with no server).
  *
  * One `<TestaProvider/>` at the app root runs the full experiment cycle in the
  * browser: deterministic assignment (sticky `_testa_exp` cookie), client-side

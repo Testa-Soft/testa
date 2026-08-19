@@ -1,6 +1,6 @@
 # @testa-soft/react
 
-Client-side [Testa](https://testa-soft.tech) A/B testing for **React + Vite SPAs** — Lovable exports and any other single-page app that has **no server**. One `<TestaProvider>` at your app root runs the whole experiment engine in the browser: deterministic, sticky assignment; client-side split-URL redirects; cookie-first HTML/DOM changes; exposure tracking; preview mode; and automatic re-runs on SPA route changes. For experiments your app renders itself, `useTestaVariant` gives you a robust, code-based branch that survives React reconciliation.
+Client-side [Testa](https://testa-soft.tech) A/B testing for **React + Vite SPAs** — any single-page app that has **no server**. One `<TestaProvider>` at your app root runs the whole experiment engine in the browser: deterministic, sticky assignment; client-side split-URL redirects; cookie-first HTML/DOM changes; exposure tracking; preview mode; and automatic re-runs on SPA route changes. For experiments your app renders itself, `useTestaVariant` gives you a robust, code-based branch that survives React reconciliation.
 
 It shares the exact decision core (`@testa-soft/experiment-core`) and render layer (`@testa-soft/dom`) as the Next.js package, so a visitor buckets into the same variation no matter which surface they hit.
 
@@ -35,7 +35,7 @@ That is the whole integration. On mount (and on every SPA navigation) the provid
 
 ### Inline-config mode
 
-If you'd rather ship the config with your build (zero-latency, no network — handy for Lovable exports), pass a `config` object instead of `projectId`:
+If you'd rather ship the config with your build (zero-latency, no network — handy for static or edge deploys), pass a `config` object instead of `projectId`:
 
 ```tsx
 import { TestaProvider } from '@testa-soft/react'

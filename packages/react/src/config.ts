@@ -3,7 +3,7 @@
  *
  * A pure SPA has one project, so this is simpler than the middleware's
  * multi-slug `ConfigClient`: it resolves EITHER an inline `config` (zero-latency,
- * no network — ideal for Lovable exports that ship their config) OR fetches
+ * no network — ideal for apps that ship their config) OR fetches
  * `{host}/api/v1/config/{projectId}` once and caches it by TTL.
  *
  * A config-fetch failure fails open (returns null → no experiments run), never
