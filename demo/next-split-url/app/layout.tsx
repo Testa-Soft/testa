@@ -1,4 +1,5 @@
 import { TestaExperiments, TestaShield } from '@testa-soft/next/experiments';
+import { TestaDebug } from './testa-debug.tsx';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { demoConfig } from '../testa.config.ts';
@@ -49,6 +50,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             draft changes from the backend (crobot). Here it points at the demo origin so the
             preview endpoint can be stubbed; in production it's the crobot app URL. */}
         <TestaExperiments config={demoConfig} previewApiUrl="http://localhost:3100" />
+        <TestaDebug />
         <ReloadSentinel />
       </body>
     </html>

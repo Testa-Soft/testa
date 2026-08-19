@@ -21,9 +21,9 @@ Create `proxy.ts` at your project root (or under `src/`):
 
 ```ts
 // proxy.ts
-import { createTestaMiddleware } from '@testa-soft/next'
+import { createTestaProxy } from '@testa-soft/next'
 
-export const proxy = createTestaMiddleware({ projectId: '3fa85f64e1c2b' })
+export const proxy = createTestaProxy({ projectId: '3fa85f64e1c2b' })
 
 export const config = {
   // Run on real pages; skip Next internals, static assets, and API routes.
@@ -34,7 +34,7 @@ export const config = {
 > **Next.js version.** Next 16 renamed the middleware file convention to
 > `proxy` — use `proxy.ts` with `export const proxy = …` (above). On **Next
 > 13–15**, name the file `middleware.ts` and the export `middleware` instead;
-> everything else is identical. `createTestaMiddleware` is unchanged either way.
+> everything else is identical. `createTestaProxy` is unchanged either way.
 
 That is the whole integration. `projectId` is your **crobot project UUID**. With
 just `projectId`, the package fetches your project config from the built-in
@@ -48,10 +48,10 @@ on the config host:
 
 ```ts
 // proxy.ts  (Next 13–15: middleware.ts, export `middleware`)
-import { createTestaMiddleware } from '@testa-soft/next'
+import { createTestaProxy } from '@testa-soft/next'
 import projectConfig from './testa.config.json'
 
-export const proxy = createTestaMiddleware({
+export const proxy = createTestaProxy({
   projectId: '3fa85f64e1c2b',
   config: projectConfig, // a ProjectConfig — zero-latency, no network fetch
 })
@@ -186,7 +186,7 @@ the guard fires — both read the one cookie.
 
 ## API reference
 
-### `createTestaMiddleware(options)`
+### `createTestaProxy(options)`
 
 Returns a Next.js middleware function. Import from `@testa-soft/next`.
 
@@ -204,10 +204,45 @@ Returns a Next.js middleware function. Import from `@testa-soft/next`.
 | `discoverRootDomain` | `boolean`                                      | `false`                              | Auto-derive the registrable domain from the request host for cookies.                                        |
 | `tracking`           | `boolean`                                      | `true`                               | Emit exposures (impressions) so experiment results populate. Set `false` for redirects-only, or if a pixel owns tracking. |
 | `trackingHost`       | `string`                                       | `https://new.testa-soft.tech`        | Host for exposure tracking (`{trackingHost}/api/leads`). Also settable via the `TESTA_TRACKING_HOST` env var. |
-| `onVariationApplied` | `(event) => void \| Promise<void>`            | —                                    | Called for each variation applied on a request. Errors/rejections are swallowed; not awaited — keep it fast.  |
+| `onVariationAssigned`| `(event, ctx) => void \| Promise<void>`       | —                                    | **Server-side** hook per assignment. `ctx.waitUntil(promise)` keeps async work (PostHog server, webhook) alive past the response — never delays it. Guard on `event.firstAssignment` for once-per-visitor. |
 
 Exported constants: `DEFAULT_CONFIG_HOST`, `DEFAULT_TRACKING_HOST`. Exported
-type: `VariationAppliedEvent` (the argument to `onVariationApplied`).
+type: `VariationAppliedEvent` (the argument to `onVariationAssigned`).
+
+## Analytics events (GA4 / GTM / PostHog / Segment)
+
+Two independent surfaces — use either or both:
+
+**Client-side** — the SDK fires **`variation_applied`** in the browser once per
+session when a visitor is shown a variation (after the redirect for split-URL, on
+the page for DOM). Subscribe with named functions (multiple handlers allowed;
+each returns an unsubscribe), or `window.testa`:
+
+```ts
+import { testa } from '@testa-soft/next'
+
+const off = testa.onVariationApplied((d) => posthog.capture('$experiment_viewed', d))
+testa.onVariationApplied((d) => segment.track('Experiment Viewed', d))
+// d = { project_id, experiment, variation, uuid, title, url }
+```
+
+A handler registered **after** the event fired still receives it (history
+replay), so late-loading analytics don't miss it. `window.testa.onVariationApplied`
+is also installed for GTM Custom HTML / non-bundled scripts.
+
+**GTM `dataLayer`** — pushed automatically (no config) on every `variation_applied`:
+
+```js
+{ event: 'Analytica', ExperimentId, ExperimentName, VariationId, VariationName }
+```
+Add a GTM **Custom Event** trigger on `Analytica`.
+
+**Server-side** — for PostHog server, a warehouse, or webhooks, use the
+`onVariationAssigned` proxy option (above) with `ctx.waitUntil`. It's independent
+of the client surface — wire up both if you want.
+
+> `variation_assigned` = when the visitor is bucketed (server); `variation_applied`
+> = when they're shown it (client, once per session). Both carry the same payload.
 
 ### `<TestaExperiments>` — from `@testa-soft/next/experiments`
 

@@ -13,7 +13,7 @@ export {
 } from './middleware.ts';
 export { hasPendingDomChange, resolveExposures } from '@testa-soft/experiment-core';
 export type { Exposure } from '@testa-soft/experiment-core';
-export type { TestaProxy, TestaProxyOptions } from './middleware.ts';
+export type { TestaProxy, TestaProxyOptions, VariationHookContext } from './middleware.ts';
 
 // Client-side event bus (3.3.3 parity) — subscribe with `testa.onVariationApplied`,
 // or the standalone fns; `window.testa` is installed by the client components.

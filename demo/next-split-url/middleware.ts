@@ -1,7 +1,7 @@
-import { createTestaMiddleware } from '@testa-soft/next';
+import { createTestaProxy } from '@testa-soft/next';
 import { demoConfig } from './testa.config.ts';
 
-export const middleware = createTestaMiddleware({
+export const middleware = createTestaProxy({
   // Inline config → zero infra (no collector/crobot needed to run the demo).
   // A real integration passes only `{ projectId }` and fetches from the config
   // host; the middleware assigns split-URL AND DOM experiments the same way.

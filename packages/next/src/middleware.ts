@@ -68,12 +68,17 @@ export interface TestaProxyOptions extends ConfigSource {
   /** Auto-derive the registrable domain from the request host for cookies. */
   discoverRootDomain?: boolean;
   /**
-   * Called for each variation applied on a request (control + variant), giving
-   * the customer the assignment data to do whatever they need (log, forward to
-   * their analytics, emit a lead). Errors and rejections are swallowed so a
-   * listener never breaks the request. Not awaited — keep it fast or fire-and-forget.
+   * Server-side hook, fired for each variation the visitor is assigned on a
+   * request (control + variant) — e.g. capture the exposure to PostHog server,
+   * a warehouse, or a webhook. `ctx.waitUntil(promise)` keeps an async call alive
+   * until it completes AFTER the response is sent (it never delays the response).
+   * Guard on `event.firstAssignment` to fire once per visitor, not per request.
+   * Errors/rejections are swallowed so a hook never breaks the request.
    */
-  onVariationAssigned?: (event: VariationAppliedEvent) => void | Promise<void>;
+  onVariationAssigned?: (
+    event: VariationAppliedEvent,
+    ctx: VariationHookContext,
+  ) => void | Promise<void>;
   /**
    * Emit exposures (impressions) to the legacy `/api/leads` so experiment
    * results populate. Default true. Set false if you only want redirects, or if
@@ -162,7 +167,7 @@ export function createTestaProxy(options: TestaProxyOptions): TestaProxy {
     );
 
     for (const applied of result.applied) {
-      fireVariationAssigned(options.onVariationAssigned, applied);
+      fireVariationAssigned(options.onVariationAssigned, applied, event);
       // Emit an exposure once per fresh enrollment (deduped server-side anyway).
       if (trackingEnabled && applied.firstAssignment && config.project_id != null) {
         const pending = emitExposure(trackingHost, {
@@ -202,19 +207,29 @@ export function createTestaProxy(options: TestaProxyOptions): TestaProxy {
 /** Request header the middleware sets so the layout can gate `<TestaShield/>`. */
 export const SHIELD_HEADER = 'x-testa-shield';
 
-/** Invoke the listener without ever letting it break the request. */
+/** Context passed to `onVariationAssigned` — keep an async task alive past the response. */
+export interface VariationHookContext {
+  /** Run `promise` to completion after the response is sent (never delays it). */
+  waitUntil: (promise: Promise<unknown>) => void;
+}
+
+/** Invoke the hook without ever letting it break the request; keep async work alive. */
 function fireVariationAssigned(
   listener: TestaProxyOptions['onVariationAssigned'],
   event: VariationAppliedEvent,
+  fetchEvent: NextFetchEvent | undefined,
 ): void {
   if (!listener) return;
+  const waitUntil = (promise: Promise<unknown>): void => {
+    if (fetchEvent?.waitUntil) fetchEvent.waitUntil(promise.catch(() => undefined));
+    else void promise.catch(() => undefined);
+  };
   try {
-    const r = listener(event);
-    if (r && typeof (r as Promise<void>).then === 'function') {
-      (r as Promise<void>).catch(() => undefined);
-    }
+    const r = listener(event, { waitUntil });
+    // If the hook itself returned a promise, keep the worker alive for it too.
+    if (r && typeof (r as Promise<void>).then === 'function') waitUntil(r as Promise<void>);
   } catch {
-    // never break the request on a listener error
+    // never break the request on a hook error
   }
 }
 
