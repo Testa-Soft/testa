@@ -39,3 +39,18 @@ export {
 } from './apply/index.ts';
 export { eachMatching, safeQuerySelectorAll } from './apply/dom.ts';
 export { stripScriptTags } from './apply/html.ts';
+export {
+  testa,
+  onVariationApplied,
+  onVariationAssigned,
+  emitVariationApplied,
+  emitVariationAssigned,
+  installTestaGlobal,
+} from './events/bus.ts';
+export type {
+  VariationEvent,
+  VariationEventName,
+  VariationHandler,
+  Unsubscribe,
+  TestaGlobal,
+} from './events/bus.ts';

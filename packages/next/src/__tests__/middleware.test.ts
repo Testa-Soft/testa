@@ -7,7 +7,7 @@
 import { ASSIGNMENT_COOKIE } from '@testa-soft/experiment-core';
 import { NextRequest } from 'next/server';
 import { describe, expect, it } from 'vitest';
-import { createTestaMiddleware } from '../middleware.ts';
+import { createTestaProxy } from '../middleware.ts';
 import { splitUrlConfig } from './helpers.ts';
 
 function request(url: string, opts: { cookie?: string; prefetch?: boolean } = {}): NextRequest {
@@ -17,9 +17,9 @@ function request(url: string, opts: { cookie?: string; prefetch?: boolean } = {}
   return new NextRequest(new URL(url), { headers });
 }
 
-const mw = () => createTestaMiddleware({ projectSlug: 'acme', config: splitUrlConfig() });
+const mw = () => createTestaProxy({ projectSlug: 'acme', config: splitUrlConfig() });
 
-describe('createTestaMiddleware', () => {
+describe('createTestaProxy', () => {
   it('307-redirects a redirect-variation visitor to the variant', async () => {
     const res = await mw()(
       request('https://acme.com/pricing', { cookie: `${ASSIGNMENT_COOKIE}=101.2.0.0` }),
@@ -63,7 +63,7 @@ describe('createTestaMiddleware', () => {
   });
 
   it('fails open (pass-through) when config resolves to null', async () => {
-    const mwNoConfig = createTestaMiddleware({ projectSlug: 'acme', loadConfig: async () => null });
+    const mwNoConfig = createTestaProxy({ projectSlug: 'acme', loadConfig: async () => null });
     const res = await mwNoConfig(
       request('https://acme.com/pricing', { cookie: `${ASSIGNMENT_COOKIE}=101.2.0.0` }),
     );

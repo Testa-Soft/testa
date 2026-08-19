@@ -21,8 +21,13 @@
  */
 
 import type { ProjectConfig } from '@testa-platform/shared-types';
-import { type Teardown, applyVariation } from '@testa-soft/dom';
-import { ASSIGNMENT_COOKIE } from '@testa-soft/experiment-core';
+import {
+  type Teardown,
+  applyVariation,
+  emitVariationApplied,
+  installTestaGlobal,
+} from '@testa-soft/dom';
+import { ASSIGNMENT_COOKIE, UUID_COOKIE, resolveExposures } from '@testa-soft/experiment-core';
 import { usePathname } from 'next/navigation';
 import { useEffect } from 'react';
 import { readClientCookie } from '../client-cookie.ts';
@@ -86,10 +91,28 @@ export function TestaExperiments({ config, previewApiUrl }: TestaExperimentsProp
     // match the experiment's page rule (keyed on `pathname` so a soft nav to a
     // non-matching route tears the change down instead of leaking it everywhere).
     const currentUrl = typeof window !== 'undefined' ? window.location.href : '';
-    teardowns.push(
-      ...applyAssignedExperiments(config, readClientCookie(ASSIGNMENT_COOKIE), currentUrl),
-    );
+    const assignmentCookie = readClientCookie(ASSIGNMENT_COOKIE);
+    teardowns.push(...applyAssignedExperiments(config, assignmentCookie, currentUrl));
     revealShield();
+
+    // Fire `variation_applied` for every experiment the visitor is exposed to on
+    // this page (split-URL, DOM, and control alike) — once per load, deduped in
+    // the bus. This is the client event surface + the GTM dataLayer push.
+    installTestaGlobal();
+    const uuid = readClientCookie(UUID_COOKIE) ?? '';
+    const nowSec = Math.floor(Date.now() / 1000);
+    for (const e of resolveExposures(config, assignmentCookie, currentUrl, nowSec)) {
+      if (config.project_id != null) {
+        emitVariationApplied({
+          project_id: config.project_id,
+          experiment: e.experimentId,
+          variation: e.variationId,
+          uuid,
+          ...(e.title ? { title: e.title } : {}),
+          url: currentUrl,
+        });
+      }
+    }
     return dispose;
     // Keyed on `config.config_hash` (a stable string), NOT the `config` object —
     // so a caller passing an inline config, a dev Fast Refresh, or a parent

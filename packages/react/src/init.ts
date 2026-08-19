@@ -19,7 +19,12 @@
  */
 
 import type { ProjectConfig } from '@testa-platform/shared-types';
-import { type Teardown, applyVariation } from '@testa-soft/dom';
+import {
+  type Teardown,
+  applyVariation,
+  emitVariationApplied,
+  installTestaGlobal,
+} from '@testa-soft/dom';
 import {
   ASSIGNMENT_COOKIE,
   type CookieStore,
@@ -27,6 +32,7 @@ import {
   UUID_TTL_SEC,
   hasRedirected,
   markRedirected,
+  resolveExposures,
 } from '@testa-soft/experiment-core';
 import { type VariationAppliedEvent, runExperiments } from '@testa-soft/experiment-core';
 import { applyAssignedExperiments } from './apply-assignments.ts';
@@ -129,7 +135,26 @@ export async function initTesta(opts: InitOptions): Promise<InitResult> {
 
   // ── DOM: apply the assigned variant, cookie-first — page-gated, so a variant
   // assigned on the experiment page never leaks onto other routes ─────────────
-  const teardowns = applyAssignedExperiments(config, store.get(ASSIGNMENT_COOKIE), currentUrl);
+  const assignmentCookie = store.get(ASSIGNMENT_COOKIE);
+  const teardowns = applyAssignedExperiments(config, assignmentCookie, currentUrl);
+
+  // Fire `variation_applied` for each exposed experiment on this page (client
+  // event surface + GTM dataLayer). Deduped per load inside the bus.
+  installTestaGlobal();
+  const uuid = store.get(UUID_COOKIE) ?? '';
+  const nowSec = Math.floor(now / 1000);
+  for (const e of resolveExposures(config, assignmentCookie, currentUrl, nowSec)) {
+    if (config.project_id != null) {
+      emitVariationApplied({
+        project_id: config.project_id,
+        experiment: e.experimentId,
+        variation: e.variationId,
+        uuid,
+        ...(e.title ? { title: e.title } : {}),
+        url: currentUrl,
+      });
+    }
+  }
   return { applied: result.applied, teardowns, redirected: false };
 }
 

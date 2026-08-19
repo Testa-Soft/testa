@@ -6,13 +6,26 @@
  */
 
 export {
-  createTestaMiddleware,
+  createTestaProxy,
   DEFAULT_CONFIG_HOST,
   DEFAULT_TRACKING_HOST,
   SHIELD_HEADER,
 } from './middleware.ts';
-export { hasPendingDomChange } from '@testa-soft/experiment-core';
-export type { TestaMiddleware, TestaMiddlewareOptions } from './middleware.ts';
+export { hasPendingDomChange, resolveExposures } from '@testa-soft/experiment-core';
+export type { Exposure } from '@testa-soft/experiment-core';
+export type { TestaProxy, TestaProxyOptions } from './middleware.ts';
+
+// Client-side event bus (3.3.3 parity) — subscribe with `testa.onVariationApplied`,
+// or the standalone fns; `window.testa` is installed by the client components.
+export {
+  testa,
+  onVariationApplied,
+  onVariationAssigned,
+  emitVariationApplied,
+  emitVariationAssigned,
+  installTestaGlobal,
+} from '@testa-soft/dom';
+export type { VariationEvent, VariationHandler, Unsubscribe, TestaGlobal } from '@testa-soft/dom';
 export { emitExposure } from './tracking.ts';
 export type { ExposurePayload } from './tracking.ts';
 export { runExperiments } from '@testa-soft/experiment-core';

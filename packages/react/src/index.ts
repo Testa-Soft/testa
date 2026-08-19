@@ -47,3 +47,17 @@ export {
   PREVIEW_VARIATION_ID,
 } from './preview.ts';
 export { installSpaNav, LOCATION_CHANGE_EVENT } from './spa-nav.ts';
+
+// Client-side event bus (3.3.3 parity) — `testa.onVariationApplied(...)`,
+// standalone fns, or `window.testa`. Same surface as `@testa-soft/next`.
+export {
+  testa,
+  onVariationApplied,
+  onVariationAssigned,
+  emitVariationApplied,
+  emitVariationAssigned,
+  installTestaGlobal,
+} from '@testa-soft/dom';
+export type { VariationEvent, VariationHandler, Unsubscribe, TestaGlobal } from '@testa-soft/dom';
+export { resolveExposures } from '@testa-soft/experiment-core';
+export type { Exposure } from '@testa-soft/experiment-core';

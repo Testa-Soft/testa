@@ -346,6 +346,45 @@ export function matchesPageRule(url: string, rules: ExperimentRule[]): boolean {
   return rules.every((r) => matchesRule(url, r));
 }
 
+/** One experiment the visitor is currently exposed to (for `variation_applied`). */
+export interface Exposure {
+  experimentId: number;
+  variationId: number;
+  title?: string;
+}
+
+/**
+ * Which experiments is this visitor EXPOSED to on `url` right now — assigned a
+ * variation (INCLUDING control), the page rule matches, and the session window
+ * is still live. This is the set the client fires `variation_applied` for
+ * (split-URL, DOM, and control alike) — distinct from the DOM-apply subset,
+ * which drops control + redirect-only. Cookie-first: reads the packed cookie,
+ * never buckets.
+ */
+export function resolveExposures(
+  config: ProjectConfig,
+  cookieValue: string | null,
+  url: string,
+  nowSec: number,
+): Exposure[] {
+  const map = parsePacked(cookieValue);
+  if (map.size === 0) return [];
+
+  const out: Exposure[] = [];
+  for (const experiment of config.experiments) {
+    if (experiment.status !== 'active') continue;
+    if (!matchesPageRule(url, experiment.rules)) continue;
+    const state = map.get(Number(experiment.experiment_id));
+    if (!state || !isAssigned(state) || !isFresh(state, nowSec)) continue;
+    out.push({
+      experimentId: experiment.experiment_id,
+      variationId: state.variation,
+      ...(experiment.title ? { title: experiment.title } : {}),
+    });
+  }
+  return out;
+}
+
 function matchesRule(url: string, rule: ExperimentRule): boolean {
   if (rule.match_type === 'not_contains') return !url.includes(rule.url_pattern);
   const mode =

@@ -1,6 +1,6 @@
 {
   "name": "@testa-soft/next",
-  "version": "0.0.2-dev.4",
+  "version": "0.0.2-dev.5",
   "type": "module",
   "description": "Testa split-URL A/B testing for Next.js — server-side, flicker-free redirects via middleware.",
   "license": "UNLICENSED",

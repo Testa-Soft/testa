@@ -1,13 +1,13 @@
 /**
- * `createTestaMiddleware` — the one-line Next.js integration.
+ * `createTestaProxy` — the one-line Next.js integration.
  *
  * This is the ONLY file that imports `next/server` at runtime; all decision
  * logic lives in the host-neutral `engine.ts` + experiment-core, so it stays
  * thin. Usage:
  *
  *   // middleware.ts
- *   import { createTestaMiddleware } from '@testa/next'
- *   export const middleware = createTestaMiddleware({ projectSlug: 'acme', config })
+ *   import { createTestaProxy } from '@testa/next'
+ *   export const middleware = createTestaProxy({ projectSlug: 'acme', config })
  *   export const config = { matcher: ['/((?!_next/static|_next/image|favicon.ico|api).*)'] }
  */
 
@@ -39,7 +39,7 @@ export const DEFAULT_CONFIG_HOST = 'https://config.testa-soft.tech';
 /** Default host for exposure/conversion tracking (crobot's `/api/leads`). */
 export const DEFAULT_TRACKING_HOST = 'https://new.testa-soft.tech';
 
-export interface TestaMiddlewareOptions extends ConfigSource {
+export interface TestaProxyOptions extends ConfigSource {
   /**
    * The project's id — the ONLY thing a normal integration passes. Config is
    * fetched from `{host}/api/v1/config/{projectId}`.
@@ -73,7 +73,7 @@ export interface TestaMiddlewareOptions extends ConfigSource {
    * their analytics, emit a lead). Errors and rejections are swallowed so a
    * listener never breaks the request. Not awaited — keep it fast or fire-and-forget.
    */
-  onVariationApplied?: (event: VariationAppliedEvent) => void | Promise<void>;
+  onVariationAssigned?: (event: VariationAppliedEvent) => void | Promise<void>;
   /**
    * Emit exposures (impressions) to the legacy `/api/leads` so experiment
    * results populate. Default true. Set false if you only want redirects, or if
@@ -84,12 +84,12 @@ export interface TestaMiddlewareOptions extends ConfigSource {
   trackingHost?: string;
 }
 
-export type TestaMiddleware = (req: NextRequest, event?: NextFetchEvent) => Promise<NextResponse>;
+export type TestaProxy = (req: NextRequest, event?: NextFetchEvent) => Promise<NextResponse>;
 
-export function createTestaMiddleware(options: TestaMiddlewareOptions): TestaMiddleware {
+export function createTestaProxy(options: TestaProxyOptions): TestaProxy {
   const projectId = options.projectId ?? options.projectSlug;
   if (!projectId) {
-    throw new Error('createTestaMiddleware: `projectId` is required');
+    throw new Error('createTestaProxy: `projectId` is required');
   }
   const configClient = new ConfigClient(resolveConfigSource(options, projectId));
   const secure = options.secureCookies ?? true;
@@ -162,7 +162,7 @@ export function createTestaMiddleware(options: TestaMiddlewareOptions): TestaMid
     );
 
     for (const applied of result.applied) {
-      emitVariationApplied(options.onVariationApplied, applied);
+      fireVariationAssigned(options.onVariationAssigned, applied);
       // Emit an exposure once per fresh enrollment (deduped server-side anyway).
       if (trackingEnabled && applied.firstAssignment && config.project_id != null) {
         const pending = emitExposure(trackingHost, {
@@ -203,8 +203,8 @@ export function createTestaMiddleware(options: TestaMiddlewareOptions): TestaMid
 export const SHIELD_HEADER = 'x-testa-shield';
 
 /** Invoke the listener without ever letting it break the request. */
-function emitVariationApplied(
-  listener: TestaMiddlewareOptions['onVariationApplied'],
+function fireVariationAssigned(
+  listener: TestaProxyOptions['onVariationAssigned'],
   event: VariationAppliedEvent,
 ): void {
   if (!listener) return;
@@ -230,7 +230,7 @@ function geoCountry(req: NextRequest): string | undefined {
  * `config` / `loadConfig` / `configUrl` always wins; otherwise the config URL is
  * built from the resolved host + projectId, so the caller only needs projectId.
  */
-function resolveConfigSource(options: TestaMiddlewareOptions, projectId: string): ConfigSource {
+function resolveConfigSource(options: TestaProxyOptions, projectId: string): ConfigSource {
   if (options.config || options.loadConfig || options.configUrl) return options;
   const host = (options.host ?? readEnv('TESTA_CONFIG_HOST') ?? DEFAULT_CONFIG_HOST).replace(
     /\/+$/,
