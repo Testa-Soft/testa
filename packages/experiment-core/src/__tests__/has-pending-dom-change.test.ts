@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
 import type { ProjectConfig } from '@testa-platform/shared-types';
+import { describe, expect, it } from 'vitest';
 import { hasPendingDomChange } from '../engine.ts';
 
 function cfg(experiments: ProjectConfig['experiments']): ProjectConfig {
@@ -22,7 +22,11 @@ const domExp: ProjectConfig['experiments'][number] = {
   goals: [],
   variations: [
     { variation_id: 0, weight: 50, changes: [] },
-    { variation_id: 1, weight: 50, changes: [{ type: 'change_html', selector: '#h', content: 'x' }] },
+    {
+      variation_id: 1,
+      weight: 50,
+      changes: [{ type: 'change_html', selector: '#h', content: 'x' }],
+    },
   ],
 };
 
@@ -34,7 +38,13 @@ const splitUrlExp: ProjectConfig['experiments'][number] = {
   goals: [],
   variations: [
     { variation_id: 0, weight: 0, changes: [] },
-    { variation_id: 1, weight: 100, changes: [{ type: 'redirect', from_url: '/calculator', to_url: 'testa=ab', url_match_type: 'query' }] },
+    {
+      variation_id: 1,
+      weight: 100,
+      changes: [
+        { type: 'redirect', from_url: '/calculator', to_url: 'testa=ab', url_match_type: 'query' },
+      ],
+    },
   ],
 };
 
@@ -44,7 +54,9 @@ describe('hasPendingDomChange', () => {
   });
 
   it('false: split-URL experiment (redirect change) never needs the shield', () => {
-    expect(hasPendingDomChange(cfg([splitUrlExp]), 'https://s.com/calculator', '20.1.0.0')).toBe(false);
+    expect(hasPendingDomChange(cfg([splitUrlExp]), 'https://s.com/calculator', '20.1.0.0')).toBe(
+      false,
+    );
   });
 
   it('false: assigned to control (no changes)', () => {
@@ -64,7 +76,10 @@ describe('hasPendingDomChange', () => {
   });
 
   it('true: one DOM experiment among a split-URL one on the same page', () => {
-    const both = cfg([{ ...splitUrlExp, rules: [{ match_type: 'contains', url_pattern: '/pricing' }] }, domExp]);
+    const both = cfg([
+      { ...splitUrlExp, rules: [{ match_type: 'contains', url_pattern: '/pricing' }] },
+      domExp,
+    ]);
     expect(hasPendingDomChange(both, 'https://s.com/pricing', '20.1.0.0~10.1.0.0')).toBe(true);
   });
 });

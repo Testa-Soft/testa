@@ -24,6 +24,14 @@
 
 export const EXCLUDED_VARIATION_ID = -1;
 
+/**
+ * Sentinel variation for "targeting PASSED, cached eligible, but not yet on the
+ * experiment page / not yet bucketed". Lets a first-touch targeting decision be
+ * cached (crobot 3.3.3 caches `_testa_excl=0`) so a UTM on the landing page
+ * keeps the visitor eligible on a later, UTM-less page. Never a real variation.
+ */
+export const ELIGIBLE_PENDING_VARIATION_ID = -2;
+
 export interface ExpState {
   variation: number;
   excluded: boolean;

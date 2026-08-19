@@ -55,6 +55,12 @@ export interface TestaMiddlewareOptions extends ConfigSource {
   /** Emit `Secure` cookies. Default true; set false for local http dev. */
   secureCookies?: boolean;
   /**
+   * Session / exclusion-cooldown window in SECONDS (crobot 3.3.3 model): how long
+   * a first-touch targeting verdict is cached and how long a conversion stays
+   * attributed. Default 30 min (`SESSION_LENGTH_SEC`).
+   */
+  sessionLengthSec?: number;
+  /**
    * Explicit cookie `Domain` for cross-subdomain tracking (e.g. `.acme.com`).
    * Wins over `discoverRootDomain`.
    */
@@ -148,6 +154,9 @@ export function createTestaMiddleware(options: TestaMiddlewareOptions): TestaMid
           ? { userAgent: req.headers.get('user-agent') as string }
           : {}),
         ...(geoCountry(req) ? { country: geoCountry(req) as string } : {}),
+        ...(options.sessionLengthSec !== undefined
+          ? { sessionLengthSec: options.sessionLengthSec }
+          : {}),
       },
       store,
     );

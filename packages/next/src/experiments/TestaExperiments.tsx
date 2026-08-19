@@ -82,8 +82,13 @@ export function TestaExperiments({ config, previewApiUrl }: TestaExperimentsProp
       return dispose;
     }
 
-    // Normal: apply the assigned variant, cookie-first.
-    teardowns.push(...applyAssignedExperiments(config, readClientCookie(ASSIGNMENT_COOKIE)));
+    // Normal: apply the assigned variant, cookie-first — but only on pages that
+    // match the experiment's page rule (keyed on `pathname` so a soft nav to a
+    // non-matching route tears the change down instead of leaking it everywhere).
+    const currentUrl = typeof window !== 'undefined' ? window.location.href : '';
+    teardowns.push(
+      ...applyAssignedExperiments(config, readClientCookie(ASSIGNMENT_COOKIE), currentUrl),
+    );
     revealShield();
     return dispose;
     // Keyed on `config.config_hash` (a stable string), NOT the `config` object —

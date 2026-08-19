@@ -55,7 +55,13 @@ export { mergeParams } from './redirect/merge-params.ts';
 // Experiment orchestration engine (page-gate → targeting/exclusions → assign →
 // redirect resolution). Host-neutral; the @testa-soft/next + /react adapters
 // import this instead of each carrying a copy.
-export { runExperiments, hasPendingDomChange } from './engine.ts';
+export { runExperiments, hasPendingDomChange, matchesPageRule } from './engine.ts';
+export {
+  SESSION_LENGTH_SEC,
+  isSessionLive,
+  isAssigned,
+  isFresh,
+} from './session.ts';
 export type {
   EngineContext,
   EngineResult,

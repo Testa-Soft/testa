@@ -9,34 +9,53 @@
  * on the server) — the client `<TestaExperiments/>` reads the same cookie and
  * applies them, cookie-first (no re-bucket).
  *
+ * Session-scoped, first-touch targeting (crobot 3.3.3 parity — see session.ts).
+ *
  * Per request:
  *   0. Apply inbound cross-domain assignments (`?_testa_cd=…`) so a visitor
  *      carried from another domain keeps their variation.
  *   1. For each ACTIVE experiment:
- *      a. Page gate — only enroll when the current URL matches the experiment's
- *         page rule (experiment's own match mode). No enrollment off-page.
- *      b. Entry gates (ONLY for a visitor not yet assigned — cookie-first wins,
- *         so a returning enrolled visitor is never re-gated by targeting):
- *         exclusions (any match → skip), targeting (must be eligible, AND).
- *      c. Assign (cookie-first + deterministic bucket). State lives in the packed
- *         `_testa_exp` cookie — the SAME format the v2 pixel uses, so assignment
- *         is preserved identically across the middleware, the client, and the pixel.
- *      d. Emit a `variation_applied` event.
- *      e. If the assigned variation is a redirect, resolve the destination
- *         (variation's match mode) and redirect. First redirect wins; DOM-only
- *         experiments fall through and accumulate (several can apply per page).
+ *      a. Targeting gate — evaluated SITE-WIDE (before the page rule) and CACHED
+ *         first-touch. A UTM on the landing page is evaluated there and the
+ *         verdict cached, so the visitor stays eligible on a later, UTM-less page.
+ *         A fail is a flat exclusion cooldown; both verdicts carry a sliding
+ *         window (`sessionLengthSec`, default 30m) and recompute once it expires.
+ *         Targeting is grouped: OR within a dimension, AND across dimensions.
+ *      b. Page gate — only ENROLL on the experiment's own page (eligibility is
+ *         already cached above, so being off-page never loses it).
+ *      c. Exclusion rules (`exclusions[]` list) — on-page entry gate for new
+ *         visitors, evaluated each time (not cached).
+ *      d. Assign (cookie-first + deterministic bucket) and stamp/slide the session
+ *         window — the conversion-attribution clock (`isSessionLive`). State lives
+ *         in the packed `_testa_exp` cookie, the SAME format the v2 pixel uses.
+ *      e. Emit a `variation_applied` event; if the assigned variation is a
+ *         redirect, resolve the destination and redirect (first redirect wins;
+ *         DOM-only experiments fall through and accumulate).
  *
  * The caller (middleware) MUST only invoke this on a real navigation, never a
  * prefetch — the engine commits cookies via the store and fires listener events.
  */
 
-import type { ExperimentRule, ProjectConfig, VariationConfig } from '@testa-platform/shared-types';
-import { applyAssignment, assign, hasCachedAssignment } from './assign.ts';
-import type { CookieStore } from './cookie-store.ts';
+import type {
+  ExperimentRule,
+  ProjectConfig,
+  TargetingCondition,
+  VariationConfig,
+} from '@testa-platform/shared-types';
+import { applyAssignment, assign } from './assign.ts';
+import { ASSIGNMENT_COOKIE, type CookieStore } from './cookie-store.ts';
 import { CROSS_DOMAIN_PARAM, decodeCrossDomain } from './cross-domain.ts';
-import { EXCLUDED_VARIATION_ID, parsePacked } from './packed-cookie.ts';
+import { ELIGIBLE_PENDING_VARIATION_ID, parsePacked } from './packed-cookie.ts';
 import { type RedirectChange, resolveRedirectDestination } from './redirect/decide.ts';
 import { matchesForMode } from './redirect/match.ts';
+import {
+  SESSION_LENGTH_SEC,
+  cacheEligible,
+  cacheExclusion,
+  isAssigned,
+  isFresh,
+  refreshSession,
+} from './session.ts';
 import { type TargetingContext, isExcludedByRules, passesTargeting } from './targeting.ts';
 
 /** Payload passed to the `onVariationApplied` listener when a visitor is enrolled. */
@@ -100,6 +119,8 @@ export interface EngineContext {
   country?: string;
   /** Collect a per-experiment `DecisionTrace` into the result. Default false. */
   debug?: boolean;
+  /** Session / exclusion-cooldown window in seconds. Default `SESSION_LENGTH_SEC` (30m). */
+  sessionLengthSec?: number;
 }
 
 export function runExperiments(ctx: EngineContext, store: CookieStore): EngineResult {
@@ -119,6 +140,10 @@ export function runExperiments(ctx: EngineContext, store: CookieStore): EngineRe
     ...(ctx.country !== undefined ? { country: ctx.country } : {}),
   };
 
+  const nowSec = Math.floor(ctx.now / 1000);
+  const expiresSec = nowSec + (ctx.sessionLengthSec ?? SESSION_LENGTH_SEC);
+  const packed = parsePacked(store.get(ASSIGNMENT_COOKIE));
+
   for (const experiment of ctx.config.experiments) {
     const id = experiment.experiment_id;
     const title = experiment.title;
@@ -129,26 +154,54 @@ export function runExperiments(ctx: EngineContext, store: CookieStore): EngineRe
       continue;
     }
 
-    // a. Page gate — only enroll on the experiment's page.
-    if (!matchesPageRule(ctx.currentUrl, experiment.rules)) {
+    const state = packed.get(id);
+    const onPage = matchesPageRule(ctx.currentUrl, experiment.rules);
+
+    // a. Targeting gate — evaluated SITE-WIDE (before the page rule) and CACHED
+    // first-touch (crobot 3.3.3 `_testa_excl`). A UTM on the landing page is
+    // evaluated there and the verdict is cached, so the visitor stays eligible
+    // on a later, UTM-less page. A fail becomes a flat cooldown (sliding window),
+    // not re-evaluated mid-window; when it expires it is recomputed.
+    if (!isAssigned(state)) {
+      if (state?.excluded && isFresh(state, nowSec)) {
+        note({ ...base, reason: 'targeting_failed', detail: 'excluded (cached, in cooldown)' });
+        continue;
+      }
+      const eligibleCached =
+        state?.variation === ELIGIBLE_PENDING_VARIATION_ID && isFresh(state, nowSec);
+      if (!eligibleCached) {
+        if (!passesTargeting(experiment.targeting, targetingCtx)) {
+          cacheExclusion(store, id, expiresSec);
+          note({
+            ...base,
+            reason: 'targeting_failed',
+            detail: describeTargeting(experiment.targeting),
+          });
+          continue;
+        }
+        // Passed: cache the eligibility (fixed-TTL, like 3.3.3's `_testa_excl`).
+        // This also OVERWRITES any stale/expired exclusion in the cookie —
+        // otherwise `assign()`'s cookie-first would honour the old `excluded=1`
+        // and refuse to enroll after the cooldown.
+        cacheEligible(store, id, expiresSec);
+      }
+    }
+
+    // b. Page-rule gate — only ENROLL on the experiment's page. Eligibility is
+    // already cached above, so being off-page never loses it.
+    if (!onPage) {
       note({ ...base, reason: 'page_no_match', detail: describeRules(experiment.rules) });
       continue;
     }
 
-    // b. Entry gates — ONLY for a visitor not yet assigned. Cookie-first wins:
-    // a returning enrolled visitor stays in even if their utm/etc. changed.
-    if (!hasCachedAssignment(store, experiment.experiment_id)) {
-      if (isExcludedByRules(experiment.exclusions, targetingCtx)) {
-        note({ ...base, reason: 'excluded_by_rules' });
-        continue;
-      }
-      if (!passesTargeting(experiment.targeting, targetingCtx)) {
-        note({ ...base, reason: 'targeting_failed' });
-        continue;
-      }
+    // c. Exclusion rules (the `exclusions[]` list) — entry gate for new visitors,
+    // evaluated on-page like 3.3.3's handleExclusions (not cached).
+    if (!isAssigned(state) && isExcludedByRules(experiment.exclusions, targetingCtx)) {
+      note({ ...base, reason: 'excluded_by_rules' });
+      continue;
     }
 
-    // c. Assign (packed `_testa_exp` — same format as the v2 pixel).
+    // d. Assign (packed `_testa_exp` — same format as the v2 pixel).
     const result = assign(
       {
         experiment_id: experiment.experiment_id,
@@ -162,11 +215,18 @@ export function runExperiments(ctx: EngineContext, store: CookieStore): EngineRe
       store,
     );
     if (result.isExcluded) {
-      note({ ...base, reason: 'traffic_excluded', detail: `traffic=${experiment.traffic_allocation}` });
+      note({
+        ...base,
+        reason: 'traffic_excluded',
+        detail: `traffic=${experiment.traffic_allocation}`,
+      });
       continue;
     }
 
-    // d/e. Resolve redirect (if the applied variation is a redirect) + emit event.
+    // Enrolled: stamp / slide the session window (conversion-attribution clock).
+    refreshSession(store, id, result.variationId, expiresSec);
+
+    // e. Resolve redirect (if the applied variation is a redirect) + emit event.
     const variation = experiment.variations.find((v) => v.variation_id === result.variationId);
     const change = variation ? redirectChangeOf(variation) : undefined;
     const dest = change ? resolveRedirectDestination(change, ctx.currentUrl) : undefined;
@@ -210,6 +270,12 @@ export function runExperiments(ctx: EngineContext, store: CookieStore): EngineRe
 function describeRules(rules: ExperimentRule[]): string {
   if (!rules || rules.length === 0) return '(no rules — matches everywhere)';
   return rules.map((r) => `${r.match_type} "${r.url_pattern}"`).join(' AND ');
+}
+
+/** Human-readable targeting summary for the debug trace. */
+function describeTargeting(targeting: TargetingCondition[] | undefined): string {
+  if (!targeting || targeting.length === 0) return '(no targeting)';
+  return targeting.map((t) => `${t.dimension} ${t.operator} "${t.value}"`).join(', ');
 }
 
 function applyInboundCrossDomain(url: string, config: ProjectConfig, store: CookieStore): void {
@@ -260,7 +326,8 @@ export function hasPendingDomChange(
     if (!matchesPageRule(url, experiment.rules)) continue;
 
     const state = map.get(Number(experiment.experiment_id));
-    if (!state || state.excluded || state.variation === EXCLUDED_VARIATION_ID) continue;
+    // Skip excluded and the eligible-but-unassigned sentinel (both variation < 0).
+    if (!state || state.excluded || state.variation < 0) continue;
 
     const variation = experiment.variations.find((v) => v.variation_id === state.variation);
     if (variation?.changes.some((c) => c.type !== 'redirect')) return true;
@@ -268,7 +335,13 @@ export function hasPendingDomChange(
   return false;
 }
 
-function matchesPageRule(url: string, rules: ExperimentRule[]): boolean {
+/**
+ * Does `url` match an experiment's page rules? Exported so the client DOM-apply
+ * layer gates on the SAME rule the engine enrolls on — a variation must only be
+ * applied on the experiment's own page, never on every page the visitor is
+ * assigned across.
+ */
+export function matchesPageRule(url: string, rules: ExperimentRule[]): boolean {
   if (!rules || rules.length === 0) return true;
   return rules.every((r) => matchesRule(url, r));
 }

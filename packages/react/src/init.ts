@@ -127,8 +127,9 @@ export async function initTesta(opts: InitOptions): Promise<InitResult> {
     }
   }
 
-  // ── DOM: apply the assigned variant, cookie-first ───────────────────────
-  const teardowns = applyAssignedExperiments(config, store.get(ASSIGNMENT_COOKIE));
+  // ── DOM: apply the assigned variant, cookie-first — page-gated, so a variant
+  // assigned on the experiment page never leaks onto other routes ─────────────
+  const teardowns = applyAssignedExperiments(config, store.get(ASSIGNMENT_COOKIE), currentUrl);
   return { applied: result.applied, teardowns, redirected: false };
 }
 

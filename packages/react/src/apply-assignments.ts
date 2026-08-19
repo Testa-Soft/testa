@@ -14,7 +14,7 @@
 
 import type { ProjectConfig, VariationChange } from '@testa-platform/shared-types';
 import { type Teardown, applyVariation } from '@testa-soft/dom';
-import { EXCLUDED_VARIATION_ID, parsePacked } from '@testa-soft/experiment-core';
+import { matchesPageRule, parsePacked } from '@testa-soft/experiment-core';
 
 export interface AssignedExperiment {
   experimentId: number;
@@ -31,6 +31,7 @@ export interface AssignedExperiment {
 export function resolveAssignedExperiments(
   config: ProjectConfig,
   cookieValue: string | null,
+  currentUrl: string,
 ): AssignedExperiment[] {
   const map = parsePacked(cookieValue);
   if (map.size === 0) return [];
@@ -38,8 +39,14 @@ export function resolveAssignedExperiments(
   const out: AssignedExperiment[] = [];
   for (const experiment of config.experiments) {
     if (experiment.status !== 'active') continue;
+    // Page gate — apply a variation ONLY on the experiment's own page (same rule
+    // the engine enrolls on). Assignment is sticky site-wide; the DOM change is
+    // not. Without this, an assigned variant leaks onto '/' and every other page.
+    if (!matchesPageRule(currentUrl, experiment.rules)) continue;
+
     const state = map.get(Number(experiment.experiment_id));
-    if (!state || state.excluded || state.variation === EXCLUDED_VARIATION_ID) continue;
+    // Skip excluded + the eligible-but-unassigned sentinel (both variation < 0).
+    if (!state || state.excluded || state.variation < 0) continue;
 
     const variation = experiment.variations.find((v) => v.variation_id === state.variation);
     if (!variation) continue;
@@ -64,9 +71,10 @@ export function resolveAssignedExperiments(
 export function applyAssignedExperiments(
   config: ProjectConfig,
   cookieValue: string | null,
+  currentUrl: string,
 ): Teardown[] {
   const teardowns: Teardown[] = [];
-  for (const assigned of resolveAssignedExperiments(config, cookieValue)) {
+  for (const assigned of resolveAssignedExperiments(config, cookieValue, currentUrl)) {
     teardowns.push(...applyVariation(assigned.variationId, assigned.changes));
   }
   return teardowns;

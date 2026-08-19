@@ -70,37 +70,52 @@ afterEach(() => {
   document.body.innerHTML = '';
 });
 
+// domConfig has `rules: []` (matches everywhere), so any URL passes its page gate.
+const URL_ANY = 'https://acme.com/anything';
+
 describe('resolveAssignedExperiments — cookie-first selection', () => {
   it('returns the variant DOM changes for an assigned visitor', () => {
-    const assigned = resolveAssignedExperiments(domConfig(), '101.2.0.0');
+    const assigned = resolveAssignedExperiments(domConfig(), '101.2.0.0', URL_ANY);
     expect(assigned).toHaveLength(1);
     expect(assigned[0]).toMatchObject({ experimentId: 101, variationId: 2 });
     expect(assigned[0]?.changes).toHaveLength(2);
   });
 
   it('returns nothing for a control-assigned visitor (no changes on the variant)', () => {
-    expect(resolveAssignedExperiments(domConfig(), '101.1.0.0')).toHaveLength(0);
+    expect(resolveAssignedExperiments(domConfig(), '101.1.0.0', URL_ANY)).toHaveLength(0);
   });
 
   it('returns nothing with no cookie (never re-buckets)', () => {
-    expect(resolveAssignedExperiments(domConfig(), null)).toHaveLength(0);
+    expect(resolveAssignedExperiments(domConfig(), null, URL_ANY)).toHaveLength(0);
   });
 
   it('skips an excluded assignment', () => {
-    expect(resolveAssignedExperiments(domConfig(), '101.-1.1.0')).toHaveLength(0);
+    expect(resolveAssignedExperiments(domConfig(), '101.-1.1.0', URL_ANY)).toHaveLength(0);
   });
 
   it('skips a paused experiment', () => {
-    expect(resolveAssignedExperiments(domConfig({ status: 'paused' }), '101.2.0.0')).toHaveLength(
+    expect(
+      resolveAssignedExperiments(domConfig({ status: 'paused' }), '101.2.0.0', URL_ANY),
+    ).toHaveLength(0);
+  });
+
+  it('does NOT apply on a page failing the experiment page rule (assigned but off-page)', () => {
+    const config = domConfig();
+    const exp = config.experiments[0];
+    if (exp) exp.rules = [{ match_type: 'contains', url_pattern: '/pricing' }];
+    expect(resolveAssignedExperiments(config, '101.2.0.0', 'https://acme.com/home')).toHaveLength(
       0,
     );
+    expect(
+      resolveAssignedExperiments(config, '101.2.0.0', 'https://acme.com/pricing'),
+    ).toHaveLength(1);
   });
 
   it('filters out redirect changes (those are the middleware’s job)', () => {
     const config = domConfig();
     const variant = config.experiments[0]?.variations[1];
     if (variant) variant.changes = [redirectChange(), cssChange('#x{top:0}')];
-    const assigned = resolveAssignedExperiments(config, '101.2.0.0');
+    const assigned = resolveAssignedExperiments(config, '101.2.0.0', URL_ANY);
     expect(assigned[0]?.changes).toHaveLength(1);
     expect(assigned[0]?.changes[0]?.type).toBe('css');
   });
@@ -109,7 +124,7 @@ describe('resolveAssignedExperiments — cookie-first selection', () => {
 describe('applyAssignedExperiments — end-to-end wiring (cookie → DOM)', () => {
   it('applies the assigned variant’s DOM changes to the page', () => {
     document.body.innerHTML = '<h1 id="hero">Hi</h1><button id="cta">Old</button>';
-    const teardowns = applyAssignedExperiments(domConfig(), '101.2.0.0');
+    const teardowns = applyAssignedExperiments(domConfig(), '101.2.0.0', URL_ANY);
     expect(document.querySelector<HTMLElement>('#cta')?.textContent).toBe('Buy now');
     // css applies via an injected <style> tag
     expect(document.head.querySelector('style')).not.toBeNull();
@@ -120,7 +135,7 @@ describe('applyAssignedExperiments — end-to-end wiring (cookie → DOM)', () =
 
   it('applies nothing for a control visitor', () => {
     document.body.innerHTML = '<button id="cta">Old</button>';
-    applyAssignedExperiments(domConfig(), '101.1.0.0');
+    applyAssignedExperiments(domConfig(), '101.1.0.0', URL_ANY);
     expect(document.querySelector<HTMLElement>('#cta')?.textContent).toBe('Old');
   });
 });

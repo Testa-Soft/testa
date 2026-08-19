@@ -130,16 +130,34 @@ function evaluate(
   return { matched: applyOperator(condition.operator, value, condition.value), supported: true };
 }
 
-/** True when every targeting condition is satisfied (AND). Unsupported → not eligible. */
+/**
+ * True when the visitor is eligible. Mirrors crobot 3.3.3 `shouldTarget`:
+ * conditions are grouped by dimension, **OR within a group** (any rule of that
+ * dimension may pass), **AND across groups** (every dimension must pass). An
+ * unsupported/unmatched condition just doesn't count toward its group's OR; a
+ * group with no passing rule fails the whole check.
+ */
 export function passesTargeting(
   targeting: TargetingCondition[] | undefined,
   ctx: TargetingContext,
 ): boolean {
   if (!targeting || targeting.length === 0) return true;
-  return targeting.every((c) => {
-    const { matched, supported } = evaluate(c, ctx);
-    return supported && matched;
-  });
+
+  const groups = new Map<string, TargetingCondition[]>();
+  for (const c of targeting) {
+    const g = groups.get(c.dimension);
+    if (g) g.push(c);
+    else groups.set(c.dimension, [c]);
+  }
+
+  for (const conditions of groups.values()) {
+    const anyPass = conditions.some((c) => {
+      const { matched, supported } = evaluate(c, ctx);
+      return supported && matched;
+    });
+    if (!anyPass) return false;
+  }
+  return true;
 }
 
 /** True when the visitor is excluded (ANY exclusion matches). Unsupported → not excluding. */
