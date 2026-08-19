@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>SPA fixture — next13-app / page A</title>
+    <!--
+      Next.js 13 (App Router) static export output.
+
+      The App Router uses a different hydration model: React Server Components
+      emit <!--$--> / <!--/$--> streaming markers; the client runtime (React 18's
+      `hydrateRoot`) processes these before running any effect or layout hook.
+      The pixel must fire and complete the redirect BEFORE any client component
+      mounts its own `useRouter().replace()` call, otherwise both could race.
+
+      Key difference from pages router: `window.next` (App Router specific) is
+      set synchronously, router.push/replace are methods on a separate object
+      exposed via `window.__NEXT_ROUTER__`.
+    -->
+    <script>
+      /**
+       * Simulate Next.js 13 App Router bootstrap sequence.
+       * The router is exposed via a different API than pages router.
+       */
+      (function () {
+        window.__NEXT_ROUTER__ = {
+          version: '13',
+          push: function (href) {
+            history.pushState({}, '', href);
+          },
+          replace: function (href) {
+            history.replaceState({}, '', href);
+          },
+        };
+        // App Router calls replaceState on mount to attach its internal state
+        history.replaceState({ __NA: true, __PRIVATE_NEXTJS_INTERNALS_TREE: '[]' }, '', window.location.href);
+        window.__nextRouterVersion = '13';
+      })();
+    </script>
+    <script>
+      window.cfPrefill = {
+        project: {
+          project_id: 9001,
+          slug: 'spa-next13',
+          integration_version: '4.0',
+          consent_mode: 'aware',
+          experiments: [
+            {
+              experiment_id: 9001,
+              status: 'active',
+              traffic_allocation: 100,
+              rules: [],
+              variations: [
+                {
+                  variation_id: 1,
+                  weight: 100,
+                  changes: [
+                    {
+                      type: 'redirect',
+                      from_url: '/page-a.html',
+                      to_url: '/page-b.html',
+                      url_match_type: 'contains',
+                    },
+                  ],
+                },
+              ],
+              goals: [],
+            },
+          ],
+          published_at: '2026-07-26T00:00:00.000Z',
+          config_hash: 'spa-next13-v1',
+        },
+        apiUrl: 'https://collect.testa-test.invalid',
+      };
+    </script>
+    <script src="/dist/loader.min.js"></script>
+    <script defer src="/dist/runtime.min.js"></script>
+  </head>
+  <body>
+    <!--$-->
+    <main>
+      <h1>Next.js 13 App Router — Page A</h1>
+      <p>
+        App Router hydration with RSC streaming markers. Pixel redirect must complete before
+        <code>useRouter</code> hooks mount.
+      </p>
+    </main>
+    <!--/$-->
+  </body>
+</html>

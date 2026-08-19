@@ -18,13 +18,29 @@ const config: PlaywrightTestConfig = {
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
     },
+    {
+      name: 'chromium-spa',
+      testDir: './test',
+      use: {
+        ...devices['Desktop Chrome'],
+        baseURL: 'http://localhost:5175',
+      },
+    },
   ],
-  webServer: {
-    command: 'npx http-server e2e/fixtures -p 5173 --silent',
-    url: 'http://localhost:5173',
-    reuseExistingServer: !process.env.CI,
-    timeout: 30_000,
-  },
+  webServer: [
+    {
+      command: 'npx http-server e2e/fixtures -p 5173 --silent',
+      url: 'http://localhost:5173',
+      reuseExistingServer: !process.env.CI,
+      timeout: 30_000,
+    },
+    {
+      command: 'npx http-server . -p 5175 --silent',
+      url: 'http://localhost:5175',
+      reuseExistingServer: !process.env.CI,
+      timeout: 30_000,
+    },
+  ],
 };
 
 export default defineConfig(config);

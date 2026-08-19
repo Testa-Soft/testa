@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>SPA fixture — react-router6 / page B</title>
+    <script>
+      (function () {
+        var _orig = history.replaceState.bind(history);
+        _orig({ usr: null, key: 'default', idx: 0 }, '', window.location.href);
+        window.__rr6RouterState = 'initialized';
+      })();
+    </script>
+    <script>
+      window.cfPrefill = {
+        project: {
+          project_id: 9001,
+          slug: 'spa-rr6',
+          integration_version: '4.0',
+          consent_mode: 'aware',
+          experiments: [
+            {
+              experiment_id: 9001,
+              status: 'active',
+              traffic_allocation: 100,
+              rules: [],
+              variations: [
+                {
+                  variation_id: 1,
+                  weight: 100,
+                  changes: [
+                    {
+                      type: 'redirect',
+                      from_url: '/page-a.html',
+                      to_url: '/page-b.html',
+                      url_match_type: 'contains',
+                    },
+                  ],
+                },
+              ],
+              goals: [],
+            },
+          ],
+          published_at: '2026-07-26T00:00:00.000Z',
+          config_hash: 'spa-rr6-v1',
+        },
+        apiUrl: 'https://collect.testa-test.invalid',
+      };
+    </script>
+    <script src="/dist/loader.min.js"></script>
+    <script defer src="/dist/runtime.min.js"></script>
+  </head>
+  <body>
+    <div id="root">
+      <h1>React Router 6 — Page B (redirect destination)</h1>
+      <p>UTM params should be preserved. Pixel must NOT fire another redirect.</p>
+      <a id="back" href="javascript:history.back()">Back</a>
+    </div>
+  </body>
+</html>

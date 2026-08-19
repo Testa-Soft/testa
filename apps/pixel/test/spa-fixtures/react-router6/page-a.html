@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>SPA fixture — react-router6 / page A</title>
+    <script>
+      /**
+       * Simulate React Router 6 initialisation: RR6 calls history.replaceState
+       * on startup to attach its own router state object to the current entry.
+       * This fires BEFORE React has rendered, potentially racing the pixel.
+       * The pixel should redirect exactly once despite this early history mutation.
+       */
+      (function () {
+        var _orig = history.replaceState.bind(history);
+        // RR6 normalises the URL on mount — mirror the timing (synchronous, pre-render)
+        _orig({ usr: null, key: 'default', idx: 0 }, '', window.location.href);
+        window.__rr6RouterState = 'initialized';
+      })();
+    </script>
+    <script>
+      window.cfPrefill = {
+        project: {
+          project_id: 9001,
+          slug: 'spa-rr6',
+          integration_version: '4.0',
+          consent_mode: 'aware',
+          experiments: [
+            {
+              experiment_id: 9001,
+              status: 'active',
+              traffic_allocation: 100,
+              rules: [],
+              variations: [
+                {
+                  variation_id: 1,
+                  weight: 100,
+                  changes: [
+                    {
+                      type: 'redirect',
+                      from_url: '/page-a.html',
+                      to_url: '/page-b.html',
+                      url_match_type: 'contains',
+                    },
+                  ],
+                },
+              ],
+              goals: [],
+            },
+          ],
+          published_at: '2026-07-26T00:00:00.000Z',
+          config_hash: 'spa-rr6-v1',
+        },
+        apiUrl: 'https://collect.testa-test.invalid',
+      };
+    </script>
+    <script src="/dist/loader.min.js"></script>
+    <script defer src="/dist/runtime.min.js"></script>
+  </head>
+  <body>
+    <div id="root">
+      <!-- React root — RR6 renders here after hydration -->
+      <h1>React Router 6 — Page A (redirect source)</h1>
+      <p>RR6 replaceState ran synchronously before this paragraph was painted.</p>
+    </div>
+  </body>
+</html>
