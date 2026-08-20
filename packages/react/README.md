@@ -91,7 +91,7 @@ Split-URL tests send a bucketed visitor to a different URL. With no server to is
 Editors can preview **unpublished** variation drafts live. Pass `previewApiUrl` (your Testa/crobot backend base URL):
 
 ```tsx
-<TestaProvider projectId="acme" previewApiUrl="https://app.testa-soft.tech">
+<TestaProvider projectId="acme" previewApiUrl="https://new.testa-soft.tech">
   <App />
 </TestaProvider>
 ```
@@ -117,7 +117,7 @@ The provider installs a framework-agnostic navigation detector — it patches `h
 | `host`          | `string`        | `https://config.testa-soft.tech` | Config host. Override for local/staging.                                       |
 | `previewApiUrl` | `string`        | —                                | Backend base URL for preview mode (`?testa_preview`).                          |
 | `tracking`      | `boolean`       | `true`                           | Emit exposures on fresh enrollment so results populate.                        |
-| `trackingHost`  | `string`        | `https://app.testa-soft.tech`    | Host for exposure tracking (`/api/leads`).                                     |
+| `trackingHost`  | `string`        | `https://new.testa-soft.tech`    | Host for exposure tracking (`/api/leads`).                                     |
 | `secureCookies` | `boolean`       | `true`                           | Emit `Secure` cookies. Set `false` for local http dev.                         |
 | `cookieDomain`  | `string`        | —                                | Cookie `Domain` for cross-subdomain sharing (e.g. `.acme.com`).                |
 | `shield`        | `boolean \| ShieldOptions` | `true`                | Smart anti-flicker overlay on initial load. `false` to disable; options object to customize selector/timeout/mode. |
