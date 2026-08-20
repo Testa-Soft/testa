@@ -1,7 +1,32 @@
-# Local development backing services for testa-platform.
-# Production hosting is out of scope — this is for `bun run dev` workflows.
+# testa-platform local stack: backing services (Redis, ClickHouse) + the
+# collector service (config API + ingest). The collector serves the config API
+# on :8090; crobot reaches it from its own container via
+# http://host.docker.internal:8090 (set TESTA_COLLECTOR_API_URL there).
 
 services:
+  collector:
+    build:
+      context: .
+      dockerfile: apps/collector/Dockerfile
+    container_name: tp-collector
+    ports:
+      - "8090:8090"
+    environment:
+      ENVIRONMENT: development
+      PORT: 8090
+      REDIS_URL: redis://redis:6379
+      CLICKHOUSE_URL: http://clickhouse:8123
+      CONFIG_DIR: /app/.data/configs
+      # Shared secret required to WRITE config (crobot sends it as a Bearer token).
+      CONFIG_WRITE_TOKEN: testa-collector-local-dev-token
+    volumes:
+      # The config bucket — static {projectId}.json files, persisted + inspectable.
+      - config-bucket:/app/.data/configs
+    depends_on:
+      - redis
+      - clickhouse
+    restart: unless-stopped
+
   redis:
     image: redis:7.4-alpine
     container_name: tp-redis
@@ -49,3 +74,4 @@ volumes:
   redis-data:
   clickhouse-data:
   clickhouse-logs:
+  config-bucket:

@@ -24,6 +24,10 @@ export {
   emitVariationApplied,
   emitVariationAssigned,
   installTestaGlobal,
+  // Custom goal events — `pushEvent('signup_done', {...})` fires matching
+  // `custom` goals; also installed as `window.testa.pushEvent` /
+  // `window.Analytica.pushEvent` (docs parity) by the client components.
+  pushEvent,
 } from '@testa-soft/dom';
 export type { VariationEvent, VariationHandler, Unsubscribe, TestaGlobal } from '@testa-soft/dom';
 export { emitExposure } from './tracking.ts';

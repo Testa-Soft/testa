@@ -31,7 +31,9 @@ import { ASSIGNMENT_COOKIE, UUID_COOKIE, resolveExposures } from '@testa-soft/ex
 import { usePathname } from 'next/navigation';
 import { useEffect } from 'react';
 import { readClientCookie } from '../client-cookie.ts';
+import { DEFAULT_TRACKING_HOST } from '../constants.ts';
 import { applyAssignedExperiments, revealShield } from './apply-assignments.ts';
+import { startGoalTracking } from './goal-tracking.ts';
 import {
   PREVIEW_VARIATION_ID,
   fetchPreviewChanges,
@@ -47,9 +49,18 @@ export interface TestaExperimentsProps {
    * lives. Required for `?testa_preview` to fetch drafts; ignored otherwise.
    */
   previewApiUrl?: string;
+  /**
+   * crobot base URL for goal conversions (`/api/leads/convert`) — same host the
+   * middleware posts exposures to. Defaults to the SDK's tracking host.
+   */
+  trackingHost?: string;
 }
 
-export function TestaExperiments({ config, previewApiUrl }: TestaExperimentsProps): null {
+export function TestaExperiments({
+  config,
+  previewApiUrl,
+  trackingHost,
+}: TestaExperimentsProps): null {
   const pathname = usePathname();
 
   // `pathname` is intentionally a dependency: it's the re-apply trigger on
@@ -89,10 +100,20 @@ export function TestaExperiments({ config, previewApiUrl }: TestaExperimentsProp
 
     // Normal: apply the assigned variant, cookie-first — but only on pages that
     // match the experiment's page rule (keyed on `pathname` so a soft nav to a
-    // non-matching route tears the change down instead of leaking it everywhere).
+    // non-matching route tears the change down instead of leaking it everywhere)
+    // AND only when no exclusion rule matches this pageview (3.3.3
+    // `handleExclusions` parity — mutual `experiment` exclusions included).
+    // NOTE: no `country` here — a server-fetched config's geo is the
+    // datacenter's; geo exclusions are the middleware's job per request.
     const currentUrl = typeof window !== 'undefined' ? window.location.href : '';
     const assignmentCookie = readClientCookie(ASSIGNMENT_COOKIE);
-    teardowns.push(...applyAssignedExperiments(config, assignmentCookie, currentUrl));
+    teardowns.push(
+      ...applyAssignedExperiments(config, assignmentCookie, currentUrl, {
+        url: currentUrl,
+        getCookie: readClientCookie,
+        ...(typeof navigator !== 'undefined' ? { userAgent: navigator.userAgent } : {}),
+      }),
+    );
     revealShield();
 
     // Fire `variation_applied` for every experiment the visitor is exposed to on
@@ -113,12 +134,27 @@ export function TestaExperiments({ config, previewApiUrl }: TestaExperimentsProp
         });
       }
     }
+
+    // Arm goal tracking (page_view / click / custom) for every assigned,
+    // session-live experiment — NOT page-gated: a goal usually completes on a
+    // different page than the experiment runs on. Conversions POST the legacy
+    // `/api/leads/convert` payload; teardown re-arms cleanly on soft nav.
+    teardowns.push(
+      startGoalTracking(
+        config,
+        assignmentCookie,
+        currentUrl,
+        uuid,
+        trackingHost ?? DEFAULT_TRACKING_HOST,
+        nowSec,
+      ),
+    );
     return dispose;
     // Keyed on `config.config_hash` (a stable string), NOT the `config` object —
     // so a caller passing an inline config, a dev Fast Refresh, or a parent
     // re-render doesn't re-run the effect and stack duplicate inserts. Re-runs
     // only on a real config change or route change (pathname).
-  }, [config.config_hash, pathname, previewApiUrl]);
+  }, [config.config_hash, pathname, previewApiUrl, trackingHost]);
 
   return null;
 }

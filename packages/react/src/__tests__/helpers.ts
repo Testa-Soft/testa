@@ -83,3 +83,12 @@ export function domConfig(over: { content?: string; traffic?: number } = {}): Pr
   }
   return config;
 }
+
+/**
+ * Point happy-dom's LIVE `window.location` at `url`. The apply guard re-checks
+ * the page rule against the live URL on every DOM touch (soft-nav safety), so
+ * tests that expect changes to apply must move the window there first.
+ */
+export function setWindowUrl(url: string): void {
+  (window as unknown as { happyDOM?: { setURL: (u: string) => void } }).happyDOM?.setURL(url);
+}

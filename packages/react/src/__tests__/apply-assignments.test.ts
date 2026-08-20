@@ -4,7 +4,7 @@ import {
   resolveAssignedExperiments,
   revealShield,
 } from '../apply-assignments.ts';
-import { domConfig, splitUrlConfig } from './helpers.ts';
+import { domConfig, setWindowUrl, splitUrlConfig } from './helpers.ts';
 
 afterEach(() => {
   document.body.innerHTML = '';
@@ -43,6 +43,7 @@ describe('resolveAssignedExperiments', () => {
 
 describe('applyAssignedExperiments', () => {
   it('applies the variant changes to the DOM on the experiment page', () => {
+    setWindowUrl(PAGE); // the apply guard reads the LIVE location
     document.body.innerHTML = '<div id="hero">CONTROL</div>';
     const teardowns = applyAssignedExperiments(domConfig(), '101.2.0.0', PAGE);
     expect(document.querySelector('#hero')?.innerHTML).toBe('VARIANT');

@@ -27,8 +27,14 @@ export type {
 } from '@testa-soft/experiment-core';
 export { DocumentCookieStore } from './cookie-store.ts';
 export type { DocumentCookieStoreOptions } from './cookie-store.ts';
-export { ConfigClient, DEFAULT_CONFIG_HOST, resolveConfigUrl } from './config.ts';
-export type { ClientConfigSource } from './config.ts';
+export { ConfigClient, DEFAULT_CONFIG_HOST, preloadConfig, resolveConfigUrl } from './config.ts';
+export type { ClientConfigSource, PreloadOptions } from './config.ts';
+export {
+  configNeedsShield,
+  readShieldHint,
+  writeShieldHint,
+  SHIELD_HINT_KEY,
+} from './shield-hint.ts';
 export { emitExposure, DEFAULT_TRACKING_HOST } from './tracking.ts';
 export type { ExposurePayload } from './tracking.ts';
 export {

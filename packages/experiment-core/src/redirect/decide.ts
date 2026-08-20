@@ -5,26 +5,23 @@
  * split into DECIDE (pure, read-only) and COMMIT (caller's job). The pixel calls
  * `location.replace`; the middleware issues a 307. Neither belongs in the core.
  *
- * `decideRedirect` performs every guard — dedup, invalid-target, no-match,
- * same-canonical-URL no-op — and returns the resolved destination. It does NOT
- * write `markRedirected`: the caller commits that (and the Set-Cookie) only on a
- * real navigation, never on a prefetch.
+ * `decideRedirect` performs every guard — invalid-target, no-match,
+ * same-canonical-URL no-op — and returns the resolved destination.
+ *
+ * There is deliberately NO once-per-experiment dedup here: a variant visitor
+ * landing on the control URL must be redirected on EVERY visit, no exceptions.
+ * Loop safety is STATELESS — the already-at-destination + canonical-equality
+ * checks below — never a cookie that suppresses legitimate redirects.
  */
 
 import type { VariationChange } from '@testa-platform/shared-types';
 import type { CookieStore } from '../cookie-store.ts';
 import { buildRedirectUrl, resolveMode } from './build-url.ts';
-import { hasRedirected } from './dedup.ts';
 import { canonicalize, matchesForMode } from './match.ts';
 
 export type RedirectChange = Extract<VariationChange, { type: 'redirect' }>;
 
-export type RedirectReason =
-  | 'match'
-  | 'already_redirected'
-  | 'aborted_invalid_target'
-  | 'no_match'
-  | 'skipped_same_url';
+export type RedirectReason = 'match' | 'aborted_invalid_target' | 'no_match' | 'skipped_same_url';
 
 export interface RedirectDecision {
   /** True when the caller SHOULD redirect (and then commit dedup + cookies). */
@@ -73,17 +70,11 @@ export function resolveRedirectDestination(
   return { shouldRedirect: true, finalUrl, reason: 'match' };
 }
 
-export function decideRedirect(inputs: RedirectInputs, store: CookieStore): RedirectDecision {
-  const { experimentId, change, currentUrl } = inputs;
+// `_store` is kept for signature compatibility (pixel/callers): the dedup-marker
+// check that used it is gone — stickiness must ALWAYS win over any marker.
+export function decideRedirect(inputs: RedirectInputs, _store: CookieStore): RedirectDecision {
+  const { change, currentUrl } = inputs;
   const mode = resolveMode(change);
-
-  // A once-per-experiment `_testa_redirected_<id>` marker still hard-blocks if
-  // some host sets it, but the middleware no longer sets it: split-URL is sticky
-  // via the assignment cookie, so returning to control MUST re-redirect. Loop
-  // protection is the "already at destination" guard below, not a once-ever cookie.
-  if (hasRedirected(store, experimentId)) {
-    return { shouldRedirect: false, reason: 'already_redirected' };
-  }
 
   if (!change.from_url || !change.to_url) {
     return { shouldRedirect: false, reason: 'aborted_invalid_target' };

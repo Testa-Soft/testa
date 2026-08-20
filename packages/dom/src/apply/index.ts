@@ -22,18 +22,31 @@ import { type MoveChange, applyMove } from './move.ts';
 
 export type Teardown = () => void;
 
+export interface ApplyVariationOptions {
+  /**
+   * Page gate, checked at the moment any node would be touched (initial sweep
+   * AND late MutationObserver hits). The SPA document persists across soft
+   * navigations, so callers pass "does the current URL still match this
+   * experiment's page rule?" — off-page elements are never modified.
+   */
+  guard?: () => boolean;
+}
+
 /**
  * Apply every change for a variation. Returns teardowns for the DOM-watching
- * appliers; the caller disposes them on the next experiment cycle.
+ * appliers; the caller disposes them on the next experiment cycle. Teardowns
+ * UNDO what was applied (restore innerHTML/display, remove style/inserted
+ * nodes) so a soft navigation away leaves no trace on persistent elements.
  */
 export function applyVariation(
   variationId: number | string,
   changes: VariationChange[],
+  opts: ApplyVariationOptions = {},
 ): Teardown[] {
   const teardowns: Teardown[] = [];
   for (const change of changes) {
     try {
-      const teardown = applyOne(variationId, change);
+      const teardown = applyOne(variationId, change, opts);
       if (teardown) teardowns.push(teardown);
     } catch (err) {
       // biome-ignore lint/suspicious/noConsole: applier failure must be visible but non-fatal
@@ -43,28 +56,33 @@ export function applyVariation(
   return teardowns;
 }
 
-function applyOne(variationId: number | string, change: VariationChange): Teardown | null {
+function applyOne(
+  variationId: number | string,
+  change: VariationChange,
+  opts: ApplyVariationOptions,
+): Teardown | null {
+  const guardOpts = opts.guard ? { guard: opts.guard } : {};
   switch (change.type) {
     case 'css':
-      // CSS uses a global <style> tag — no DOM watcher, no teardown.
-      applyCss(variationId, change as CssChange);
-      return null;
+      // Global <style> tag: gate at apply time (no watcher), removable teardown.
+      if (opts.guard && !opts.guard()) return null;
+      return applyCss(variationId, change as CssChange);
 
     case 'change_html':
-      return applyChangeHtml(change as ChangeHtmlChange);
+      return applyChangeHtml(change as ChangeHtmlChange, guardOpts);
 
     case 'hide_element':
-      return applyHide(change as HideChange);
+      return applyHide(change as HideChange, guardOpts);
 
     case 'append_html':
-      return applyAppend(change as AppendChange);
+      return applyAppend(change as AppendChange, guardOpts);
 
     case 'prepend_html':
-      return applyPrepend(change as PrependChange);
+      return applyPrepend(change as PrependChange, guardOpts);
 
     case 'move_element_append':
     case 'move_element_prepend':
-      return applyMove(change as MoveChange);
+      return applyMove(change as MoveChange, guardOpts);
 
     case 'redirect':
       // Split-URL redirect (crobot `url`) is the experiment-core engine's job.

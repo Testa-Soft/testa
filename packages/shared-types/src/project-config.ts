@@ -26,6 +26,25 @@ export interface ProjectConfig {
   published_at: string;
   /** Content hash of the experiments array; included in the served JS URL for cache invalidation. */
   config_hash: string;
+  /**
+   * Visitor geo, spliced into the served JSON by the `config-geo` worker on
+   * `config.testa-soft.tech` (from `request.cf`) — never part of the stored
+   * config. Empty string = unknown. Only meaningful when the config was
+   * fetched FROM THE VISITOR'S BROWSER; a server-side fetch carries the
+   * datacenter's location, so server consumers (e.g. the Next.js middleware)
+   * must ignore it and derive geo from the visitor's request headers instead.
+   */
+  geo?: GeoData;
+}
+
+/** Visitor geolocation as resolved by Cloudflare at the edge. */
+export interface GeoData {
+  /** ISO 3166-1 alpha-2 country code (e.g. `LT`), `''` when unknown. */
+  country: string;
+  /** ISO 3166-2 region code (e.g. `VL`), `''` when unknown. */
+  region: string;
+  /** City name (e.g. `Vilnius`), `''` when unknown. */
+  city: string;
 }
 
 export interface ExperimentConfig {
@@ -52,14 +71,15 @@ export interface ExperimentConfig {
    */
   cross_domain?: boolean;
   /**
-   * Split-URL targeting conditions (crobot `experiment_rules` type
-   * `targeting`). ALL must match for the visitor to be eligible (AND). Flat
-   * list, distinct from the 4.0 `audience` tree. See `runtime` targeting eval.
+   * Targeting conditions (crobot `experiment_rules` type `targeting`),
+   * gating ALL experiment types (split-URL and DOM/copy alike) before
+   * assignment. Grouped by dimension: OR within a group, AND across groups.
+   * Flat list, distinct from the 4.0 `audience` tree. See `runtime` targeting eval.
    */
   targeting?: TargetingCondition[];
   /**
-   * Split-URL exclusion conditions (crobot `experiment_rules` type
-   * `exclusion`). If ANY matches, the visitor is excluded (OR).
+   * Exclusion conditions (crobot `experiment_rules` type `exclusion`),
+   * gating ALL experiment types. If ANY matches, the visitor is excluded (OR).
    */
   exclusions?: TargetingCondition[];
 }

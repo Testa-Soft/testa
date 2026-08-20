@@ -1,6 +1,18 @@
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
+  // The server entry imports the client entry via the bare self-reference
+  // `@testa-soft/next/experiments` (kept external so the "use client" boundary
+  // survives the build). Point that at the source under test so vitest resolves
+  // it without a built `dist`.
+  resolve: {
+    alias: {
+      '@testa-soft/next/experiments': fileURLToPath(
+        new URL('./src/experiments/index.ts', import.meta.url),
+      ),
+    },
+  },
   test: {
     environment: 'node',
     globals: false,

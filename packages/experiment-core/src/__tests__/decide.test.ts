@@ -31,16 +31,15 @@ describe('decideRedirect', () => {
     expect(d.reason).toBe('no_match');
   });
 
-  it('respects the redirect dedup marker', () => {
+  it('redirects even when a dedup marker is set — a variant visitor on the control URL is ALWAYS redirected', () => {
     const store = memoryStore();
-    markRedirected(store, 1);
+    markRedirected(store, 1); // legacy/pixel marker present — must not block
     const d = decideRedirect(
       { experimentId: 1, change: change(), currentUrl: 'https://acme.com/pricing' },
       store,
     );
-    expect(d.shouldRedirect).toBe(false);
-    expect(d.reason).toBe('already_redirected');
-    expect(store.get(redirectedName(1))).toBe('1');
+    expect(d.shouldRedirect).toBe(true);
+    expect(d.reason).toBe('match');
   });
 
   it('is a no-op when the destination canonicalizes to the current URL', () => {

@@ -116,6 +116,59 @@ describe('buildTestaConfig', () => {
     expect(cfg.experiments[0]?.variations.find((v) => v.variation_id === 1)?.changes).toEqual([]);
   });
 
+  it('maps goals through (crobot GoalResource → GoalConfig)', () => {
+    const cfg = buildTestaConfig({
+      ...sourceProject,
+      experiments: [
+        {
+          ...baseExp,
+          goals: [
+            { id: 7, title: 'Quiz reached', type: 'page_view', action: '/quiz', match_type: 'contains', rank: 1 },
+            { id: 8, title: 'CTA click', type: 'click', action: '#cta', match_type: null, rank: 2 },
+            { id: 9, title: 'Signup', type: 'custom', action: 'signup_done', rank: 3 },
+          ],
+        },
+      ],
+    });
+    expect(cfg.experiments[0]?.goals).toEqual([
+      { goal_id: 7, name: 'Quiz reached', type: 'page_view', action: '/quiz', match_type: 'contains' },
+      { goal_id: 8, name: 'CTA click', type: 'click', action: '#cta' },
+      { goal_id: 9, name: 'Signup', type: 'custom', action: 'signup_done' },
+    ]);
+  });
+
+  it('drops goals with an unknown type or missing action/id', () => {
+    const cfg = buildTestaConfig({
+      ...sourceProject,
+      experiments: [
+        {
+          ...baseExp,
+          goals: [
+            { id: 1, title: 'Bogus', type: 'scroll_depth', action: '50%' },
+            { id: 2, title: 'No action', type: 'click', action: '' },
+            { title: 'No id', type: 'custom', action: 'x' },
+          ],
+        },
+      ],
+    });
+    expect(cfg.experiments[0]?.goals).toEqual([]);
+  });
+
+  it('normalises an unrecognised goal match_type to contains', () => {
+    const cfg = buildTestaConfig({
+      ...sourceProject,
+      experiments: [
+        {
+          ...baseExp,
+          goals: [{ id: 7, type: 'page_view', action: '/quiz', match_type: 'site_wide' }],
+        },
+      ],
+    });
+    expect(cfg.experiments[0]?.goals).toEqual([
+      { goal_id: 7, type: 'page_view', action: '/quiz', match_type: 'contains' },
+    ]);
+  });
+
   it('still ignores experiment types that are neither split_url nor copy', () => {
     const cfg = buildTestaConfig({
       ...sourceProject,

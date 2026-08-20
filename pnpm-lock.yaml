@@ -43,6 +43,21 @@ importers:
         specifier: 5.6.3
         version: 5.6.3
 
+  apps/config-geo:
+    devDependencies:
+      '@cloudflare/workers-types':
+        specifier: 4.20241112.0
+        version: 4.20241112.0
+      typescript:
+        specifier: 5.6.3
+        version: 5.6.3
+      vitest:
+        specifier: 2.1.5
+        version: 2.1.5(@types/node@22.9.0)(happy-dom@15.11.4)
+      wrangler:
+        specifier: 3.86.1
+        version: 3.86.1(@cloudflare/workers-types@4.20241112.0)
+
   apps/edge:
     dependencies:
       hono:
@@ -122,6 +137,9 @@ importers:
         specifier: 18.3.1
         version: 18.3.1(react@18.3.1)
     devDependencies:
+      '@testa-platform/shared-types':
+        specifier: workspace:*
+        version: link:../../packages/shared-types
       '@types/node':
         specifier: 22.9.0
         version: 22.9.0
@@ -2367,37 +2385,6 @@ packages:
       terser:
         optional: true
 
-  vite@5.4.21:
-    resolution: {integrity: sha512-o5a9xKjbtuhY6Bi5S3+HvbRERmouabWbyUcpXXUA1u+GNUKoROi9byOJ8M0nHbHYHkYICiMlqxkg1KkYmm25Sw==}
-    engines: {node: ^18.0.0 || >=20.0.0}
-    hasBin: true
-    peerDependencies:
-      '@types/node': ^18.0.0 || >=20.0.0
-      less: '*'
-      lightningcss: ^1.21.0
-      sass: '*'
-      sass-embedded: '*'
-      stylus: '*'
-      sugarss: '*'
-      terser: ^5.4.0
-    peerDependenciesMeta:
-      '@types/node':
-        optional: true
-      less:
-        optional: true
-      lightningcss:
-        optional: true
-      sass:
-        optional: true
-      sass-embedded:
-        optional: true
-      stylus:
-        optional: true
-      sugarss:
-        optional: true
-      terser:
-        optional: true
-
   vitest@2.1.5:
     resolution: {integrity: sha512-P4ljsdpuzRTPI/kbND2sDZ4VmieerR2c9szEZpjc+98Z9ebvnXmM5+0tHEKqYZumXqlvnmfWsjeFOjXVriDG7A==}
     engines: {node: ^18.0.0 || >=20.0.0}
@@ -3272,13 +3259,13 @@ snapshots:
       chai: 5.3.3
       tinyrainbow: 1.2.0
 
-  '@vitest/mocker@2.1.5(vite@5.4.21(@types/node@22.9.0))':
+  '@vitest/mocker@2.1.5(vite@5.4.11(@types/node@22.9.0))':
     dependencies:
       '@vitest/spy': 2.1.5
       estree-walker: 3.0.3
       magic-string: 0.30.21
     optionalDependencies:
-      vite: 5.4.21(@types/node@22.9.0)
+      vite: 5.4.11(@types/node@22.9.0)
 
   '@vitest/pretty-format@2.1.5':
     dependencies:
@@ -4320,19 +4307,10 @@ snapshots:
       '@types/node': 22.9.0
       fsevents: 2.3.3
 
-  vite@5.4.21(@types/node@22.9.0):
-    dependencies:
-      esbuild: 0.21.5
-      postcss: 8.5.14
-      rollup: 4.60.3
-    optionalDependencies:
-      '@types/node': 22.9.0
-      fsevents: 2.3.3
-
   vitest@2.1.5(@types/node@22.9.0)(happy-dom@15.11.4):
     dependencies:
       '@vitest/expect': 2.1.5
-      '@vitest/mocker': 2.1.5(vite@5.4.21(@types/node@22.9.0))
+      '@vitest/mocker': 2.1.5(vite@5.4.11(@types/node@22.9.0))
       '@vitest/pretty-format': 2.1.9
       '@vitest/runner': 2.1.5
       '@vitest/snapshot': 2.1.5
@@ -4348,7 +4326,7 @@ snapshots:
       tinyexec: 0.3.2
       tinypool: 1.1.1
       tinyrainbow: 1.2.0
-      vite: 5.4.21(@types/node@22.9.0)
+      vite: 5.4.11(@types/node@22.9.0)
       vite-node: 2.1.5(@types/node@22.9.0)
       why-is-node-running: 2.3.0
     optionalDependencies:

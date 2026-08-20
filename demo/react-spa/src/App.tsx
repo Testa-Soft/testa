@@ -44,6 +44,7 @@ export function App() {
         <Link to="/" style={navLink}>Home</Link>
         <Link to="/features" style={navLink}>Features</Link>
         <Link to="/about" style={navLink}>About</Link>
+        <Link to="/calculator" style={navLink}>Calculator</Link>
       </nav>
       <Routes>
         <Route
@@ -66,6 +67,10 @@ export function App() {
         />
         <Route path="/features" element={<Page title="Features"><p>Same experiments, re-resolved on soft nav — robust across routes.</p></Page>} />
         <Route path="/about" element={<Page title="About"><p>Cookie-first: assignment lives in <code>_testa_exp</code>; no re-bucketing.</p></Page>} />
+        {/* Prod-config target page: the real project's experiments are scoped to
+            `contains /calculator`. Redirect variants land on ?testa=ab here;
+            change_html variants rewrite this h1 — soft-nav away must NOT leak it. */}
+        <Route path="/calculator" element={<Page title="Calculator"><p>Prod-config target page (<code>VITE_TESTA_DEMO_PROD=1</code>). Author changes for <code>/calculator</code> in crobot; they land here within ~30s.</p></Page>} />
       </Routes>
     </>
   );

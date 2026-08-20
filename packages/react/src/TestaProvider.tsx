@@ -2,23 +2,37 @@
  * `<TestaProvider/>` — the one-component client integration. Mount it once at
  * the app root.
  *
- * On mount it: resolves the config (inline or fetched by `projectId`), builds a
- * `DocumentCookieStore`, runs `initTesta` (assign → redirect or apply DOM), and
- * reveals the anti-flicker shield. It then installs the framework-agnostic SPA
+ * It fetches the config as early as a client package can — kicked off during the
+ * FIRST RENDER (a `useState` initializer, before children render or effects run)
+ * via the module-level `preloadConfig` cache, which makes StrictMode's
+ * double-invoke and remounts collapse onto one request.
+ *
+ * SMART SHIELD: it manages the anti-flicker overlay automatically. On mount
+ * (`useLayoutEffect`, after DOM commit but before first paint) it raises the
+ * shield when the persisted hint says the project has something to hide — see
+ * `shield-hint.ts`. The app no longer needs a manual `<TestaShield/>` (though an
+ * even-earlier `index.html` snippet still composes: `raiseShield` is idempotent
+ * by `styleId`). Set `shield={false}` to opt out and manage it yourself.
+ *
+ * After the config resolves it builds a `DocumentCookieStore`, runs `initTesta`
+ * (assign → redirect or apply DOM), refreshes the shield hint, then reveals the
+ * shield once the variant has painted. It installs the framework-agnostic SPA
  * navigation detector to re-run the cycle on every route change (disposing the
- * previous cycle's DOM teardowns first). The resolved assignment map is provided
- * via context so `useTestaVariant` works. Everything is torn down on unmount.
+ * previous cycle's DOM teardowns first; the shield is never re-raised after the
+ * initial reveal). The assignment map is provided via context so
+ * `useTestaVariant` works. Everything is torn down on unmount.
  */
 
 import type { ProjectConfig } from '@testa-platform/shared-types';
-import type { Teardown } from '@testa-soft/dom';
+import { type Shield, type ShieldOptions, type Teardown, raiseShield } from '@testa-soft/dom';
 import { ASSIGNMENT_COOKIE } from '@testa-soft/experiment-core';
-import { type ReactNode, useEffect, useLayoutEffect, useState } from 'react';
+import { type ReactNode, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { revealShield } from './apply-assignments.ts';
-import { ConfigClient } from './config.ts';
+import { preloadConfig } from './config.ts';
 import { TestaContext, type TestaContextValue } from './context.ts';
 import { DocumentCookieStore } from './cookie-store.ts';
 import { initTesta } from './init.ts';
+import { configNeedsShield, readShieldHint, writeShieldHint } from './shield-hint.ts';
 import { installSpaNav } from './spa-nav.ts';
 import { buildAssignmentMap } from './use-variant.ts';
 
@@ -40,6 +54,14 @@ export interface TestaProviderProps {
   secureCookies?: boolean;
   /** Cookie `Domain` for cross-subdomain sharing (e.g. `.acme.com`). */
   cookieDomain?: string;
+  /**
+   * Anti-flicker shield control. Default `true` — the provider auto-raises the
+   * shield on mount when the persisted hint says the project has something to
+   * hide, and reveals it once the variant paints. Pass `ShieldOptions` to
+   * customise (selector/timeout/etc). Pass `false` to opt out entirely and
+   * manage the shield yourself (e.g. an `index.html` snippet / `<TestaShield/>`).
+   */
+  shield?: boolean | ShieldOptions;
 }
 
 export function TestaProvider(props: TestaProviderProps): JSX.Element {
@@ -48,6 +70,30 @@ export function TestaProvider(props: TestaProviderProps): JSX.Element {
     assignments: new Map(),
   });
   const [settled, setSettled] = useState(false);
+  const shieldHandleRef = useRef<Shield | null>(null);
+
+  // EAGER FETCH: kick the request off during first render (before children
+  // render, before effects) so config resolution overlaps React's initial work.
+  // The module-level cache makes StrictMode's double-invoke a single request.
+  const [configPromise] = useState(() =>
+    preloadConfig({
+      ...(props.config ? { config: props.config } : {}),
+      ...(props.projectId ? { projectId: props.projectId } : {}),
+      ...(props.host ? { host: props.host } : {}),
+    }),
+  );
+
+  // AUTO-SHIELD: raise as early as a client package can (after DOM commit, before
+  // first paint) when enabled and the hint isn't an explicit "nothing to hide".
+  // `raiseShield` is idempotent by styleId, so it composes with an index.html
+  // snippet instead of double-shielding.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: raise once on mount
+  useLayoutEffect(() => {
+    const shieldOpt = props.shield ?? true;
+    if (shieldOpt === false) return; // app manages its own shield
+    if (readShieldHint() === false) return; // last load had nothing to hide
+    shieldHandleRef.current = raiseShield(typeof shieldOpt === 'object' ? shieldOpt : {});
+  }, []);
 
   // Mount-once: config + options are captured on first render. A config swap is
   // rare in an SPA; remount the provider (or reload) to pick up a new one.
@@ -60,11 +106,6 @@ export function TestaProvider(props: TestaProviderProps): JSX.Element {
     const store = new DocumentCookieStore({
       secure: props.secureCookies ?? true,
       ...(props.cookieDomain ? { domain: props.cookieDomain } : {}),
-    });
-    const client = new ConfigClient({
-      ...(props.config ? { config: props.config } : {}),
-      ...(props.projectId ? { projectId: props.projectId } : {}),
-      ...(props.host ? { host: props.host } : {}),
     });
 
     const disposeTeardowns = (list: Teardown[]): void => {
@@ -92,19 +133,31 @@ export function TestaProvider(props: TestaProviderProps): JSX.Element {
         disposeTeardowns(result.teardowns);
         return;
       }
-      if (result.redirected) return; // navigating away — leave the shield up
+      if (result.redirected) {
+        // Navigating away via location.replace. On the INITIAL load the shield
+        // is still up; on a SOFT-NAV redirect it was revealed long ago — re-raise
+        // it (idempotent) so the control page never flashes while the browser
+        // performs the full navigation to the variant URL.
+        const shieldOpt = props.shield ?? true;
+        if (shieldOpt !== false) {
+          shieldHandleRef.current = raiseShield(typeof shieldOpt === 'object' ? shieldOpt : {});
+        }
+        return;
+      }
       teardowns = result.teardowns;
       setValue({ config, assignments: buildAssignmentMap(store.get(ASSIGNMENT_COOKIE)) });
       setSettled(true); // shield revealed post-commit (useLayoutEffect below), after the variant paints
     };
 
     void (async () => {
-      const config = await client.get(Date.now());
+      const config = await configPromise;
       if (disposed) return;
       if (!config) {
         setSettled(true); // fail open — never leave the page hidden
         return;
       }
+      // Refresh the persisted hint for the NEXT load now that we know the truth.
+      writeShieldHint(configNeedsShield(config));
       try {
         await cycle(config);
       } catch {
@@ -130,8 +183,12 @@ export function TestaProvider(props: TestaProviderProps): JSX.Element {
 
   // Reveal the shield only AFTER the assigned variant has been committed +
   // painted (a synchronous reveal races the code-based useTestaVariant render).
+  // Reveal both the auto-raised handle (covers a custom styleId) and any
+  // snippet-raised shield via `window.__testa_shield` — both are idempotent.
   useLayoutEffect(() => {
-    if (settled) revealShield();
+    if (!settled) return;
+    shieldHandleRef.current?.reveal();
+    revealShield();
   }, [settled]);
 
   return <TestaContext.Provider value={value}>{props.children}</TestaContext.Provider>;

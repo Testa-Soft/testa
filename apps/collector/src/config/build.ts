@@ -14,6 +14,8 @@
 
 import type {
   ExperimentConfig,
+  GoalConfig,
+  GoalType,
   MatchType,
   ProjectConfig,
   TargetingCondition,
@@ -46,6 +48,15 @@ interface SourceRule {
   operator?: string;
 }
 
+/** crobot `GoalResource`: { id, title, type, action, match_type, rank }. */
+interface SourceGoal {
+  id?: number;
+  title?: string | null;
+  type?: string;
+  action?: string | null;
+  match_type?: string | null;
+}
+
 interface SourceExperiment {
   id?: number;
   identifier: number;
@@ -59,6 +70,7 @@ interface SourceExperiment {
   targeting?: SourceRule[];
   exclusions?: SourceRule[];
   variations?: SourceVariation[];
+  goals?: SourceGoal[];
 }
 
 const OPERATORS = new Set<TargetingCondition['operator']>([
@@ -117,12 +129,46 @@ function buildExperiment(e: SourceExperiment): ExperimentConfig {
     status: mapStatus(e.status),
     traffic_allocation: e.traffic,
     rules: [{ match_type: mapRuleMatchType(e.url_match_type), url_pattern: e.url }],
-    goals: [],
+    goals: mapGoals(e.goals),
     variations: (e.variations ?? []).map((v) => buildVariation(v, e)),
     ...(e.cross_domain ? { cross_domain: true } : {}),
     ...(targeting.length > 0 ? { targeting } : {}),
     ...(exclusions.length > 0 ? { exclusions } : {}),
   };
+}
+
+const GOAL_TYPES = new Set<GoalType>(['click', 'page_view', 'custom']);
+const GOAL_MATCH_TYPES = new Set<MatchType>(['exact', 'contains', 'not_contains', 'regex']);
+
+/**
+ * crobot GoalResource → GoalConfig. Goals with an unknown type or without an
+ * id/action can't fire (or can't be attributed by `/api/leads/convert`), so
+ * they are dropped rather than served broken. `match_type` only matters for
+ * `page_view`; an unrecognised value (e.g. `site_wide`) falls back to
+ * `contains` — the 3.3.3 `urlMatches` default.
+ */
+function mapGoals(goals: SourceGoal[] | undefined): GoalConfig[] {
+  return (goals ?? [])
+    .filter(
+      (g): g is SourceGoal & { id: number; type: GoalType; action: string } =>
+        typeof g.id === 'number' &&
+        GOAL_TYPES.has(g.type as GoalType) &&
+        typeof g.action === 'string' &&
+        g.action.length > 0,
+    )
+    .map((g) => ({
+      goal_id: g.id,
+      ...(g.title ? { name: g.title } : {}),
+      type: g.type,
+      action: g.action,
+      ...(g.match_type
+        ? {
+            match_type: GOAL_MATCH_TYPES.has(g.match_type as MatchType)
+              ? (g.match_type as MatchType)
+              : 'contains',
+          }
+        : {}),
+    }));
 }
 
 function mapConditions(rules: SourceRule[] | undefined): TargetingCondition[] {

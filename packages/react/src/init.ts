@@ -7,8 +7,8 @@
  *   3. Otherwise run the engine:
  *      - emit an exposure per fresh enrollment (when tracking is on);
  *      - if a split-URL variation fired, do a CLIENT-side `location.replace`
- *        redirect, loop-guarded by the per-experiment `_testa_redirected_<id>`
- *        cookie so we never bounce back and forth;
+ *        redirect — on EVERY visit to the control URL (loop safety is the
+ *        engine's stateless already-at-destination check, never a marker);
  *      - else apply the assigned DOM changes cookie-first.
  *
  * Returns the applied list + the DOM teardowns (so the caller can dispose them
@@ -30,8 +30,6 @@ import {
   type CookieStore,
   UUID_COOKIE,
   UUID_TTL_SEC,
-  hasRedirected,
-  markRedirected,
   resolveExposures,
 } from '@testa-soft/experiment-core';
 import { type VariationAppliedEvent, runExperiments } from '@testa-soft/experiment-core';
@@ -101,6 +99,10 @@ export async function initTesta(opts: InitOptions): Promise<InitResult> {
       visitorId: store.get(UUID_COOKIE) ?? '',
       now,
       getCookie: (n) => store.get(n),
+      // Visitor geo spliced into the config by the config-geo edge worker.
+      // Gates targeting AND exclusions for every experiment type. Absent/empty
+      // → dimension unsupported: targeting fails closed, exclusions fail open.
+      ...(config.geo?.country ? { country: config.geo.country } : {}),
     },
     store,
   );
@@ -121,22 +123,26 @@ export async function initTesta(opts: InitOptions): Promise<InitResult> {
     }
   }
 
-  // ── Split-URL: client-side redirect, loop-guarded ───────────────────────
+  // ── Split-URL: client-side redirect — ALWAYS, on every visit to the control
+  // URL. Loop safety is the engine's stateless already-at-destination check,
+  // never a marker cookie (a marker would show variant visitors the control
+  // page on later visits). ─────────────────────────────────────────────────
   if (result.redirectTo) {
-    const redirectEvent = result.applied.find((a) => a.redirected);
-    const expId = redirectEvent?.experimentId;
-    const alreadyBounced = expId != null && hasRedirected(store, expId);
-    if (!alreadyBounced) {
-      if (expId != null) markRedirected(store, expId);
-      navigate(result.redirectTo);
-      return { applied: result.applied, teardowns: [], redirected: true };
-    }
+    navigate(result.redirectTo);
+    return { applied: result.applied, teardowns: [], redirected: true };
   }
 
-  // ── DOM: apply the assigned variant, cookie-first — page-gated, so a variant
-  // assigned on the experiment page never leaks onto other routes ─────────────
+  // ── DOM: apply the assigned variant, cookie-first — page-gated AND
+  // exclusion-gated (3.3.3 parity: exclusions re-checked every pageview), so a
+  // variant assigned on the experiment page never leaks onto other routes and
+  // a mutually-excluded experiment never double-applies ──────────────────────
   const assignmentCookie = store.get(ASSIGNMENT_COOKIE);
-  const teardowns = applyAssignedExperiments(config, assignmentCookie, currentUrl);
+  const teardowns = applyAssignedExperiments(config, assignmentCookie, currentUrl, {
+    url: currentUrl,
+    getCookie: (n) => store.get(n),
+    ...(typeof navigator !== 'undefined' ? { userAgent: navigator.userAgent } : {}),
+    ...(config.geo?.country ? { country: config.geo.country } : {}),
+  });
 
   // Fire `variation_applied` for each exposed experiment on this page (client
   // event surface + GTM dataLayer). Deduped per load inside the bus.

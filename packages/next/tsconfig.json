@@ -6,7 +6,10 @@
     "noEmit": true,
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "jsx": "react-jsx",
-    "types": []
+    "types": [],
+    "paths": {
+      "@testa-soft/next/experiments": ["./src/experiments/index.ts"]
+    }
   },
   "include": ["src/**/*"]
 }

@@ -1,8 +1,8 @@
 {
   "name": "@testa-soft/next",
-  "version": "0.0.2-dev.6",
+  "version": "0.0.2-dev.10",
   "type": "module",
-  "description": "Testa split-URL A/B testing for Next.js — server-side, flicker-free redirects via middleware.",
+  "description": "Testa split-URL A/B testing for Next.js \u2014 server-side, flicker-free redirects via middleware.",
   "license": "UNLICENSED",
   "sideEffects": false,
   "main": "./dist/index.cjs",
@@ -23,6 +23,11 @@
       "types": "./dist/experiments/index.d.ts",
       "import": "./dist/experiments/index.js",
       "require": "./dist/experiments/index.cjs"
+    },
+    "./server": {
+      "types": "./dist/server/index.d.ts",
+      "import": "./dist/server/index.js",
+      "require": "./dist/server/index.cjs"
     }
   },
   "files": [

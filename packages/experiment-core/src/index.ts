@@ -60,8 +60,9 @@ export {
   hasPendingDomChange,
   matchesPageRule,
   resolveExposures,
+  resolveGoalExperiments,
 } from './engine.ts';
-export type { Exposure } from './engine.ts';
+export type { Exposure, GoalAssignment } from './engine.ts';
 export {
   SESSION_LENGTH_SEC,
   isSessionLive,

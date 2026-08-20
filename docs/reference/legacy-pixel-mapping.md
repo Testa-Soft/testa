@@ -68,7 +68,7 @@ The URL the rule matches against is `window.location.href` minus fragment, with 
 | Custom JS via `eval` (in the runtime context) | `apply/js.ts` | Yes — preserve the eval. We're not making it safer in v1. |
 | Element attribute set | `apply/attribute.ts` | `el.setAttribute(name, value)` |
 | **Split URL redirect** | `apply/redirect.ts` | **Including known redirect bugs.** Do not "fix". Tracked as post-pilot follow-up. |
-| Cross-domain link tagging | `apply/cross_domain.ts` | The `_testa_cd` URL parameter passed to whitelisted domains. |
+| Cross-domain link tagging | `experiments/cross-domain.ts` | The `_testa_cd` URL parameter passed to different-domain links. |
 
 ### MutationObserver (`runtime/experiments/observer.ts`)
 
@@ -94,7 +94,7 @@ The `_testa_uuid` change is the load-bearing one for ITP defeat.
 
 3.6 tags outbound links to whitelisted domains with `?_testa_cd=<encoded experiment+variation+uuid>`. The destination site's pixel reads it on landing and applies the experiment without re-rolling traffic.
 
-4.0 module: `runtime/experiments/cross_domain.ts`. Preserve the encoding format exactly so 3.6 and 4.0 sites can interoperate during the rollout window.
+4.0 module: `runtime/experiments/cross-domain.ts` (implemented). The `{ u, exps:[{e,v}] }` base64 encoding is preserved exactly (with legacy single `{e,v,u}` decode) so 3.6/3.3.3 and 4.0 sites interoperate during the rollout window. Assignment + session cookies are applied on landing; the `_testa_uuid` cookie is NOT written from JS (worker owns it — the incoming uuid is mirrored to `window.Analytica.uuid` only).
 
 > **Known production issue.** See `docs/KNOWN_ISSUES.md` (entry dated 2026-05-05). Some Next.js / SPA destinations strip the `_testa_cd` query param during client-side navigation, breaking the bridge. The v1 port is 1:1 (issue preserved). A more robust transport (postMessage iframe, hash fragment, or worker-bridged exchange) ships as a follow-up PR after pilot is stable. Do NOT try to fix this in Phase 3.7's port — track the parity test, file the issue, move on.
 

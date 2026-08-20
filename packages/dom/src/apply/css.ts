@@ -22,15 +22,20 @@ const STYLE_ID_PREFIX = 'testa-css-';
  * content)` overwrites the existing `<style>` tag instead of stacking. The
  * `variationId` is in the tag id so multiple variations on one page don't
  * clobber each other.
+ *
+ * Returns a teardown that REMOVES the style tag: the sheet is document-global,
+ * so without removal it keeps styling every page after a soft navigation away
+ * from the experiment page. The caller re-applies on each cycle where the page
+ * rule matches, so on-page persistence across React re-renders is unaffected.
  */
-export function applyCss(variationId: number | string, change: CssChange): void {
-  if (typeof document === 'undefined') return;
+export function applyCss(variationId: number | string, change: CssChange): () => void {
+  if (typeof document === 'undefined') return () => {};
   const id = `${STYLE_ID_PREFIX}${variationId}-${hashContent(change.content)}`;
   const existing = document.getElementById(id);
 
   if (existing instanceof HTMLStyleElement) {
     existing.textContent = change.content;
-    return;
+    return () => existing.remove();
   }
 
   const style = document.createElement('style');
@@ -38,6 +43,7 @@ export function applyCss(variationId: number | string, change: CssChange): void 
   style.setAttribute('data-testa-css', String(variationId));
   style.textContent = change.content;
   document.head.appendChild(style);
+  return () => style.remove();
 }
 
 /** Cheap hash so the style tag id is short + deterministic per content. */

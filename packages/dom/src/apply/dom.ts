@@ -6,23 +6,43 @@
  *    Late-arriving variants are how we apply CSS to a `.buy-button` that
  *    React hasn't rendered yet.
  *
+ *  - `opts.guard` is checked at the moment a node would be touched (initial
+ *    sweep AND observer hits). In an SPA the document persists across soft
+ *    navigations, so an un-guarded watcher would apply the variant to the NEXT
+ *    page's matching element — the caller passes "does the current URL still
+ *    match this experiment's page rule?" and off-page nodes stay untouched.
+ *
  *  - `safeQuerySelectorAll` swallows malformed selectors. Customers can paste
  *    nearly anything into the admin UI; we should refuse to crash on `.foo[`.
  */
 
 const MUTATION_OBSERVER_TIMEOUT_MS = 10_000;
 
+export interface EachMatchingOptions {
+  /** Observer lifetime (ms) for late-rendered matches. Default 10s. */
+  timeoutMs?: number;
+  /**
+   * Checked immediately before EVERY application (existing and late nodes).
+   * Return false to skip — the node is NOT marked seen, so a later hit while
+   * the guard passes can still apply within this cycle.
+   */
+  guard?: () => boolean;
+}
+
 /** Run `fn` on every current and future match for `selector`, capped by timeout. */
 export function eachMatching(
   selector: string,
   fn: (el: Element) => void,
-  timeoutMs: number = MUTATION_OBSERVER_TIMEOUT_MS,
+  opts: EachMatchingOptions = {},
 ): () => void {
+  const timeoutMs = opts.timeoutMs ?? MUTATION_OBSERVER_TIMEOUT_MS;
+  const guard = opts.guard;
   const seen = new WeakSet<Element>();
 
   const tryApply = (root: ParentNode): void => {
     for (const el of safeQuerySelectorAll(root, selector)) {
       if (seen.has(el)) continue;
+      if (guard && !guard()) return; // off-page: touch nothing, stay unseen
       seen.add(el);
       try {
         fn(el);
@@ -48,7 +68,7 @@ export function eachMatching(
         if (node instanceof Element) {
           // The added node itself might match.
           if (matchesSafe(node, selector)) {
-            if (!seen.has(node)) {
+            if (!seen.has(node) && !(guard && !guard())) {
               seen.add(node);
               try {
                 fn(node);

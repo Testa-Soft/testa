@@ -13,24 +13,28 @@
  */
 
 import type { VariationChange } from '@testa-platform/shared-types';
-import { eachMatching } from './dom.ts';
+import { type EachMatchingOptions, eachMatching } from './dom.ts';
 
 export type MoveChange = Extract<
   VariationChange,
   { type: 'move_element_append' | 'move_element_prepend' }
 >;
 
-export function applyMove(change: MoveChange): () => void {
+export function applyMove(change: MoveChange, opts: EachMatchingOptions = {}): () => void {
   const position = change.type === 'move_element_append' ? 'append' : 'prepend';
-  return eachMatching(change.selector, (el) => {
-    const target = safeQuerySelector(change.content);
-    if (!target) return; // Target not on the page (yet) — skip, like legacy.
-    if (position === 'append') {
-      target.appendChild(el);
-    } else {
-      target.prepend(el);
-    }
-  });
+  return eachMatching(
+    change.selector,
+    (el) => {
+      const target = safeQuerySelector(change.content);
+      if (!target) return; // Target not on the page (yet) — skip, like legacy.
+      if (position === 'append') {
+        target.appendChild(el);
+      } else {
+        target.prepend(el);
+      }
+    },
+    opts,
+  );
 }
 
 /** Single-match lookup that swallows malformed selectors, like dom.ts helpers. */

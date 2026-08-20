@@ -1,6 +1,6 @@
 import type { GoalConfig } from '@testa-platform/shared-types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { type AssignedExperiment, createGoalController, urlMatchesGoal } from '../goals.ts';
+import { type GoalExperiment, createGoalController, urlMatchesGoal } from '../controller.ts';
 
 beforeEach(() => {
   document.body.innerHTML = '';
@@ -25,7 +25,7 @@ describe('urlMatchesGoal', () => {
   });
 });
 
-function assigned(goals: GoalConfig[]): AssignedExperiment {
+function assigned(goals: GoalConfig[]): GoalExperiment {
   return { experimentId: 7, variationId: 2, goals };
 }
 
@@ -45,6 +45,8 @@ describe('createGoalController — page_view goals', () => {
 
     expect(track).toHaveBeenCalledWith('conversion', {
       goal_id: 11,
+      action: '/thanks',
+      goal_name: 'Thanks',
       experiment_id: 7,
       variation_id: 2,
     });
@@ -77,6 +79,7 @@ describe('createGoalController — custom goals', () => {
     c.handleCustomEvent('demo_booked', { plan: 'pro' });
     expect(track).toHaveBeenCalledWith('conversion', {
       goal_id: 22,
+      action: 'demo_booked',
       experiment_id: 7,
       variation_id: 2,
       plan: 'pro',
@@ -109,6 +112,7 @@ describe('createGoalController — click goals', () => {
 
     expect(track).toHaveBeenCalledWith('conversion', {
       goal_id: 33,
+      action: '.cta',
       experiment_id: 7,
       variation_id: 2,
     });

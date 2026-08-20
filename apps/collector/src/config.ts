@@ -33,6 +33,19 @@ const envSchema = z.object({
   DEDUP_EVENT_NAMES: z.string().default('purchase'),
   /** Dedup TTL for the Redis SET NX EX gate. */
   DEDUP_TTL_SEC: z.coerce.number().int().positive().default(600),
+
+  /**
+   * Directory the config API writes servable `{projectId}.json` files to — the
+   * local stand-in for the object bucket / CDN origin we push configs (and later
+   * events) to. Served statically from here.
+   */
+  CONFIG_DIR: z.string().default('.data/configs'),
+
+  /**
+   * Shared secret required on `POST /api/v1/config/*` (the config WRITE path).
+   * crobot sends it as `Authorization: Bearer <token>`. GET stays public.
+   */
+  CONFIG_WRITE_TOKEN: z.string().min(8).default('dev-config-token-change-me-please'),
 });
 
 const parsed = envSchema.parse(process.env);
@@ -77,4 +90,7 @@ export const config = {
       .filter(Boolean),
     ttlSec: parsed.DEDUP_TTL_SEC,
   },
+
+  configDir: parsed.CONFIG_DIR,
+  configWriteToken: parsed.CONFIG_WRITE_TOKEN,
 } as const;

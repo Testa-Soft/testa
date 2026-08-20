@@ -71,21 +71,58 @@ describe('GET /projects/:slug.js — 4.0 happy path', () => {
     expect(body).toContain('window.cfPrefill');
     expect(body).toContain('"project_id":42');
     expect(body).toContain('window.cfPrefill.env = "test"');
+    expect(body).toContain('window.cfGeoData');
     expect(body).toContain(BUNDLE_4_0);
+    // Per-visitor body (geo + cookie) must never land in a shared cache.
+    expect(res.headers.get('cache-control')).toContain('private');
+  });
+
+  it('injects the visitor geo from request.cf into cfGeoData', async () => {
+    const env = makeEnv({
+      configs: { foo: FIXTURE_4_0 },
+      bundles: { '4.0': BUNDLE_4_0 },
+    });
+    const res = await app.fetch(
+      new Request('https://track.testa.com/projects/foo.js', {
+        cf: { country: 'LT', regionCode: 'VL', city: 'Vilnius' },
+      }),
+      env,
+    );
+    const body = await res.text();
+    expect(body).toContain(
+      'window.cfGeoData = {"country":"LT","region":"VL","city":"Vilnius"};',
+    );
+  });
+
+  it('falls back to empty geo strings when request.cf is absent', async () => {
+    const env = makeEnv({
+      configs: { foo: FIXTURE_4_0 },
+      bundles: { '4.0': BUNDLE_4_0 },
+    });
+    const res = await app.fetch(new Request('https://track.testa.com/projects/foo.js'), env);
+    const body = await res.text();
+    expect(body).toContain('window.cfGeoData = {"country":"","region":"","city":""};');
   });
 });
 
 describe('GET /projects/:slug.js — 3.6 frozen bundle', () => {
-  it('returns the legacy bundle verbatim, no cfPrefill block', async () => {
+  it('prepends only cfGeoData (legacy proxy-worker contract), then the bundle verbatim', async () => {
     const env = makeEnv({
       configs: { bar: FIXTURE_3_6 },
       bundles: { '3.6': BUNDLE_3_6 },
     });
-    const res = await app.fetch(new Request('https://track.testa.com/projects/bar.js'), env);
+    const res = await app.fetch(
+      new Request('https://track.testa.com/projects/bar.js', {
+        cf: { country: 'LT', regionCode: 'VL', city: 'Vilnius' },
+      }),
+      env,
+    );
     expect(res.status).toBe(200);
     const body = await res.text();
     expect(body).not.toContain('cfPrefill');
-    expect(body).toBe(BUNDLE_3_6);
+    expect(body).toBe(
+      `window.cfGeoData = {"country":"LT","region":"VL","city":"Vilnius"};\n${BUNDLE_3_6}`,
+    );
   });
 });
 

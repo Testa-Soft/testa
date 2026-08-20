@@ -20,6 +20,7 @@ import {
 import { NextResponse } from 'next/server';
 import type { NextFetchEvent, NextRequest } from 'next/server';
 import { ConfigClient, type ConfigSource } from './config.ts';
+import { DEFAULT_CONFIG_HOST, DEFAULT_TRACKING_HOST, SHIELD_HEADER, readEnv } from './constants.ts';
 import { NextCookieStore } from './cookie-store.ts';
 import { resolveCookieDomain } from './domain.ts';
 import { computePrefetchRedirect } from './soft-nav/prefetch-guard.ts';
@@ -29,15 +30,9 @@ import { ensureVisitorId } from './uuid.ts';
 
 export type { VariationAppliedEvent };
 
-/**
- * Baked-in default config host. A client integration only needs `{ projectId }`;
- * the package already knows where to fetch config from. Override per-deployment
- * with the `host` option (or the `TESTA_CONFIG_HOST` env var).
- */
-export const DEFAULT_CONFIG_HOST = 'https://config.testa-soft.tech';
-
-/** Default host for exposure/conversion tracking (crobot's `/api/leads`). */
-export const DEFAULT_TRACKING_HOST = 'https://new.testa-soft.tech';
+// Re-exported from `./constants.ts` so the server entry can share them without
+// importing this (edge-only) module, while existing imports keep working.
+export { DEFAULT_CONFIG_HOST, DEFAULT_TRACKING_HOST, SHIELD_HEADER } from './constants.ts';
 
 export interface TestaProxyOptions extends ConfigSource {
   /**
@@ -204,9 +199,6 @@ export function createTestaProxy(options: TestaProxyOptions): TestaProxy {
   };
 }
 
-/** Request header the middleware sets so the layout can gate `<TestaShield/>`. */
-export const SHIELD_HEADER = 'x-testa-shield';
-
 /** Context passed to `onVariationAssigned` — keep an async task alive past the response. */
 export interface VariationHookContext {
   /** Run `promise` to completion after the response is sent (never delays it). */
@@ -252,12 +244,4 @@ function resolveConfigSource(options: TestaProxyOptions, projectId: string): Con
     '',
   );
   return { ...options, configUrl: `${host}/api/v1/config/${projectId}` };
-}
-
-function readEnv(name: string): string | undefined {
-  try {
-    return typeof process !== 'undefined' ? process.env?.[name] : undefined;
-  } catch {
-    return undefined;
-  }
 }

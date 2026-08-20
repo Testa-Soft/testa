@@ -6,11 +6,16 @@
  *   - exclusions: if ANY condition matches (OR), the visitor is excluded.
  *
  * Dimensions the middleware can evaluate server-side:
- *   - utm_source/medium/campaign/term/content/keyword → URL query params
  *   - url            → the full request URL
  *   - cookie         → a request cookie (value `name=val` or just `name`)
  *   - device         → UA-derived (mobile | tablet | desktop)
  *   - region_country → a geo signal (ISO country) if the host provides one
+ *   - experiment     → visitor is ASSIGNED (variation ≥ 0) to experiment
+ *     `value` — crobot's cross-experiment (mutual) exclusion. Parses the packed
+ *     cookie FRESH via `getCookie`, so an assignment made earlier in the same
+ *     request (read-through store) already counts: config order = priority.
+ *   - anything else  → a URL query param looked up by the dimension name
+ *     (utm_source, gclid, …) — 3.3.3's `handleURLParameter` default case.
  *
  * Fail policy for a dimension we CAN'T evaluate (e.g. geo with no signal):
  *   - targeting  → treat as NOT satisfied (don't run an experiment we can't
@@ -19,6 +24,8 @@
  */
 
 import type { TargetingCondition } from '@testa-platform/shared-types';
+import { ASSIGNMENT_COOKIE } from './cookie-store.ts';
+import { parsePacked } from './packed-cookie.ts';
 import { safeUrl } from './redirect/url.ts';
 
 export interface TargetingContext {
@@ -29,25 +36,12 @@ export interface TargetingContext {
   country?: string;
 }
 
-const UTM_DIMENSIONS = new Set([
-  'utm_source',
-  'utm_medium',
-  'utm_campaign',
-  'utm_term',
-  'utm_content',
-  'utm_keyword',
-]);
-
 interface Resolved {
   supported: boolean;
   value: string | null;
 }
 
 function resolveDimension(dimension: string, ctx: TargetingContext): Resolved {
-  if (UTM_DIMENSIONS.has(dimension)) {
-    const u = safeUrl(ctx.url);
-    return { supported: true, value: u ? u.searchParams.get(dimension) : null };
-  }
   if (dimension === 'url') {
     return { supported: true, value: ctx.url };
   }
@@ -63,7 +57,11 @@ function resolveDimension(dimension: string, ctx: TargetingContext): Resolved {
     // handled specially in matchCookie; not resolved to a single value here
     return { supported: true, value: null };
   }
-  return { supported: false, value: null };
+  // Any other dimension is a URL query parameter looked up BY NAME (utm_source,
+  // utm_medium, gclid, …) — 3.3.3 `handleURLParameter` is the `default:` case
+  // of its rule switch, so every unrecognized rule type resolves this way.
+  const u = safeUrl(ctx.url);
+  return { supported: true, value: u ? u.searchParams.get(dimension) : null };
 }
 
 function deviceOf(ua: string): string {
@@ -125,6 +123,9 @@ function evaluate(
   if (condition.dimension === 'cookie') {
     return { matched: matchCookie(condition, ctx), supported: true };
   }
+  if (condition.dimension === 'experiment') {
+    return matchExperiment(condition, ctx);
+  }
   const { supported, value } = resolveDimension(condition.dimension, ctx);
   if (!supported) return { matched: false, supported: false };
   return { matched: applyOperator(condition.operator, value, condition.value), supported: true };
@@ -158,6 +159,26 @@ export function passesTargeting(
     if (!anyPass) return false;
   }
   return true;
+}
+
+/**
+ * `dimension: 'experiment'` — is the visitor ASSIGNED to experiment `value`?
+ * Assignment means a real variation (≥ 0, control included); parked eligibility
+ * (-2) and cached exclusions do not count. Parsed fresh from the packed cookie
+ * on every evaluation so same-request assignments are visible (read-through
+ * store) and the operator keeps working as URL params come and go.
+ */
+function matchExperiment(
+  condition: TargetingCondition,
+  ctx: TargetingContext,
+): { matched: boolean; supported: boolean } {
+  // Only equality makes sense for "in experiment N"; anything else is treated
+  // as unsupported (targeting → not satisfied, exclusion → not excluding).
+  if (condition.operator !== 'equals') return { matched: false, supported: false };
+  const id = Number(condition.value);
+  if (!Number.isFinite(id)) return { matched: false, supported: false };
+  const state = parsePacked(ctx.getCookie(ASSIGNMENT_COOKIE)).get(id);
+  return { matched: state !== undefined && !state.excluded && state.variation >= 0, supported: true };
 }
 
 /** True when the visitor is excluded (ANY exclusion matches). Unsupported → not excluding. */

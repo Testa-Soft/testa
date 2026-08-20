@@ -40,7 +40,15 @@ export const SECONDS_PER_HOUR = 60 * 60;
 export const SECONDS_PER_DAY = 24 * SECONDS_PER_HOUR;
 
 export const ASSIGNMENT_TTL_SEC = 30 * SECONDS_PER_DAY;
-export const REDIRECTED_TTL_SEC = 30 * SECONDS_PER_DAY;
+/**
+ * Redirect loop-BREAKER window, not persistence. A variant visitor landing on
+ * the control URL must be redirected on EVERY visit (the engine already skips
+ * when the current URL is the destination) — this guard only exists to break
+ * immediate A↔B ping-pong from pathological configs, so it lives seconds.
+ * (It was 30 days once, which locked client-side redirects to once-a-month:
+ * variant visitors saw the CONTROL page on every later visit.)
+ */
+export const REDIRECTED_TTL_SEC = 15;
 export const UUID_TTL_SEC = 400 * SECONDS_PER_DAY;
 
 export const redirectedName = (experimentId: number | string): string =>

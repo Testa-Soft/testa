@@ -12,15 +12,22 @@
  * changes only.
  */
 
-import type { ProjectConfig, VariationChange } from '@testa-platform/shared-types';
+import type { ExperimentRule, ProjectConfig, VariationChange } from '@testa-platform/shared-types';
 import { type Teardown, applyVariation } from '@testa-soft/dom';
-import { matchesPageRule, parsePacked } from '@testa-soft/experiment-core';
+import {
+  type TargetingContext,
+  isExcludedByRules,
+  matchesPageRule,
+  parsePacked,
+} from '@testa-soft/experiment-core';
 
 export interface AssignedExperiment {
   experimentId: number;
   variationId: number;
   /** The variant's non-redirect (DOM) changes, in config order. */
   changes: VariationChange[];
+  /** The experiment's page rules — re-checked at every DOM touch (guard). */
+  rules: ExperimentRule[];
 }
 
 /**
@@ -33,6 +40,7 @@ export function resolveAssignedExperiments(
   config: ProjectConfig,
   cookieValue: string | null,
   currentUrl: string,
+  exclusionCtx?: TargetingContext,
 ): AssignedExperiment[] {
   const map = parsePacked(cookieValue);
   if (map.size === 0) return [];
@@ -44,6 +52,11 @@ export function resolveAssignedExperiments(
     // rule the middleware enrolls on. Assignment is sticky across the whole site;
     // the DOM change is not. Without this, an assigned variant leaks onto '/'.
     if (!matchesPageRule(currentUrl, experiment.rules)) continue;
+    // Exclusion gate — like the middleware engine (3.3.3 `handleExclusions`),
+    // exclusions re-evaluate on EVERY pageview, assigned or not: a match
+    // suppresses the apply without touching the sticky assignment. Enforces
+    // `dimension: 'experiment'` mutual exclusion at apply time.
+    if (exclusionCtx && isExcludedByRules(experiment.exclusions, exclusionCtx)) continue;
 
     const state = map.get(Number(experiment.experiment_id));
     // Skip excluded + the eligible-but-unassigned sentinel (both variation < 0).
@@ -59,6 +72,7 @@ export function resolveAssignedExperiments(
       experimentId: experiment.experiment_id,
       variationId: state.variation,
       changes: domChanges,
+      rules: experiment.rules,
     });
   }
   return out;
@@ -73,10 +87,20 @@ export function applyAssignedExperiments(
   config: ProjectConfig,
   cookieValue: string | null,
   currentUrl: string,
+  exclusionCtx?: TargetingContext,
 ): Teardown[] {
   const teardowns: Teardown[] = [];
-  for (const assigned of resolveAssignedExperiments(config, cookieValue, currentUrl)) {
-    teardowns.push(...applyVariation(assigned.variationId, assigned.changes));
+  for (const assigned of resolveAssignedExperiments(config, cookieValue, currentUrl, exclusionCtx)) {
+    // The guard re-checks the page rule at the LIVE URL on every DOM touch —
+    // the appliers' MutationObservers outlive soft navigations, and without
+    // this they'd apply the variant to the next page's matching elements.
+    teardowns.push(
+      ...applyVariation(assigned.variationId, assigned.changes, {
+        guard: () =>
+          typeof window !== 'undefined' &&
+          matchesPageRule(window.location.href, assigned.rules),
+      }),
+    );
   }
   return teardowns;
 }

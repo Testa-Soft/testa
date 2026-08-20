@@ -14,6 +14,9 @@ export {
   applyAssignedExperiments,
   revealShield,
 } from './apply-assignments.ts';
+export { startGoalTracking } from './goal-tracking.ts';
+export type { GoalCycleTeardown } from './goal-tracking.ts';
+export { pushEvent } from '@testa-soft/dom';
 export type { AssignedExperiment } from './apply-assignments.ts';
 export {
   isPreviewRequested,

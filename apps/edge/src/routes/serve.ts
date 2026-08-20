@@ -1,7 +1,7 @@
 import type { ProjectConfig } from '@testa-platform/shared-types';
 import { Hono } from 'hono';
 import { getOrCreateVisitorId } from '../cookies.ts';
-import { renderPixel } from '../serve/render.ts';
+import { geoOf, renderPixel } from '../serve/render.ts';
 import type { Env } from '../types.ts';
 
 export const serve = new Hono<{ Bindings: Env }>();
@@ -57,13 +57,15 @@ serve.get('/projects/:slug{.+\\.js}', async (c) => {
   }
 
   const visitor = await getOrCreateVisitorId(c.req.raw, c.env);
-  const body = renderPixel(config, bundle, c.env.ENVIRONMENT);
+  const body = renderPixel(config, bundle, c.env.ENVIRONMENT, geoOf(c.req.raw));
 
   return new Response(body, {
     status: 200,
     headers: {
       'content-type': 'application/javascript; charset=utf-8',
-      'cache-control': 'public, max-age=60, stale-while-revalidate=300',
+      // `private`: the body carries the VISITOR's geo (and a per-visitor
+      // cookie), so only their own browser may cache it — never a shared cache.
+      'cache-control': 'private, max-age=60, stale-while-revalidate=300',
       etag,
       'set-cookie': visitor.set_cookie_header,
     },

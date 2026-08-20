@@ -1,9 +1,9 @@
-import { TestaExperiments, TestaShield } from '@testa-soft/next/experiments';
-import { TestaDebug } from './testa-debug.tsx';
+import { TestaExperiments, TestaShield } from '@testa-soft/next/server';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
-import { demoConfig } from '../testa.config.ts';
+import { PROD_PROJECT_ID, demoConfig, useProdConfig } from '../testa.config.ts';
 import { ReloadSentinel } from './reload-sentinel.tsx';
+import { TestaDebug } from './testa-debug.tsx';
 
 export const metadata = {
   title: 'Testa split-URL + HTML demo',
@@ -17,7 +17,10 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     <html lang="en">
       <head>
         {/* Anti-flicker: hides the page pre-paint until the variant is applied,
-            with a timeout fallback. Only needed for HTML/DOM experiments. */}
+            with a timeout fallback. Self-gating server component — only renders
+            the shield script when the middleware signals a pending DOM change for
+            this request (the `x-testa-shield` header), so split-URL-only pages
+            never get shielded needlessly. */}
         <TestaShield selector="body" timeoutMs={4000} />
       </head>
       <body
@@ -43,13 +46,20 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           <Link href="/pricing" style={navLink}>
             Pricing
           </Link>
+          <Link href="/calculator" style={navLink}>
+            Calculator
+          </Link>
         </nav>
         {children}
         {/* Applies the visitor's assigned DOM experiments (cookie-first) + reveals the shield.
             `previewApiUrl` enables `?testa_preview=true&testa_preview_token=…` to fetch + apply
             draft changes from the backend (crobot). Here it points at the demo origin so the
             preview endpoint can be stubbed; in production it's the crobot app URL. */}
-        <TestaExperiments config={demoConfig} previewApiUrl="http://localhost:3100" />
+        {useProdConfig ? (
+          <TestaExperiments projectId={PROD_PROJECT_ID} />
+        ) : (
+          <TestaExperiments config={demoConfig} previewApiUrl="http://localhost:3100" />
+        )}
         <TestaDebug />
         <ReloadSentinel />
       </body>

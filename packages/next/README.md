@@ -87,30 +87,38 @@ timeout fallback so a slow or broken apply can never leave the page blank), and
 `<TestaExperiments/>` reveals it once the variant is on the page.
 
 Add both in your root layout — the shield as high in `<head>` as possible, and
-the experiments component anywhere in the body:
+the experiments component anywhere in the body. Use the **server entry**: the
+config is fetched server-side on the first request and cached in the Next data
+cache (background-revalidated) — no app-side fetch code:
 
 ```tsx
 // app/layout.tsx
-import { TestaShield, TestaExperiments } from '@testa-soft/next/experiments'
-import projectConfig from './testa.config.json'
+import { TestaShield, TestaExperiments } from '@testa-soft/next/server'
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
       <head>
-        {/* Hides the page before paint; revealed once the variant is applied. */}
+        {/* Self-gating: renders the shield ONLY when the middleware flagged a
+            pending DOM change for this request (x-testa-shield header). */}
         <TestaShield selector="body" timeoutMs={4000} />
       </head>
       <body>
         {children}
-        {/* Reads _testa_exp and applies the assigned variation's DOM changes.
-            Re-applies automatically on App-Router soft navigation. */}
-        <TestaExperiments config={projectConfig} />
+        {/* Fetches the config server-side (same id as the proxy), then applies
+            the assigned variation's DOM changes client-side. Re-applies on
+            App-Router soft navigation. Fails open if config is unreachable. */}
+        <TestaExperiments projectId="3fa85f64e1c2b" />
       </body>
     </html>
   )
 }
 ```
+
+Managing the config yourself? The client entry
+(`@testa-soft/next/experiments`) exports the same components taking an explicit
+`config` prop (the shield there always renders — not header-gated), and the
+`/server` components also accept `config` to skip their fetch.
 
 Supported change types are crobot-native and applied by the shared DOM engine:
 
@@ -244,14 +252,36 @@ of the client surface — wire up both if you want.
 > `variation_assigned` = when the visitor is bucketed (server); `variation_applied`
 > = when they're shown it (client, once per session). Both carry the same payload.
 
-### `<TestaExperiments>` — from `@testa-soft/next/experiments`
+### `<TestaExperiments>` — from `@testa-soft/next/server` (recommended)
+
+Async server component: fetches the config server-side (Next data cache) and
+renders the client applier. Fails open (renders nothing) on any config failure.
+
+| Prop            | Type            | Default                          | Description                                                           |
+| --------------- | --------------- | -------------------------------- | --------------------------------------------------------------------- |
+| `projectId`     | `string`        | —                                | **Required** (unless `config` given). Same id as `createTestaProxy`.  |
+| `config`        | `ProjectConfig` | —                                | Inline config — skips the fetch.                                       |
+| `host`          | `string`        | `https://config.testa-soft.tech` | Config host. Also via `TESTA_CONFIG_HOST`.                             |
+| `revalidateSec` | `number`        | `30`                             | Next data-cache revalidation window.                                   |
+| `previewApiUrl` | `string`        | —                                | Backend base URL; enables `?testa_preview`.                            |
+
+### `<TestaShield>` — from `@testa-soft/next/server` (recommended)
+
+Async server component with the same props as the client shield below, but
+**self-gating**: renders only when the middleware set `x-testa-shield: 1` for
+this request. Outside a request scope (static generation) it renders nothing.
+
+`loadTestaConfig({ projectId, host?, revalidateSec? })` is also exported from
+`/server` for custom server code — resolves `null` on any failure (fail open).
+
+### `<TestaExperiments>` — from `@testa-soft/next/experiments` (client entry)
 
 | Prop            | Type            | Default | Description                                                                                          |
 | --------------- | --------------- | ------- | -------------------------------------------------------------------------------------------------- |
 | `config`        | `ProjectConfig` | —       | **Required.** The same config the middleware uses (local fixture or fetched once).                 |
 | `previewApiUrl` | `string`        | —       | Backend base URL for preview mode. Required for `?testa_preview` to fetch drafts; ignored otherwise. |
 
-### `<TestaShield>` — from `@testa-soft/next/experiments`
+### `<TestaShield>` — from `@testa-soft/next/experiments` (client entry)
 
 | Prop        | Type                        | Default     | Description                                                                                   |
 | ----------- | --------------------------- | ----------- | -------------------------------------------------------------------------------------------- |

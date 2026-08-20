@@ -31,7 +31,7 @@ createRoot(document.getElementById('root')!).render(
 )
 ```
 
-That is the whole integration. On mount (and on every SPA navigation) the provider assigns the visitor, performs any split-URL redirect, and applies HTML/DOM changes.
+That is the whole integration. The config fetch starts during the provider's **first render** (before paint, deduped across StrictMode double-mounts), and on mount (plus every SPA navigation) the provider assigns the visitor, performs any split-URL redirect, and applies HTML/DOM changes — behind a built-in **smart anti-flicker overlay** (see below).
 
 ### Inline-config mode
 
@@ -71,33 +71,20 @@ function PricingCta() {
 
 For "same URL, different content" tests authored in the Testa editor, the provider applies **crobot-native DOM changes** on the client, cookie-first — no re-bucketing. Nothing extra to wire up beyond `<TestaProvider>`.
 
-Because these mutate content the browser already painted, there can be a brief control→variant flash. `<TestaShield>` hides the page until the variant is applied (with a hard timeout fallback so a slow/broken apply never leaves it blank). In a Vite SPA the earliest, most reliable place is your `index.html` `<head>` — inline the snippet directly:
+Because these mutate content the browser already painted, there can be a brief control→variant flash. The provider handles this **automatically** with a smart anti-flicker overlay (`shield` prop, default on):
 
-```html
-<!-- index.html -->
-<head>
-  <script>
-    /* paste the output of buildShieldSnippet() from @testa-soft/dom, or: */
-    (function () {
-      var s = document.createElement('style')
-      s.id = '__testa_shield'
-      s.textContent = 'body{opacity:0 !important}'
-      ;(document.head || document.documentElement).appendChild(s)
-      function reveal() { var e = document.getElementById('__testa_shield'); if (e) e.remove() }
-      setTimeout(reveal, 4000)
-      window.__testa_shield = { reveal: reveal }
-    })()
-  </script>
-</head>
-```
+- **Initial load:** the overlay is raised before first paint (a pre-paint layout effect) while the config loads, and revealed the moment the assigned variant is applied — or immediately when nothing applies. A 4s hard timeout guarantees a slow or broken apply never leaves the page blank (fail open).
+- **Smart skip:** after the first config load the provider persists a hint (`localStorage['__testa_shield_hint']`) recording whether the project has any active experiments with changes. Projects with nothing to apply **stop shielding entirely** on subsequent visits — no needless blank frame.
+- **Redirects:** the overlay stays up while a client-side split-URL redirect navigates away, so the control page never flashes.
+- **Soft navigations:** never re-shielded — re-apply is near-instant.
 
-`<TestaProvider>` calls `reveal()` automatically once the variant is applied. You can also render `<TestaShield />` from React, but a React-rendered `<script>` runs after first paint, so the `index.html` snippet above is preferred for a pure SPA.
+Pass `shield={false}` to manage flicker yourself, or `shield={{ selector, timeoutMs, mode, styleId }}` to customize. For the absolute earliest coverage (before your JS bundle even loads — e.g. slow networks), you can still inline `buildShieldSnippet()` from `@testa-soft/dom` in `index.html`'s `<head>`; the provider detects it (same style id) and won't double-shield.
 
 Supported change types are crobot-native and applied by the shared DOM engine: `change_html`, `css`, `hide_element`, `append_html`, `prepend_html`, `move_element_append`, `move_element_prepend`.
 
 ## Split-URL redirects happen client-side
 
-Split-URL tests send a bucketed visitor to a different URL. With no server to issue a `307`, the provider performs the redirect **client-side** via `window.location.replace(destination)` as early as it can on load. It's loop-guarded by a per-experiment `_testa_redirected_<id>` cookie so a visitor is never bounced back and forth. Because there's no edge, expect a brief navigation rather than the flicker-free server redirect the Next.js package gives you — use `<TestaShield>` if the source page would otherwise flash.
+Split-URL tests send a bucketed visitor to a different URL. With no server to issue a `307`, the provider performs the redirect **client-side** via `window.location.replace(destination)` as early as it can on load. It's loop-guarded by a per-experiment `_testa_redirected_<id>` cookie so a visitor is never bounced back and forth. Because there's no edge, expect a brief navigation rather than the flicker-free server redirect the Next.js package gives you — the provider's built-in shield keeps the source page hidden while the redirect navigates away.
 
 ## Preview mode
 
@@ -133,10 +120,11 @@ The provider installs a framework-agnostic navigation detector — it patches `h
 | `trackingHost`  | `string`        | `https://app.testa-soft.tech`    | Host for exposure tracking (`/api/leads`).                                     |
 | `secureCookies` | `boolean`       | `true`                           | Emit `Secure` cookies. Set `false` for local http dev.                         |
 | `cookieDomain`  | `string`        | —                                | Cookie `Domain` for cross-subdomain sharing (e.g. `.acme.com`).                |
+| `shield`        | `boolean \| ShieldOptions` | `true`                | Smart anti-flicker overlay on initial load. `false` to disable; options object to customize selector/timeout/mode. |
 
 ## How it works
 
 - **Deterministic, sticky assignment.** The provider buckets each visitor with `xxhash32(visitorId:experimentId) mod 100` and writes the sticky `_testa_exp` cookie. A returning visitor is never re-rolled, and `useTestaVariant`, DOM apply, and redirects all read that one cookie.
 - **Client-side redirects, loop-guarded.** Split-URL tests `location.replace` to the variant, guarded by `_testa_redirected_<id>` so there's no bounce loop.
-- **DOM changes behind a shield.** HTML/DOM variants apply cookie-first after mount and re-apply on soft navigation; `<TestaShield>` prevents the control→variant flash.
+- **DOM changes behind a smart shield.** HTML/DOM variants apply cookie-first after mount and re-apply on soft navigation; the provider's built-in overlay prevents the control→variant flash and skips itself when the project has nothing to apply.
 - **Exposures feed results.** One exposure per fresh enrollment is POSTed to the tracking host (deduped server-side).

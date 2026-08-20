@@ -52,17 +52,21 @@ export function matchesUrl(currentUrl: string, pattern: string): boolean {
 }
 
 /**
- * Exact match — origin + pathname only. Query parameters are IGNORED, matching
+ * Exact match — host + pathname only. Query parameters are IGNORED, matching
  * the pixel's `urlMatches('exact')` behaviour: `/pricing` matches
  * `/pricing?utm_source=fb`. Current query params still flow to the redirect
  * destination via `merge-params.ts`; they just don't gate the match.
+ *
+ * HOST (not hostname) — the port counts: `localhost:3200` and `localhost:5002`
+ * are different sites and must never cross-match. Protocol stays ignored
+ * (http/https unification); default ports normalize away inside `URL`.
  */
 function exactMatch(currentUrl: string, pattern: string): boolean {
   const cur = safeUrl(currentUrl);
   const pat = safeUrl(pattern);
   if (!cur || !pat) return false;
 
-  if (cur.hostname.toLowerCase() !== pat.hostname.toLowerCase()) return false;
+  if (cur.host.toLowerCase() !== pat.host.toLowerCase()) return false;
   return normalizePath(cur.pathname) === normalizePath(pat.pathname);
 }
 

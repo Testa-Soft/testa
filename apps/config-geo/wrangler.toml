@@ -1,0 +1,14 @@
+# Geo-splicing worker for the config API. Sits on the config zone route so
+# `fetch(request)` inside it hits the CF edge cache (per the zone's cache rule)
+# and falls back to the Fly collector origin on a miss. No bindings needed —
+# geo comes from `request.cf`, which Cloudflare populates before the worker runs.
+name = "testa-config-geo"
+main = "src/index.ts"
+compatibility_date = "2024-11-12"
+
+routes = [
+  { pattern = "config.testa-soft.tech/api/v1/config/*", zone_name = "testa-soft.tech" }
+]
+
+[observability]
+enabled = true

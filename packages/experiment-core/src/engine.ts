@@ -38,6 +38,7 @@
 
 import type {
   ExperimentRule,
+  GoalConfig,
   ProjectConfig,
   TargetingCondition,
   VariationConfig,
@@ -194,9 +195,14 @@ export function runExperiments(ctx: EngineContext, store: CookieStore): EngineRe
       continue;
     }
 
-    // c. Exclusion rules (the `exclusions[]` list) — entry gate for new visitors,
-    // evaluated on-page like 3.3.3's handleExclusions (not cached).
-    if (!isAssigned(state) && isExcludedByRules(experiment.exclusions, targetingCtx)) {
+    // c. Exclusion rules (the `exclusions[]` list) — evaluated on-page on EVERY
+    // pass, for assigned visitors too (3.3.3 `handleExclusions` runs before the
+    // sticky cookie is honoured). A match blocks apply/redirect for THIS
+    // pageview only: the assignment stays in the cookie, never re-rolled, and
+    // applies again once the exclusion stops matching. This is what makes
+    // `dimension: 'experiment'` a real mutual exclusion — being in the other
+    // experiment suppresses this one no matter when either was assigned.
+    if (isExcludedByRules(experiment.exclusions, targetingCtx)) {
       note({ ...base, reason: 'excluded_by_rules' });
       continue;
     }
@@ -380,6 +386,44 @@ export function resolveExposures(
       experimentId: experiment.experiment_id,
       variationId: state.variation,
       ...(experiment.title ? { title: experiment.title } : {}),
+    });
+  }
+  return out;
+}
+
+/** An experiment the visitor is assigned to whose goals should be live. */
+export interface GoalAssignment {
+  experimentId: number;
+  variationId: number;
+  goals: GoalConfig[];
+}
+
+/**
+ * Which experiments should have their GOALS armed for this visitor right now —
+ * assigned a variation (control included) and session-live (3.3.3
+ * `belongsToExperiment` + `checkSession`). Deliberately NOT page-gated: a goal
+ * usually completes on a different page than the experiment runs on (e.g.
+ * experiment on /calculator, page_view goal on /quiz). Cookie-first: reads the
+ * packed cookie, never buckets.
+ */
+export function resolveGoalExperiments(
+  config: ProjectConfig,
+  cookieValue: string | null,
+  nowSec: number,
+): GoalAssignment[] {
+  const map = parsePacked(cookieValue);
+  if (map.size === 0) return [];
+
+  const out: GoalAssignment[] = [];
+  for (const experiment of config.experiments) {
+    if (experiment.status !== 'active') continue;
+    if (!experiment.goals || experiment.goals.length === 0) continue;
+    const state = map.get(Number(experiment.experiment_id));
+    if (!state || !isAssigned(state) || !isFresh(state, nowSec)) continue;
+    out.push({
+      experimentId: experiment.experiment_id,
+      variationId: state.variation,
+      goals: experiment.goals,
     });
   }
   return out;

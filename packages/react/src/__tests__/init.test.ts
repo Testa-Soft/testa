@@ -1,7 +1,7 @@
 import { ASSIGNMENT_COOKIE, UUID_COOKIE, markRedirected } from '@testa-soft/experiment-core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { initTesta } from '../init.ts';
-import { domConfig, memoryStore, splitUrlConfig } from './helpers.ts';
+import { domConfig, memoryStore, setWindowUrl, splitUrlConfig } from './helpers.ts';
 
 const AT_PAGE = 'https://acme.com/pricing';
 
@@ -38,6 +38,7 @@ describe('initTesta — visitor id', () => {
 
 describe('initTesta — DOM apply', () => {
   it('applies the assigned variant DOM changes given a cookie', async () => {
+    setWindowUrl(AT_PAGE); // the apply guard reads the LIVE location
     document.body.innerHTML = '<div id="hero">CONTROL</div>';
     const store = memoryStore({ [UUID_COOKIE]: 'v', [ASSIGNMENT_COOKIE]: '101.2.0.0' });
     const res = await initTesta({
@@ -67,23 +68,18 @@ describe('initTesta — client redirect', () => {
     expect(navigate).toHaveBeenCalledOnce();
     expect(navigate.mock.calls[0]?.[0]).toContain('/pricing-v2');
     expect(res.redirected).toBe(true);
-    // Loop guard written.
-    expect(store.get('_testa_redirected_101')).toBe('1');
   });
 
-  it('does NOT re-navigate once the loop guard is set (already bounced)', async () => {
+  it('redirects on EVERY visit to the control URL — sticky, no lockout, marker ignored', async () => {
     const store = memoryStore({ [UUID_COOKIE]: 'v', [ASSIGNMENT_COOKIE]: '101.2.0.0' });
-    markRedirected(store, 101);
+    markRedirected(store, 101); // stale marker (legacy builds / pixel) must not block
     const navigate = vi.fn();
-    const res = await initTesta({
-      config: splitUrlConfig(),
-      currentUrl: AT_PAGE,
-      store,
-      tracking: false,
-      navigate,
-    });
-    expect(navigate).not.toHaveBeenCalled();
-    expect(res.redirected).toBe(false);
+    const opts = { config: splitUrlConfig(), currentUrl: AT_PAGE, store, tracking: false, navigate };
+    const first = await initTesta(opts);
+    const second = await initTesta(opts); // e.g. soft-nav back to the control URL
+    expect(first.redirected).toBe(true);
+    expect(second.redirected).toBe(true);
+    expect(navigate).toHaveBeenCalledTimes(2);
   });
 });
 
@@ -138,5 +134,156 @@ describe('initTesta — exposure tracking', () => {
       navigate: () => undefined,
     });
     expect(fetchSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe('initTesta — geo targeting via config.geo', () => {
+  /** Split-URL config gated on `region_country = LT`, variant 2 (redirect) forced. */
+  const geoTargetedConfig = (geo?: { country: string; region: string; city: string }) => {
+    const config = splitUrlConfig();
+    const experiment = config.experiments[0];
+    if (!experiment) throw new Error('fixture config has no experiments');
+    return {
+      ...config,
+      ...(geo ? { geo } : {}),
+      experiments: [
+        {
+          ...experiment,
+          targeting: [{ dimension: 'region_country', operator: 'exact' as const, value: 'LT' }],
+          variations: [
+            { variation_id: 1, weight: 0, changes: [] },
+            {
+              variation_id: 2,
+              weight: 100,
+              changes: [
+                {
+                  type: 'redirect' as const,
+                  from_url: AT_PAGE,
+                  to_url: 'https://acme.com/pricing-v2',
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+  };
+
+  it('enters the experiment when config.geo.country matches the targeting rule', async () => {
+    const store = memoryStore({ [UUID_COOKIE]: 'v' });
+    const navigate = vi.fn();
+    const res = await initTesta({
+      config: geoTargetedConfig({ country: 'LT', region: 'VL', city: 'Vilnius' }),
+      currentUrl: AT_PAGE,
+      store,
+      tracking: false,
+      navigate,
+    });
+    expect(navigate).toHaveBeenCalledOnce();
+    expect(res.redirected).toBe(true);
+  });
+
+  it('stays out when config.geo.country does not match', async () => {
+    const store = memoryStore({ [UUID_COOKIE]: 'v' });
+    const navigate = vi.fn();
+    const res = await initTesta({
+      config: geoTargetedConfig({ country: 'US', region: 'CA', city: 'San Francisco' }),
+      currentUrl: AT_PAGE,
+      store,
+      tracking: false,
+      navigate,
+    });
+    expect(navigate).not.toHaveBeenCalled();
+    expect(res.redirected).toBe(false);
+  });
+
+  it('fails closed when config.geo is absent (dimension unsupported)', async () => {
+    const store = memoryStore({ [UUID_COOKIE]: 'v' });
+    const navigate = vi.fn();
+    const res = await initTesta({
+      config: geoTargetedConfig(),
+      currentUrl: AT_PAGE,
+      store,
+      tracking: false,
+      navigate,
+    });
+    expect(navigate).not.toHaveBeenCalled();
+    expect(res.redirected).toBe(false);
+  });
+});
+
+describe('initTesta — geo gates apply to ALL experiment types, both directions', () => {
+  const LT_GEO = { country: 'LT', region: 'VL', city: 'Vilnius' };
+
+  it('geo targeting gates a DOM experiment (match → changes applied)', async () => {
+    setWindowUrl(AT_PAGE);
+    document.body.innerHTML = '<div id="hero">CONTROL</div>';
+    const config = { ...domConfig(), geo: LT_GEO };
+    const experiment = config.experiments[0];
+    if (experiment) {
+      experiment.targeting = [{ dimension: 'region_country', operator: 'exact', value: 'LT' }];
+    }
+    await initTesta({
+      config,
+      currentUrl: AT_PAGE,
+      store: memoryStore({ [UUID_COOKIE]: 'v' }),
+      tracking: false,
+      navigate: () => undefined,
+    });
+    expect(document.querySelector('#hero')?.innerHTML).toBe('VARIANT');
+  });
+
+  it('geo targeting gates a DOM experiment (mismatch → control untouched)', async () => {
+    setWindowUrl(AT_PAGE);
+    document.body.innerHTML = '<div id="hero">CONTROL</div>';
+    const config = { ...domConfig(), geo: { country: 'US', region: 'CA', city: 'SF' } };
+    const experiment = config.experiments[0];
+    if (experiment) {
+      experiment.targeting = [{ dimension: 'region_country', operator: 'exact', value: 'LT' }];
+    }
+    await initTesta({
+      config,
+      currentUrl: AT_PAGE,
+      store: memoryStore({ [UUID_COOKIE]: 'v' }),
+      tracking: false,
+      navigate: () => undefined,
+    });
+    expect(document.querySelector('#hero')?.innerHTML).toBe('CONTROL');
+  });
+
+  it('geo EXCLUSION keeps a matching visitor out of a DOM experiment', async () => {
+    setWindowUrl(AT_PAGE);
+    document.body.innerHTML = '<div id="hero">CONTROL</div>';
+    const config = { ...domConfig(), geo: LT_GEO };
+    const experiment = config.experiments[0];
+    if (experiment) {
+      experiment.exclusions = [{ dimension: 'region_country', operator: 'exact', value: 'LT' }];
+    }
+    await initTesta({
+      config,
+      currentUrl: AT_PAGE,
+      store: memoryStore({ [UUID_COOKIE]: 'v' }),
+      tracking: false,
+      navigate: () => undefined,
+    });
+    expect(document.querySelector('#hero')?.innerHTML).toBe('CONTROL');
+  });
+
+  it('geo EXCLUSION with no geo signal fails open (visitor enters)', async () => {
+    setWindowUrl(AT_PAGE);
+    document.body.innerHTML = '<div id="hero">CONTROL</div>';
+    const config = domConfig(); // no geo in config
+    const experiment = config.experiments[0];
+    if (experiment) {
+      experiment.exclusions = [{ dimension: 'region_country', operator: 'exact', value: 'LT' }];
+    }
+    await initTesta({
+      config,
+      currentUrl: AT_PAGE,
+      store: memoryStore({ [UUID_COOKIE]: 'v' }),
+      tracking: false,
+      navigate: () => undefined,
+    });
+    expect(document.querySelector('#hero')?.innerHTML).toBe('VARIANT');
   });
 });

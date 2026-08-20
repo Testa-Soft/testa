@@ -115,6 +115,16 @@ describe('GET /api/v1/config/:projectId', () => {
     expect(res.status).toBe(404);
   });
 
+  it('serves a long shared-cache TTL (purge-on-publish invalidates) + short browser max-age', async () => {
+    const store = memoryStore();
+    const app = buildApp(store);
+    await post(app, '12345', SOURCE_PROJECT);
+    const res = await get(app, '12345');
+    expect(res.headers.get('cache-control')).toBe(
+      'public, max-age=60, s-maxage=600, stale-while-revalidate=1800',
+    );
+  });
+
   it('marks a 404 as no-store so the CDN never negative-caches a not-yet-published project', async () => {
     const res = await get(buildApp(memoryStore()), 'unknown');
     expect(res.status).toBe(404);

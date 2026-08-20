@@ -28,7 +28,7 @@ export {
 } from './shield/shield.ts';
 export type { Shield, ShieldOptions, ShieldMode } from './shield/shield.ts';
 export { applyVariation } from './apply/index.ts';
-export type { Teardown } from './apply/index.ts';
+export type { Teardown, ApplyVariationOptions } from './apply/index.ts';
 export {
   applyAppend,
   applyChangeHtml,
@@ -38,6 +38,7 @@ export {
   applyPrepend,
 } from './apply/index.ts';
 export { eachMatching, safeQuerySelectorAll } from './apply/dom.ts';
+export type { EachMatchingOptions } from './apply/dom.ts';
 export { stripScriptTags } from './apply/html.ts';
 export {
   testa,
@@ -54,3 +55,13 @@ export type {
   Unsubscribe,
   TestaGlobal,
 } from './events/bus.ts';
+export { createGoalController, urlMatchesGoal } from './goals/controller.ts';
+export type { GoalController, GoalDeps, GoalExperiment, GoalTeardown } from './goals/controller.ts';
+export { emitLegacyConversion, resetConversionGuard } from './goals/convert.ts';
+export type { LegacyConversionPayload } from './goals/convert.ts';
+export {
+  installGoalGlobals,
+  pushEvent,
+  registerGoalController,
+  resetGoalRegistry,
+} from './goals/registry.ts';

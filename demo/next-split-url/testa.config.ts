@@ -1,6 +1,18 @@
 import type { ProjectConfig } from '@testa-platform/shared-types';
 
 /**
+ * PROD-CONFIG MODE — run the demo against the real config API instead of the
+ * inline fixture below: `TESTA_DEMO_PROD=1 pnpm dev`. The demo consumes the
+ * WORKSPACE packages (unpublished code), so this is the loop for testing SDK
+ * changes against real crobot-authored experiments without publishing:
+ * edit in crobot → publish → both config caches revalidate within ~30s.
+ * Exposure tracking stays OFF in the demo either way, so test enrollments
+ * never pollute the real project's results.
+ */
+export const PROD_PROJECT_ID = '6a8418d12335d';
+export const useProdConfig = process.env.TESTA_DEMO_PROD === '1';
+
+/**
  * Inline demo config. In production this comes from crobot (its ProjectResource
  * JSON, served by the collector config API) — see PRD 003. Here it's static so
  * the demo runs with zero infra. Change shapes are crobot-native (`change_html`
@@ -19,7 +31,7 @@ export const demoConfig: ProjectConfig = {
   integration_version: '4.0',
   consent_mode: 'aware',
   published_at: '2026-08-04T00:00:00.000Z',
-  config_hash: 'demo-2',
+  config_hash: 'demo-3',
   experiments: [
     {
       experiment_id: 101,
@@ -42,6 +54,28 @@ export const demoConfig: ProjectConfig = {
               to_url: '/pricing-v2',
               url_match_type: 'regex',
             },
+          ],
+        },
+      ],
+    },
+    {
+      // PAGE-SCOPED change_html — regression fixture for the soft-nav leak: the
+      // variant H1 must show ONLY on /features; soft-navigating to any other
+      // page must show that page's own, untouched H1 (guard + teardown-undo).
+      experiment_id: 303,
+      title: 'Features H1 rewrite (page-scoped)',
+      status: 'active',
+      traffic_allocation: 100,
+      rules: [{ match_type: 'contains', url_pattern: '/features' }],
+      goals: [],
+      variations: [
+        { variation_id: 1, name: 'Control', weight: 0, changes: [] },
+        {
+          variation_id: 2,
+          name: 'Variant (H1 rewrite)',
+          weight: 100,
+          changes: [
+            { type: 'change_html', selector: 'h1', content: 'Features — variant H1 ✅' },
           ],
         },
       ],

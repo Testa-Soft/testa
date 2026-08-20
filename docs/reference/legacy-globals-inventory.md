@@ -16,7 +16,7 @@ Complete enumeration of the `window.Analytica` surface exposed by `crobot/resour
 | `Analytica.EXCLUDED_COOKIE` | `"_testa_excl"` | Per-experiment exclusion cookie name prefix | `runtime/cookies.ts` |
 | `Analytica.FREQ_COOKIE` | `"_testa_freq"` | Per-experiment frequency-cap counter cookie prefix (new in 4.0) | `runtime/cookies.ts` |
 | `Analytica.MUTEX_COOKIE` | `"_testa_mutex"` | Per-mutex-group assigned-experiment-id cookie prefix (new in 4.0) | `runtime/cookies.ts` |
-| `Analytica.CROSS_DOMAIN_PARAM` | `"_testa_cd"` | URL param name for cross-domain visitor stitching | `runtime/experiments/redirect/cross-domain.ts` |
+| `Analytica.CROSS_DOMAIN_PARAM` | `"_testa_cd"` | URL param name for cross-domain assignment stitching | `runtime/experiments/cross-domain.ts` |
 | `Analytica.SESSION_LENGTH` | `60 * 60 * 1000` (ms) | Session inactivity window | `runtime/cookies.ts` |
 | `Analytica.CLICK_SELECTOR_TIMEOUT` | `100` (ms) | Polling interval for click-goal selector | `runtime/experiments/apply/index.ts` |
 | `Analytica.CLICK_SELECTOR_MAX_TRIES` | `3` | Max retries on click selector | `runtime/experiments/apply/index.ts` |

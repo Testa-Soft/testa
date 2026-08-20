@@ -164,12 +164,18 @@ export function makeConfigGetHandler(deps: ConfigRouteDeps) {
     }
 
     // ETag = config_hash so Cloudflare (and clients) can revalidate cheaply.
-    // Purge-on-publish (crobot) is the authoritative invalidation; the short
-    // max-age is a safety net if a purge is ever missed, and
-    // stale-while-revalidate keeps edge reads fast in the meantime.
+    // Purge-on-publish (crobot) is the authoritative invalidation, so the CF
+    // edge may hold the config for long: `s-maxage` (shared caches only) keeps
+    // PoPs warm for 10min + a 30min stale-while-revalidate window, killing the
+    // cold-origin round trip for all but the quietest PoPs. Browsers get the
+    // short `max-age` safety net (the config-geo worker rewrites the
+    // browser-facing header to `private` anyway).
     const etag = `"${config.config_hash}"`;
     c.header('ETag', etag);
-    c.header('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
+    c.header(
+      'Cache-Control',
+      'public, max-age=60, s-maxage=600, stale-while-revalidate=1800',
+    );
     if (c.req.header('if-none-match') === etag) return c.body(null, 304);
 
     return c.json(config, 200);
