@@ -230,6 +230,42 @@ the variant before the control page renders.
 
 ---
 
+## Goals & conversions
+
+Goals are created in crobot and attached to an experiment; the SDK arms them
+client-side (via `<TestaExperiments/>`) on every navigation, for every
+experiment the visitor is **assigned** to and whose session is live. Goals are
+deliberately **not page-gated** — a goal usually completes on a different page
+than the experiment runs on. Conversions POST the legacy
+`{trackingHost}/api/leads/convert` payload (`goal_id`, `action`, `lead_uuid`,
+`variation`, `data`) — identical to the 3.3.3 pixel — so results populate the
+same either way. crobot counts each goal **once per visitor**; the client also
+guards once per page load.
+
+| Goal type   | Fires when                                                                | Code needed |
+| ----------- | ------------------------------------------------------------------------- | ----------- |
+| `page_view` | The current URL matches the goal pattern (`exact`/`contains`/`regex`).    | none        |
+| `click`     | The **first** element matching the goal's CSS selector is clicked (650ms setup delay + late-render retries, 3.3.3 parity). Prefer specific selectors (`#cta`, `[data-goal=…]`). | none |
+| `custom`    | Your code emits a matching event name.                                     | one call    |
+
+Custom events, from bundled code:
+
+```ts
+import { pushEvent } from '@testa-soft/next'
+
+pushEvent('signup_completed', { plan: 'pro' })
+```
+
+From non-bundled scripts / GTM Custom HTML, the same call is installed as
+`window.testa.pushEvent(...)` **and** — for 3.3.3 docs parity —
+`window.Analytica.pushEvent(...)` (non-clobbering: a real legacy pixel's own
+`pushEvent` is never overwritten, so dual-running sites keep pixel behavior).
+Note the globals exist from hydration onward; calls made before hydration are
+dropped (same failure mode as the legacy pixel pre-load — fire conversion
+events on user actions, or import `pushEvent` from the package).
+
+---
+
 ## Analytics events (GA4 / GTM / PostHog / Segment)
 
 Testa exposes experiment exposures on **two independent surfaces** — a
