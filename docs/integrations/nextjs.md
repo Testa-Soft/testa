@@ -55,18 +55,12 @@ Create `proxy.ts` at your project root (or under `src/`):
 import { createTestaProxy } from '@testa-soft/next'
 
 export const proxy = createTestaProxy({ projectId: '3fa85f64e1c2b' })
-
-export const config = {
-  // Run on real pages; skip Next internals, static assets, and API routes.
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|api).*)'],
-}
 ```
 
 > **Next.js version.** Next 16 renamed the middleware file convention to
 > `proxy` — use `proxy.ts` with `export const proxy = …` (above). On **Next
 > 13–15**, name the file `middleware.ts` and the export `middleware` instead;
-> everything else is identical. `createTestaProxy` is unchanged either way, and
-> the `config.matcher` is the same on both.
+> everything else is identical. `createTestaProxy` is unchanged either way.
 
 That is the entire integration for split-URL. `projectId` is your **crobot
 project UUID**. With just `projectId`, the package fetches your project config
@@ -74,6 +68,36 @@ from the Testa config host (`https://config.testa-soft.tech/api/v1/config/{proje
 and caches it. A bucketed visitor is redirected server-side; everyone else passes
 through untouched. If no config can be resolved, the proxy **fails open** and does
 nothing.
+
+The proxy filters requests internally: `/_next/*`, `/api/*`, `/.well-known/*`,
+and static-asset files (images, fonts, scripts, `robots.txt`, `sitemap.xml`, …)
+pass through untouched — no cookies, no config fetch, no exposure. You do **not**
+need a `matcher` for correct behavior.
+
+### Optional: a `matcher` to save edge invocations
+
+Without a `matcher`, the middleware function is still *invoked* on every asset
+request (a harmless no-op). On hosts that bill per edge invocation, add one to
+skip those invocations entirely:
+
+```ts
+// proxy.ts — optional cost optimization
+export const config = {
+  matcher: ['/((?!_next/|api/|favicon.ico|sitemap.xml|robots.txt).*)'],
+}
+```
+
+Next.js requires `matcher` to be a static literal in your file (it's parsed at
+build time), so the package can't own it. Keep it conservative — a path the
+matcher skips is a path Testa can never test on. To keep experiments off extra
+routes, prefer the `skipPaths` option instead:
+
+```ts
+export const proxy = createTestaProxy({
+  projectId: '3fa85f64e1c2b',
+  skipPaths: ['/admin', /^\/(de|fr)\//], // prefix strings or pathname regexes
+})
+```
 
 ### Where the config comes from
 
@@ -96,10 +120,6 @@ export const proxy = createTestaProxy({
   projectId: '3fa85f64e1c2b',
   config: projectConfig, // a ProjectConfig — zero-latency, no network fetch
 })
-
-export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|api).*)'],
-}
 ```
 
 Config caching (`cache` option), shared per server instance:
@@ -399,10 +419,6 @@ export const proxy = createTestaProxy({
     )
   },
 })
-
-export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|api).*)'],
-}
 ```
 
 The hook signature is `(event, ctx) => void | Promise<void>`. Errors and
@@ -577,8 +593,9 @@ early, but history replay means a late handler still receives an event that
 already fired.
 
 **Nothing happens at all.** The proxy fails open when it can't resolve config —
-confirm `projectId` (or `config`) is correct and the `matcher` includes your
-route.
+confirm `projectId` (or `config`) is correct. If you added an optional
+`config.matcher` or `skipPaths`, confirm neither excludes the route you're
+testing on.
 
 ---
 

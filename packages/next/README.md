@@ -24,11 +24,6 @@ Create `proxy.ts` at your project root (or under `src/`):
 import { createTestaProxy } from '@testa-soft/next'
 
 export const proxy = createTestaProxy({ projectId: '3fa85f64e1c2b' })
-
-export const config = {
-  // Run on real pages; skip Next internals, static assets, and API routes.
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|api).*)'],
-}
 ```
 
 > **Next.js version.** Next 16 renamed the middleware file convention to
@@ -39,6 +34,30 @@ export const config = {
 That is the whole integration. `projectId` is your **crobot project UUID**. With
 just `projectId`, the package fetches your project config from the built-in
 config host (`https://config.testa-soft.tech/api/v1/config/{projectId}`).
+
+The proxy is safe on **every** request out of the box: it internally passes
+through `/_next/*`, `/api/*`, `/.well-known/*`, and static-asset files (images,
+fonts, scripts, `robots.txt`, …) without touching cookies, fetching config, or
+emitting exposures — no `matcher` needed for correctness.
+
+### Optional: skip invocations with a `matcher`
+
+A `matcher` saves the middleware **invocation itself** on asset requests (edge
+invocations cost money and add latency on some hosts). It's purely a cost
+optimization — if the regex is wrong or missing, nothing misbehaves:
+
+```ts
+// proxy.ts — optional, saves edge invocations on assets
+export const config = {
+  matcher: ['/((?!_next/|api/|favicon.ico|sitemap.xml|robots.txt).*)'],
+}
+```
+
+> Next.js requires `matcher` to be a static literal in **your** file (it's
+> parsed at build time), so the package can't provide it for you. Keep it
+> conservative: a path the matcher skips is a path Testa can never test on.
+> To exclude extra routes from experiments, prefer the `skipPaths` option —
+> it lives in one place and takes regexes.
 
 ### Inline-config mode
 
@@ -55,10 +74,6 @@ export const proxy = createTestaProxy({
   projectId: '3fa85f64e1c2b',
   config: projectConfig, // a ProjectConfig — zero-latency, no network fetch
 })
-
-export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|api).*)'],
-}
 ```
 
 You can also point at a custom config host with `host: 'https://config.staging.example.com'`,
@@ -219,6 +234,7 @@ Returns a Next.js middleware function. Import from `@testa-soft/next`.
 | `discoverRootDomain` | `boolean`                                      | `false`                              | Auto-derive the registrable domain from the request host for cookies.                                        |
 | `tracking`           | `boolean`                                      | `true`                               | Emit exposures (impressions) so experiment results populate. Set `false` for redirects-only, or if a pixel owns tracking. |
 | `trackingHost`       | `string`                                       | `https://new.testa-soft.tech`        | Host for exposure tracking (`{trackingHost}/api/leads`). Also settable via the `TESTA_TRACKING_HOST` env var. |
+| `skipPaths`          | `(string \| RegExp)[]`                         | —                                    | Extra paths to pass through untouched, on top of the built-in filter (`/_next/*`, `/api/*`, `/.well-known/*`, asset extensions). Strings match as segment-aligned prefixes (`'/admin'` matches `/admin/users`, not `/administrator`); RegExps test the pathname. |
 | `onVariationAssigned`| `(event, ctx) => void \| Promise<void>`       | —                                    | **Server-side** hook per assignment. `ctx.waitUntil(promise)` keeps async work (PostHog server, webhook) alive past the response — never delays it. Guard on `event.firstAssignment` for once-per-visitor. |
 
 Exported constants: `DEFAULT_CONFIG_HOST`, `DEFAULT_TRACKING_HOST`. Exported

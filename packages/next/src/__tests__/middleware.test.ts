@@ -69,4 +69,56 @@ describe('createTestaProxy', () => {
     );
     expect(res.status).not.toBe(307);
   });
+
+  describe('internal request filter (safe without a matcher)', () => {
+    /** A loose `contains` page rule that would also match asset URLs like /pricing-hero.png. */
+    const looseConfig = () => {
+      const cfg = splitUrlConfig();
+      const exp = cfg.experiments[0];
+      if (!exp) throw new Error('splitUrlConfig produced no experiment');
+      return {
+        ...cfg,
+        experiments: [
+          { ...exp, rules: [{ match_type: 'contains' as const, url_pattern: '/pricing' }] },
+        ],
+      };
+    };
+
+    it('never redirects an asset even when a loose experiment rule matches it', async () => {
+      const proxy = createTestaProxy({ projectId: 'acme', config: looseConfig() });
+      const res = await proxy(
+        request('https://acme.com/pricing-hero.png', { cookie: `${ASSIGNMENT_COOKIE}=101.2.0.0` }),
+      );
+      expect(res.status).not.toBe(307);
+      expect(res.headers.get('set-cookie')).toBeNull();
+    });
+
+    it('passes /_next/* through untouched (no cookies, no config fetch)', async () => {
+      let configFetched = false;
+      const proxy = createTestaProxy({
+        projectId: 'acme',
+        loadConfig: async () => {
+          configFetched = true;
+          return splitUrlConfig();
+        },
+      });
+      const res = await proxy(request('https://acme.com/_next/static/chunks/main.js'));
+      expect(res.status).toBe(200);
+      expect(res.headers.get('set-cookie')).toBeNull();
+      expect(configFetched).toBe(false);
+    });
+
+    it('honors custom skipPaths end-to-end', async () => {
+      const proxy = createTestaProxy({
+        projectId: 'acme',
+        config: splitUrlConfig(),
+        skipPaths: ['/pricing'],
+      });
+      const res = await proxy(
+        request('https://acme.com/pricing', { cookie: `${ASSIGNMENT_COOKIE}=101.2.0.0` }),
+      );
+      expect(res.status).not.toBe(307);
+      expect(res.headers.get('set-cookie')).toBeNull();
+    });
+  });
 });

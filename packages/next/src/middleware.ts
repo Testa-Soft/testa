@@ -7,8 +7,10 @@
  *
  *   // middleware.ts
  *   import { createTestaProxy } from '@testa/next'
- *   export const middleware = createTestaProxy({ projectSlug: 'acme', config })
- *   export const config = { matcher: ['/((?!_next/static|_next/image|favicon.ico|api).*)'] }
+ *   export const middleware = createTestaProxy({ projectId: '3fa85f64e1c2b' })
+ *   // Optional cost optimization (correctness never depends on it — see
+ *   // request-filter.ts): a matcher skips the edge invocation on assets.
+ *   export const config = { matcher: ['/((?!_next/|api/|favicon.ico|sitemap.xml|robots.txt).*)'] }
  */
 
 import { ASSIGNMENT_COOKIE, UUID_COOKIE } from '@testa-soft/experiment-core';
@@ -23,6 +25,7 @@ import { ConfigClient, type ConfigSource } from './config.ts';
 import { DEFAULT_CONFIG_HOST, DEFAULT_TRACKING_HOST, SHIELD_HEADER, readEnv } from './constants.ts';
 import { NextCookieStore } from './cookie-store.ts';
 import { resolveCookieDomain } from './domain.ts';
+import { type SkipPath, shouldBypassRequest } from './request-filter.ts';
 import { computePrefetchRedirect } from './soft-nav/prefetch-guard.ts';
 import { isPrefetchRequest } from './soft-nav/rsc-redirect.ts';
 import { emitExposure } from './tracking.ts';
@@ -82,6 +85,14 @@ export interface TestaProxyOptions extends ConfigSource {
   tracking?: boolean;
   /** Host for exposure tracking. Default: `TESTA_TRACKING_HOST` env or built-in. */
   trackingHost?: string;
+  /**
+   * Extra paths the proxy must pass through untouched, on top of the built-in
+   * filter (`/_next/*`, `/api/*`, `/.well-known/*`, static-asset extensions).
+   * A string matches as a segment-aligned prefix (`'/admin'` matches `/admin`
+   * and `/admin/users`, not `/administrator`); a RegExp is tested against the
+   * pathname.
+   */
+  skipPaths?: ReadonlyArray<SkipPath>;
 }
 
 export type TestaProxy = (req: NextRequest, event?: NextFetchEvent) => Promise<NextResponse>;
@@ -104,6 +115,14 @@ export function createTestaProxy(options: TestaProxyOptions): TestaProxy {
     req: NextRequest,
     event?: NextFetchEvent,
   ): Promise<NextResponse> {
+    // Blackbox safety net, BEFORE any config fetch or cookie work: never treat
+    // assets / framework internals / API routes as pages, so the proxy is
+    // correct even with no `config.matcher` at all (the matcher is then purely
+    // a cost optimization — it skips the edge invocation entirely).
+    if (shouldBypassRequest(new URL(req.url).pathname, options.skipPaths)) {
+      return NextResponse.next();
+    }
+
     const cookieDomain = resolveCookieDomain(new URL(req.url).hostname, {
       ...(options.cookieDomain ? { cookieDomain: options.cookieDomain } : {}),
       ...(options.discoverRootDomain ? { discoverRootDomain: true } : {}),

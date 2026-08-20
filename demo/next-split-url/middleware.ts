@@ -21,6 +21,8 @@ export const middleware = createTestaProxy({
   },
 });
 
+// OPTIONAL — the proxy already ignores /_next/*, /api/*, and static assets
+// internally, so this matcher only saves the (no-op) edge invocation on them.
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|api).*)'],
+  matcher: ['/((?!_next/|api/|favicon.ico|sitemap.xml|robots.txt).*)'],
 };
