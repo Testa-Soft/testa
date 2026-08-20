@@ -13,7 +13,7 @@ vi.mock('next/headers', () => ({
   },
 }));
 
-import { TestaShield } from '../TestaShield.tsx';
+import { TestaGuard } from '../TestaGuard.tsx';
 
 beforeEach(() => {
   holder.get = () => null;
@@ -24,10 +24,10 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-describe('TestaShield (server component)', () => {
+describe('TestaGuard (server component)', () => {
   it('renders an inline shield script when the header is "1"', async () => {
     holder.get = (name) => (name === 'x-testa-shield' ? '1' : null);
-    const el = await TestaShield({});
+    const el = await TestaGuard({});
     expect(el).not.toBeNull();
     expect((el as { type: string }).type).toBe('script');
     const html = (el as { props: { dangerouslySetInnerHTML: { __html: string } } }).props
@@ -37,7 +37,7 @@ describe('TestaShield (server component)', () => {
 
   it('passes selector + timeoutMs through to the snippet', async () => {
     holder.get = () => '1';
-    const el = await TestaShield({ selector: '#main', timeoutMs: 1234 });
+    const el = await TestaGuard({ selector: '#main', timeoutMs: 1234 });
     const html = (el as { props: { dangerouslySetInnerHTML: { __html: string } } }).props
       .dangerouslySetInnerHTML.__html;
     expect(html).toContain('#main');
@@ -46,16 +46,16 @@ describe('TestaShield (server component)', () => {
 
   it('returns null when the header is "0"', async () => {
     holder.get = () => '0';
-    expect(await TestaShield({})).toBeNull();
+    expect(await TestaGuard({})).toBeNull();
   });
 
   it('returns null when the header is absent', async () => {
     holder.get = () => null;
-    expect(await TestaShield({})).toBeNull();
+    expect(await TestaGuard({})).toBeNull();
   });
 
   it('returns null (fail open) when headers() throws', async () => {
     holder.throws = true;
-    expect(await TestaShield({})).toBeNull();
+    expect(await TestaGuard({})).toBeNull();
   });
 });

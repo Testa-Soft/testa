@@ -186,7 +186,7 @@ export function createTestaProxy(options: TestaProxyOptions): TestaProxy {
 
     // Tell the app whether to raise the anti-flicker shield for THIS request:
     // only when the visitor has a pending DOM change on this page. Split-URL-only
-    // projects and pages with nothing to change get `0`, so `<TestaShield/>`
+    // projects and pages with nothing to change get `0`, so `<TestaGuard/>`
     // never overlays needlessly. Passed as a request header the RSC layout reads
     // via `headers()`. Runs on soft-nav RSC requests too, so it stays per-page.
     const shield = hasPendingDomChange(config, req.url, store.get(ASSIGNMENT_COOKIE));

@@ -1,10 +1,10 @@
 /**
- * `<TestaShield/>` — the anti-flicker shield, as an inline `<head>` script.
+ * `<TestaGuard/>` — the anti-flicker shield, as an inline `<head>` script.
  *
  * DOM experiments mutate server-rendered (control) content, so without shielding
  * there's a control→variant flash. A React effect can't prevent it — it runs
  * after first paint. So this renders a synchronous inline script that hides the
- * content BEFORE the body paints, with a hard timeout fallback; `<TestaExperiments/>`
+ * content BEFORE the body paints, with a hard timeout fallback; `<TestaProvider/>`
  * reveals it once the variant is applied.
  *
  * Render it as high as possible in the root layout (ideally inside <head>). It's
@@ -14,9 +14,9 @@
 
 import { type ShieldOptions, buildShieldSnippet } from '@testa-soft/dom';
 
-export type TestaShieldProps = ShieldOptions;
+export type TestaGuardProps = ShieldOptions;
 
-export function TestaShield(props: TestaShieldProps): JSX.Element {
+export function TestaGuard(props: TestaGuardProps): JSX.Element {
   // The snippet is built from author-controlled options and JSON-encodes its
   // values; it contains no untrusted input.
   const snippet = buildShieldSnippet(props);

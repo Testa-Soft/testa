@@ -17,7 +17,7 @@ export const DEFAULT_CONFIG_HOST = 'https://config.testa-soft.tech';
 /** Default host for exposure/conversion tracking (crobot's `/api/leads`). */
 export const DEFAULT_TRACKING_HOST = 'https://new.testa-soft.tech';
 
-/** Request header the middleware sets so the layout can gate `<TestaShield/>`. */
+/** Request header the middleware sets so the layout can gate `<TestaGuard/>`. */
 export const SHIELD_HEADER = 'x-testa-shield';
 
 /**

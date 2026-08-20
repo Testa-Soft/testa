@@ -1,7 +1,7 @@
 import type { ProjectConfig } from '@testa-platform/shared-types';
-import { TestaExperiments as TestaExperimentsClient } from '@testa-soft/next/experiments';
+import { TestaProvider as TestaProviderClient } from '@testa-soft/next/experiments';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { TestaExperiments } from '../TestaExperiments.tsx';
+import { TestaProvider } from '../TestaProvider.tsx';
 
 const CONFIG: ProjectConfig = {
   project_id: 1,
@@ -18,13 +18,13 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-describe('TestaExperiments (server component)', () => {
+describe('TestaProvider (server component)', () => {
   it('renders the client component with an inline config and never fetches', async () => {
     const fetchSpy = vi.fn();
     vi.stubGlobal('fetch', fetchSpy);
-    const el = await TestaExperiments({ config: CONFIG });
+    const el = await TestaProvider({ config: CONFIG });
     expect(el).not.toBeNull();
-    expect((el as { type: unknown }).type).toBe(TestaExperimentsClient);
+    expect((el as { type: unknown }).type).toBe(TestaProviderClient);
     expect((el as { props: { config: ProjectConfig } }).props.config).toBe(CONFIG);
     expect(fetchSpy).not.toHaveBeenCalled();
   });
@@ -34,9 +34,9 @@ describe('TestaExperiments (server component)', () => {
       async () => ({ ok: true, json: async () => CONFIG }) as unknown as Response,
     );
     vi.stubGlobal('fetch', fetchSpy);
-    const el = await TestaExperiments({ projectId: 'abc', host: 'https://cfg.example' });
+    const el = await TestaProvider({ projectId: 'abc', host: 'https://cfg.example' });
     expect(fetchSpy).toHaveBeenCalledTimes(1);
-    expect((el as { type: unknown }).type).toBe(TestaExperimentsClient);
+    expect((el as { type: unknown }).type).toBe(TestaProviderClient);
     expect((el as { props: { config: ProjectConfig } }).props.config).toEqual(CONFIG);
   });
 
@@ -45,23 +45,23 @@ describe('TestaExperiments (server component)', () => {
       async () => ({ ok: false, json: async () => ({}) }) as unknown as Response,
     );
     vi.stubGlobal('fetch', fetchSpy);
-    expect(await TestaExperiments({ projectId: 'abc', host: 'https://cfg.example' })).toBeNull();
+    expect(await TestaProvider({ projectId: 'abc', host: 'https://cfg.example' })).toBeNull();
   });
 
   it('passes previewApiUrl through to the client component', async () => {
-    const el = await TestaExperiments({ config: CONFIG, previewApiUrl: 'https://preview.example' });
+    const el = await TestaProvider({ config: CONFIG, previewApiUrl: 'https://preview.example' });
     expect((el as { props: { previewApiUrl?: string } }).props.previewApiUrl).toBe(
       'https://preview.example',
     );
   });
 
   it('omits previewApiUrl when not supplied', async () => {
-    const el = await TestaExperiments({ config: CONFIG });
+    const el = await TestaProvider({ config: CONFIG });
     expect('previewApiUrl' in (el as { props: object }).props).toBe(false);
   });
 
   it('returns null when neither config nor projectId is given at runtime', async () => {
     // Cast around the union type — a caller can still violate it at runtime.
-    expect(await TestaExperiments({} as never)).toBeNull();
+    expect(await TestaProvider({} as never)).toBeNull();
   });
 });

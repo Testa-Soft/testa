@@ -1,31 +1,35 @@
 /**
- * `@testa/next/experiments` — client-side DOM experiments (css/html/text/attr/
- * js/hide/insert/move) + anti-flicker shield. Separate entry so the middleware
- * bundle stays react-free (see tsup.config.ts). The middleware assigns
- * server-side; these render the assignment client-side.
+ * `@testa-soft/next/experiments` — client-side DOM experiments (css/html/text/
+ * attr/js/hide/insert/move) + anti-flicker guard. Separate entry so the
+ * middleware bundle stays react-free (see tsup.config.ts). The middleware
+ * assigns server-side; these render the assignment client-side.
+ *
+ * NOTE: these are the RAW client components (explicit `config` prop, guard is
+ * NOT self-gating) for the inline-config / zero-infra path. Normal
+ * integrations use `@testa-soft/next/server` instead.
  */
 
-// Canonical names: <TestaProvider/> (DOM apply + goals) and <TestaGuard/>
-// (anti-flicker). The originals stay exported as deprecated aliases.
-export { TestaExperiments as TestaProvider } from './TestaExperiments.tsx';
-export type { TestaExperimentsProps as TestaProviderProps } from './TestaExperiments.tsx';
-export { TestaShield as TestaGuard } from './TestaShield.tsx';
-export type { TestaShieldProps as TestaGuardProps } from './TestaShield.tsx';
+export { TestaProvider } from './TestaProvider.tsx';
+export type { TestaProviderProps } from './TestaProvider.tsx';
+export { TestaGuard } from './TestaGuard.tsx';
+export type { TestaGuardProps } from './TestaGuard.tsx';
 /** @deprecated Renamed — use `TestaProvider`. */
-export { TestaExperiments } from './TestaExperiments.tsx';
-export type { TestaExperimentsProps } from './TestaExperiments.tsx';
+export { TestaProvider as TestaExperiments } from './TestaProvider.tsx';
+/** @deprecated Renamed — use `TestaProviderProps`. */
+export type { TestaProviderProps as TestaExperimentsProps } from './TestaProvider.tsx';
 /** @deprecated Renamed — use `TestaGuard`. */
-export { TestaShield } from './TestaShield.tsx';
-export type { TestaShieldProps } from './TestaShield.tsx';
+export { TestaGuard as TestaShield } from './TestaGuard.tsx';
+/** @deprecated Renamed — use `TestaGuardProps`. */
+export type { TestaGuardProps as TestaShieldProps } from './TestaGuard.tsx';
 export {
   resolveAssignedExperiments,
   applyAssignedExperiments,
   revealShield,
 } from './apply-assignments.ts';
+export type { AssignedExperiment } from './apply-assignments.ts';
 export { startGoalTracking } from './goal-tracking.ts';
 export type { GoalCycleTeardown } from './goal-tracking.ts';
 export { pushEvent } from '@testa-soft/dom';
-export type { AssignedExperiment } from './apply-assignments.ts';
 export {
   isPreviewRequested,
   getPreviewToken,

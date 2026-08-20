@@ -1,6 +1,6 @@
 /**
  * Read a cookie value in the browser. Shared by the client components
- * (`<TestaRouterGuard/>`, `<TestaExperiments/>`). Returns null on the server or
+ * (`<TestaRouterGuard/>`, `<TestaProvider/>`). Returns null on the server or
  * when the cookie is absent.
  */
 export function readClientCookie(name: string): string | null {

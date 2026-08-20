@@ -2,7 +2,7 @@
  * Client-side goal tracking cycle — the glue between the shared goal controller
  * (`@testa-soft/dom`) and crobot's legacy `/api/leads/convert` endpoint.
  *
- * Called once per navigation from `<TestaExperiments/>`: arms page_view, click
+ * Called once per navigation from `<TestaProvider/>`: arms page_view, click
  * and custom goals for every experiment the visitor is ASSIGNED to (session-
  * live, control included, NOT page-gated — a goal usually completes on a
  * different page than the experiment runs on). Custom goals fire via

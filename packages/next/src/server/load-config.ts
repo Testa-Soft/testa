@@ -1,7 +1,7 @@
 /**
  * `loadTestaConfig` — server-side config fetch for the RSC surface.
  *
- * The React Server Components (`<TestaExperiments projectId=.../>`) resolve the
+ * The React Server Components (`<TestaProvider projectId=.../>`) resolve the
  * same `ProjectConfig` the middleware uses, so the app never needs its own
  * config-fetch code. Fetching happens on the first server-side request and is
  * cached by Next's data cache (stale-while-revalidate) via the `next.revalidate`

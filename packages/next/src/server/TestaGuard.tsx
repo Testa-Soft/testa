@@ -1,12 +1,12 @@
 /**
- * `<TestaShield/>` — the anti-flicker shield as a React Server Component.
+ * `<TestaGuard/>` — the anti-flicker shield as a React Server Component.
  *
  * Unlike the client-entry shield (which always renders), this one is SELF-GATING:
  * it renders the inline `<head>` script ONLY when the middleware signals a pending
  * DOM change for THIS request (the `x-testa-shield: '1'` request header, computed
  * per-page via `hasPendingDomChange`). So split-URL-only pages/projects — and any
  * page with nothing to mutate — never get shielded, and no shield is left hanging
- * for `<TestaExperiments/>` to reveal.
+ * for `<TestaProvider/>` to reveal.
  *
  * It reads the header via `next/headers`. `await headers()` works on both Next 14
  * (sync value) and Next 15/16 (promise). Outside a request scope (static
@@ -19,9 +19,9 @@ import { type ShieldOptions, buildShieldSnippet } from '@testa-soft/dom';
 import { headers } from 'next/headers';
 import { SHIELD_HEADER } from '../constants.ts';
 
-export type TestaShieldProps = ShieldOptions;
+export type TestaGuardProps = ShieldOptions;
 
-export async function TestaShield(props: TestaShieldProps): Promise<JSX.Element | null> {
+export async function TestaGuard(props: TestaGuardProps): Promise<JSX.Element | null> {
   let shield: string | null = null;
   try {
     const h = await headers();

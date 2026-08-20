@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * `<TestaExperiments/>` — applies the visitor's DOM experiments on the client.
+ * `<TestaProvider/>` — applies the visitor's DOM experiments on the client.
  * Add it once in the layout (client component); it re-applies on each App-Router
  * navigation.
  *
@@ -13,7 +13,7 @@
  *     fetches the draft changes for that session from `previewApiUrl` and applies
  *     them, so an editor can see un-published changes live.
  *
- * Either way it reveals the anti-flicker shield (raised by `<TestaShield/>`) once
+ * Either way it reveals the anti-flicker shield (raised by `<TestaGuard/>`) once
  * applied, so control content is never shown before the variant.
  *
  * Framework-agnostic logic lives in `apply-assignments.ts` + `preview.ts` (unit
@@ -41,7 +41,7 @@ import {
   isPreviewRequested,
 } from './preview.ts';
 
-export interface TestaExperimentsProps {
+export interface TestaProviderProps {
   /** The same ProjectConfig the middleware uses (local fixture or fetched once). */
   config: ProjectConfig;
   /**
@@ -56,11 +56,11 @@ export interface TestaExperimentsProps {
   trackingHost?: string;
 }
 
-export function TestaExperiments({
+export function TestaProvider({
   config,
   previewApiUrl,
   trackingHost,
-}: TestaExperimentsProps): null {
+}: TestaProviderProps): null {
   const pathname = usePathname();
 
   // `pathname` is intentionally a dependency: it's the re-apply trigger on

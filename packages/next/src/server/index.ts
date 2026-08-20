@@ -1,24 +1,24 @@
 /**
  * `@testa-soft/next/server` — React Server Component surface.
  *
- * Drop `<TestaShield/>` in the `<head>` and `<TestaExperiments projectId=.../>`
- * in the `<body>` of the root layout; config is fetched server-side on the first
+ * Drop `<TestaGuard/>` in the `<head>` and `<TestaProvider projectId=.../>` in
+ * the `<body>` of the root layout; config is fetched server-side on the first
  * request and cached (Next data cache), so there is NO app-side fetch code.
- * `<TestaShield/>` is self-gating on the middleware's `x-testa-shield` header, so
- * it only renders where a DOM change is actually pending.
+ * `<TestaGuard/>` is self-gating on the middleware's `x-testa-shield` header,
+ * so it only renders where a DOM change is actually pending.
  */
 
-// Canonical names: <TestaProvider/> (config fetch + DOM apply + goals) and
-// <TestaGuard/> (anti-flicker). The originals stay exported as deprecated aliases.
-export { TestaExperiments as TestaProvider } from './TestaExperiments.tsx';
-export type { TestaExperimentsProps as TestaProviderProps } from './TestaExperiments.tsx';
-export { TestaShield as TestaGuard } from './TestaShield.tsx';
-export type { TestaShieldProps as TestaGuardProps } from './TestaShield.tsx';
+export { TestaProvider } from './TestaProvider.tsx';
+export type { TestaProviderProps } from './TestaProvider.tsx';
+export { TestaGuard } from './TestaGuard.tsx';
+export type { TestaGuardProps } from './TestaGuard.tsx';
 /** @deprecated Renamed — use `TestaProvider`. */
-export { TestaExperiments } from './TestaExperiments.tsx';
-export type { TestaExperimentsProps } from './TestaExperiments.tsx';
+export { TestaProvider as TestaExperiments } from './TestaProvider.tsx';
+/** @deprecated Renamed — use `TestaProviderProps`. */
+export type { TestaProviderProps as TestaExperimentsProps } from './TestaProvider.tsx';
 /** @deprecated Renamed — use `TestaGuard`. */
-export { TestaShield } from './TestaShield.tsx';
-export type { TestaShieldProps } from './TestaShield.tsx';
+export { TestaGuard as TestaShield } from './TestaGuard.tsx';
+/** @deprecated Renamed — use `TestaGuardProps`. */
+export type { TestaGuardProps as TestaShieldProps } from './TestaGuard.tsx';
 export { loadTestaConfig } from './load-config.ts';
 export type { LoadTestaConfigOptions } from './load-config.ts';
