@@ -27,10 +27,6 @@ Peer dependencies (a Next.js app already has these):
 - `next` — `>=13.4.0`
 - `react` — `>=18` (only needed if you use the client components)
 
-> **Pre-release.** Testa/Next is currently published as a `0.0.x` pre-release, so
-> `npm install @testa-soft/next` pulls the current build (its `@testa-soft/experiment-core`
-> and `@testa-soft/dom` dependencies come along automatically).
-
 ---
 
 ## Concepts
