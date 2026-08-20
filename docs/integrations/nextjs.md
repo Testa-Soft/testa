@@ -130,7 +130,11 @@ Config caching (`cache` option), shared per server instance:
 - `'per-pageload'` — DOCUMENT requests always fetch fresh (a publish is live on
   the very next hard pageview); RSC soft navigations reuse the pinned copy, so
   the config never shifts mid-SPA-session.
-- `false` — no server-side cache; every request fetches (testing only).
+
+There's deliberately no "off" mode — it would add a blocking config fetch to
+every matched request (soft navs and prefetches included) with no last-known
+fallback. Testing config changes? `'per-pageload'` already fetches fresh on
+every hard reload.
 
 ### Already have middleware? Composing with your own logic
 

@@ -81,7 +81,9 @@ describe('createTestaProxy', () => {
           return NextResponse.next({ request: { headers } });
         },
       });
-      const res = await proxy(request('https://acme.com/pricing', { cookie: `${ASSIGNMENT_COOKIE}=101.1.0.0` }));
+      const res = await proxy(
+        request('https://acme.com/pricing', { cookie: `${ASSIGNMENT_COOKIE}=101.1.0.0` }),
+      );
       // Handler's own override AND testa's shield both survive on ONE response.
       expect(res.headers.get('x-middleware-request-x-domain')).toBe('acme.com');
       expect(res.headers.get('x-middleware-request-x-testa-shield')).toBe('0');
@@ -95,7 +97,9 @@ describe('createTestaProxy', () => {
         config: splitUrlConfig(),
         handler: () => NextResponse.next(),
       });
-      const res = await proxy(request('https://acme.com/pricing', { cookie: `${ASSIGNMENT_COOKIE}=101.1.0.0` }));
+      const res = await proxy(
+        request('https://acme.com/pricing', { cookie: `${ASSIGNMENT_COOKIE}=101.1.0.0` }),
+      );
       expect(res.headers.get('x-middleware-request-x-testa-shield')).toBe('0');
       expect(res.headers.get('set-cookie')).toContain('_testa_uuid=');
     });
@@ -106,7 +110,9 @@ describe('createTestaProxy', () => {
         config: splitUrlConfig(),
         handler: () => undefined,
       });
-      const res = await proxy(request('https://acme.com/pricing', { cookie: `${ASSIGNMENT_COOKIE}=101.1.0.0` }));
+      const res = await proxy(
+        request('https://acme.com/pricing', { cookie: `${ASSIGNMENT_COOKIE}=101.1.0.0` }),
+      );
       expect(res.headers.get('x-middleware-request-x-testa-shield')).toBe('0');
       expect(res.headers.get('set-cookie')).toContain('_testa_uuid=');
     });

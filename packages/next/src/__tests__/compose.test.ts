@@ -43,9 +43,7 @@ describe('applyRequestHeaders', () => {
 
   it('throws when it cannot build a safe wholesale set (no overrides, no request)', () => {
     const res = NextResponse.next();
-    expect(() => applyRequestHeaders(res, { 'x-domain': 'acme.com' })).toThrow(
-      /request/i,
-    );
+    expect(() => applyRequestHeaders(res, { 'x-domain': 'acme.com' })).toThrow(/request/i);
   });
 
   it('returns a redirect response unchanged (nothing downstream renders)', () => {

@@ -107,17 +107,13 @@ describe('ConfigClient', () => {
     expect(loadConfig).toHaveBeenCalledTimes(2);
   });
 
-  it('cache: false disables server-side caching entirely — every get fetches fresh', async () => {
-    let version = 0;
-    const loadConfig = vi.fn(async () => {
-      version += 1;
-      return { ...splitUrlConfig(), config_hash: `v${version}` };
-    });
-    const client = new ConfigClient({ loadConfig, cache: false });
-
-    expect((await client.get('acme', 0))?.config_hash).toBe('v1');
-    expect((await client.get('acme', 1))?.config_hash).toBe('v2');
-    expect(loadConfig).toHaveBeenCalledTimes(2);
+  it('rejects cache: false at construction — an uncached blocking fetch per request is never valid', () => {
+    const loadConfig = async () => splitUrlConfig();
+    // Removed pre-1.1.0: it added a blocking config fetch to EVERY matched
+    // request (documents, soft navs, prefetches) with no last-known fallback.
+    expect(
+      () => new ConfigClient({ loadConfig, cache: false as unknown as 'per-pageload' }),
+    ).toThrow(/per-pageload/);
   });
 
   it('blocks on a refetch past the max-stale bound (5 min) instead of serving ancient config', async () => {

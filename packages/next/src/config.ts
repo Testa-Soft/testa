@@ -30,10 +30,12 @@ export interface ConfigSource {
    *   hard reloads — a publish is live on the very next pageview); soft-nav
    *   RSC/prefetch requests reuse the last fetched copy, so the config stays
    *   pinned during an SPA session.
-   * - `false`: NO server-side cache — every request fetches (adds the fetch's
-   *   latency to every matched request; fast-iteration testing only).
+   *
+   * There is deliberately no "off" value: it would add a BLOCKING config fetch
+   * to every matched request (documents, soft navs, prefetches) with no
+   * last-known-good fallback. For fresh-config testing use `'per-pageload'`.
    */
-  cache?: boolean | 'per-pageload';
+  cache?: true | 'per-pageload';
   /** Fresh window override (ms) when caching is on. Default 60s. */
   cacheTtlMs?: number;
 }
@@ -52,7 +54,7 @@ interface CacheEntry {
 const DEFAULT_TTL_MS = 60_000;
 const MAX_STALE_MS = 300_000;
 
-export type ConfigCacheMode = 'swr' | 'per-pageload' | 'off';
+export type ConfigCacheMode = 'swr' | 'per-pageload';
 
 export class ConfigClient {
   private readonly source: ConfigSource;
@@ -64,7 +66,14 @@ export class ConfigClient {
   constructor(source: ConfigSource) {
     this.source = source;
     const cache = source.cache ?? true;
-    this.mode = cache === true ? 'swr' : cache === false ? 'off' : 'per-pageload';
+    if ((cache as unknown) === false) {
+      throw new Error(
+        'ConfigClient: `cache: false` was removed — it added a blocking config ' +
+          'fetch to every matched request with no last-known fallback. Use ' +
+          "`cache: 'per-pageload'` for always-fresh document loads.",
+      );
+    }
+    this.mode = cache === true ? 'swr' : 'per-pageload';
     this.ttlMs = source.cacheTtlMs ?? DEFAULT_TTL_MS;
   }
 
@@ -83,9 +92,6 @@ export class ConfigClient {
   ): Promise<ProjectConfig | null> {
     // Static config short-circuits — always fresh, never cached/fetched.
     if (this.source.config) return this.source.config;
-
-    // Caching disabled: fetch fresh on every request, store nothing.
-    if (this.mode === 'off') return this.resolve(slug);
 
     if (this.mode === 'per-pageload') {
       if (isDocumentRequest) {

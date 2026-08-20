@@ -86,8 +86,10 @@ resolver (e.g. read Vercel Edge Config). Config caching (`cache` option), shared
 - `'per-pageload'` — DOCUMENT requests always fetch fresh (a publish is live on
   the very next hard pageview); RSC soft navigations reuse the pinned copy, so
   the config never shifts mid-SPA-session.
-- `false` — no server-side cache; every request fetches (testing only). If no config can be resolved, the middleware fails open
-and passes the request through untouched.
+There's deliberately no "off" mode — it would add a blocking config fetch to
+every matched request (soft navs and prefetches included) with no last-known
+fallback; use `'per-pageload'` when testing config changes. If no config can be
+resolved, the middleware fails open and passes the request through untouched.
 
 ## Composing with your own middleware
 
