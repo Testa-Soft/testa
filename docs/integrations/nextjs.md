@@ -106,7 +106,15 @@ export const config = {
 }
 ```
 
-Fetched configs are cached shared per server instance: fresh for 60s, then served stale while revalidating in the background (never older than 5 min). `cache: false` disables the server cache; `cacheTtlMs` tunes the window.
+Config caching (`cache` option), shared per server instance:
+
+- `true` (default) — fresh for 60s, then served stale while revalidating in the
+  background (never older than 5 min): zero request latency, publishes live in
+  ~1 min. `cacheTtlMs` tunes the fresh window.
+- `'per-pageload'` — DOCUMENT requests always fetch fresh (a publish is live on
+  the very next hard pageview); RSC soft navigations reuse the pinned copy, so
+  the config never shifts mid-SPA-session.
+- `false` — no server-side cache; every request fetches (testing only).
 
 ---
 
