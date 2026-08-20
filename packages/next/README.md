@@ -63,8 +63,10 @@ export const config = {
 
 You can also point at a custom config host with `host: 'https://config.staging.example.com'`,
 supply a `configUrl` to fetch from, or provide an async `loadConfig(projectId)`
-resolver (e.g. read Vercel Edge Config). Fetched configs are cached for the
-visitor session (30 min by default, `cacheTtlMs`). If no config can be resolved, the middleware fails open
+resolver (e.g. read Vercel Edge Config). Fetched configs are cached shared per server instance: fresh for 60s, then
+served stale while revalidating in the background (never older than 5 min) —
+zero request latency, ~1 min publish propagation. `cache: false` disables the
+server cache entirely (every request fetches); `cacheTtlMs` tunes the window. If no config can be resolved, the middleware fails open
 and passes the request through untouched.
 
 ## HTML/DOM experiments

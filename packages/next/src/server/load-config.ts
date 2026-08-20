@@ -16,7 +16,7 @@ import type { ProjectConfig } from '@testa-platform/shared-types';
 import { DEFAULT_CONFIG_HOST, readEnv } from '../constants.ts';
 
 /** Default Next data-cache revalidate window (seconds). Matches the middleware's TTL. */
-const DEFAULT_REVALIDATE_SEC = 1800;
+const DEFAULT_REVALIDATE_SEC = 60;
 
 export interface LoadTestaConfigOptions {
   /** Project id — config is fetched from `{host}/api/v1/config/{projectId}`. */

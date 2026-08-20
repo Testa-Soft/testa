@@ -33,8 +33,8 @@ interface CacheEntry {
   fetchedAtMs: number;
 }
 
-// One fetch per visitor session (30 min) — see @testa-soft/next config.ts.
-const DEFAULT_TTL_MS = 1_800_000;
+// Refetch window between config polls (client-side, served by the CDN).
+const DEFAULT_TTL_MS = 60_000;
 
 export class ConfigClient {
   private readonly source: ClientConfigSource;

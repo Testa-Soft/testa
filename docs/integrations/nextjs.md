@@ -106,7 +106,7 @@ export const config = {
 }
 ```
 
-Fetched configs are cached for the visitor session (30 min by default, `cacheTtlMs`).
+Fetched configs are cached shared per server instance: fresh for 60s, then served stale while revalidating in the background (never older than 5 min). `cache: false` disables the server cache; `cacheTtlMs` tunes the window.
 
 ---
 
@@ -132,7 +132,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         {children}
         {/* Fetches the same ProjectConfig the proxy resolves — server-side, on
-            the first request, cached in the Next data cache (session-length background
+            the first request, cached in the Next data cache (60s background
             revalidation). No app-side fetch code. Then reads _testa_exp and
             applies the assigned variation's DOM changes client-side,
             re-applying on App-Router soft navigation. Fails open (renders

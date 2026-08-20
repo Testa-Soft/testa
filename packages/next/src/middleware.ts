@@ -112,7 +112,11 @@ export function createTestaProxy(options: TestaProxyOptions): TestaProxy {
       secure,
       ...(cookieDomain ? { domain: cookieDomain } : {}),
     });
-    const config = await configClient.get(projectId, Date.now());
+    const config = await configClient.get(
+      projectId,
+      Date.now(),
+      event?.waitUntil ? event.waitUntil.bind(event) : undefined,
+    );
 
     // No config → behave as a no-op pass-through (fail open).
     if (!config) return NextResponse.next();
