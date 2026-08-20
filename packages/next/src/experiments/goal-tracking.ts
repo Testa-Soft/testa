@@ -38,10 +38,14 @@ export function startGoalTracking(
   trackingHost: string,
   nowSec: number,
 ): GoalCycleTeardown {
+  // Install the pushEvent globals UNCONDITIONALLY: customer code calls
+  // `window.testa.pushEvent(...)` / `window.Analytica.pushEvent(...)` without
+  // knowing whether this visitor has goal-carrying assignments — the call must
+  // always exist (it's a safe no-op when nothing is armed).
+  installGoalGlobals();
+
   const assigned = resolveGoalExperiments(config, assignmentCookie, nowSec);
   if (assigned.length === 0) return () => {};
-
-  installGoalGlobals();
 
   const controller = createGoalController({
     track: (_name, props = {}) => {
