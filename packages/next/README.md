@@ -63,8 +63,8 @@ export const config = {
 
 You can also point at a custom config host with `host: 'https://config.staging.example.com'`,
 supply a `configUrl` to fetch from, or provide an async `loadConfig(projectId)`
-resolver (e.g. read Vercel Edge Config). Fetched configs are cached (30s by
-default, `cacheTtlMs`). If no config can be resolved, the middleware fails open
+resolver (e.g. read Vercel Edge Config). Fetched configs are cached for the
+visitor session (30 min by default, `cacheTtlMs`). If no config can be resolved, the middleware fails open
 and passes the request through untouched.
 
 ## HTML/DOM experiments
@@ -75,16 +75,16 @@ changes** on the client. The split is:
 - **Middleware assigns** the visitor server-side and writes the sticky
   `_testa_exp` cookie (add the middleware from the quick start above — DOM
   experiments reuse the exact same assignment).
-- **`<TestaExperiments/>` renders** that assignment on the client, cookie-first:
+- **`<TestaProvider/>` renders** that assignment on the client, cookie-first:
   it reads `_testa_exp`, looks up the variation's changes in the config, and
   applies them to the DOM. No re-bucketing happens on the client.
 
 Because DOM changes mutate content the server already rendered (the control),
 there's an unavoidable control→variant flash unless the page is hidden until the
-variant is applied. `<TestaShield/>` handles that: it's a synchronous inline
+variant is applied. `<TestaGuard/>` handles that: it's a synchronous inline
 `<head>` script that hides the content **before first paint** (with a hard
 timeout fallback so a slow or broken apply can never leave the page blank), and
-`<TestaExperiments/>` reveals it once the variant is on the page.
+`<TestaProvider/>` reveals it once the variant is on the page.
 
 Add both in your root layout — the shield as high in `<head>` as possible, and
 the experiments component anywhere in the body. Use the **server entry**: the
@@ -93,7 +93,7 @@ cache (background-revalidated) — no app-side fetch code:
 
 ```tsx
 // app/layout.tsx
-import { TestaShield, TestaExperiments } from '@testa-soft/next/server'
+import { TestaGuard, TestaProvider } from '@testa-soft/next/server'
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -101,14 +101,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <head>
         {/* Self-gating: renders the shield ONLY when the middleware flagged a
             pending DOM change for this request (x-testa-shield header). */}
-        <TestaShield selector="body" timeoutMs={4000} />
+        <TestaGuard selector="body" timeoutMs={4000} />
       </head>
       <body>
         {children}
         {/* Fetches the config server-side (same id as the proxy), then applies
             the assigned variation's DOM changes client-side. Re-applies on
             App-Router soft navigation. Fails open if config is unreachable. */}
-        <TestaExperiments projectId="3fa85f64e1c2b" />
+        <TestaProvider projectId="3fa85f64e1c2b" />
       </body>
     </html>
   )
@@ -132,7 +132,7 @@ Supported change types are crobot-native and applied by the shared DOM engine:
 | `move_element_append`  | Move matched elements under the target selector (append).          |
 | `move_element_prepend` | Move matched elements under the target selector (prepend).         |
 
-> Split-URL-only deployments don't need `<TestaShield/>` — the middleware's
+> Split-URL-only deployments don't need `<TestaGuard/>` — the middleware's
 > `307` is already flicker-free. The shield only matters when you apply DOM
 > changes on top of server-rendered content.
 
@@ -140,10 +140,10 @@ Supported change types are crobot-native and applied by the shared DOM engine:
 
 Editors can preview **unpublished** variation drafts live, without them going to
 real visitors. Pass `previewApiUrl` (your crobot backend base URL) to
-`<TestaExperiments/>`:
+`<TestaProvider/>`:
 
 ```tsx
-<TestaExperiments config={projectConfig} previewApiUrl="https://new.testa-soft.tech" />
+<TestaProvider config={projectConfig} previewApiUrl="https://new.testa-soft.tech" />
 ```
 
 Then open any page with the preview query params:
@@ -152,7 +152,7 @@ Then open any page with the preview query params:
 https://yoursite.com/pricing?testa_preview=true&testa_preview_token=<token>
 ```
 
-In preview mode `<TestaExperiments/>` **skips normal cookie assignment** and
+In preview mode `<TestaProvider/>` **skips normal cookie assignment** and
 instead fetches the draft changes for that session from
 `{previewApiUrl}/api/preview/{token}` and applies them. The fetched changes are
 the same crobot-native `VariationChange` shapes as real variations, so a draft
@@ -188,7 +188,7 @@ the in-flight navigation and `router.replace()`s to the variant before the
 control page renders. A visitor gets the same variant whether the middleware or
 the guard fires — both read the one cookie.
 
-> App Router users don't need this — `<TestaExperiments/>` re-applies DOM
+> App Router users don't need this — `<TestaProvider/>` re-applies DOM
 > experiments on soft navigation, and the middleware handles split-URL
 > redirects (including a prefetch-safe path for `<Link>` prefetches).
 
@@ -252,7 +252,7 @@ of the client surface — wire up both if you want.
 > `variation_assigned` = when the visitor is bucketed (server); `variation_applied`
 > = when they're shown it (client, once per session). Both carry the same payload.
 
-### `<TestaExperiments>` — from `@testa-soft/next/server` (recommended)
+### `<TestaProvider>` — from `@testa-soft/next/server` (recommended)
 
 Async server component: fetches the config server-side (Next data cache) and
 renders the client applier. Fails open (renders nothing) on any config failure.
@@ -265,7 +265,7 @@ renders the client applier. Fails open (renders nothing) on any config failure.
 | `revalidateSec` | `number`        | `30`                             | Next data-cache revalidation window.                                   |
 | `previewApiUrl` | `string`        | —                                | Backend base URL; enables `?testa_preview`.                            |
 
-### `<TestaShield>` — from `@testa-soft/next/server` (recommended)
+### `<TestaGuard>` — from `@testa-soft/next/server` (recommended)
 
 Async server component with the same props as the client shield below, but
 **self-gating**: renders only when the middleware set `x-testa-shield: 1` for
@@ -274,14 +274,14 @@ this request. Outside a request scope (static generation) it renders nothing.
 `loadTestaConfig({ projectId, host?, revalidateSec? })` is also exported from
 `/server` for custom server code — resolves `null` on any failure (fail open).
 
-### `<TestaExperiments>` — from `@testa-soft/next/experiments` (client entry)
+### `<TestaProvider>` — from `@testa-soft/next/experiments` (client entry)
 
 | Prop            | Type            | Default | Description                                                                                          |
 | --------------- | --------------- | ------- | -------------------------------------------------------------------------------------------------- |
 | `config`        | `ProjectConfig` | —       | **Required.** The same config the middleware uses (local fixture or fetched once).                 |
 | `previewApiUrl` | `string`        | —       | Backend base URL for preview mode. Required for `?testa_preview` to fetch drafts; ignored otherwise. |
 
-### `<TestaShield>` — from `@testa-soft/next/experiments` (client entry)
+### `<TestaGuard>` — from `@testa-soft/next/experiments` (client entry)
 
 | Prop        | Type                        | Default     | Description                                                                                   |
 | ----------- | --------------------------- | ----------- | -------------------------------------------------------------------------------------------- |
@@ -300,7 +300,7 @@ this request. Outside a request scope (static generation) it renders nothing.
 
 - **Server-side assignment, cookie-first.** The middleware buckets each visitor
   deterministically and writes the sticky `_testa_exp` cookie (plus a `_testa`
-  visitor id). Every surface — middleware, `<TestaExperiments/>`,
+  visitor id). Every surface — middleware, `<TestaProvider/>`,
   `<TestaRouterGuard/>` — reads that one cookie, so a visitor sees the same
   variation everywhere with no re-rolling.
 - **Split-URL is a `307` before HTML.** For split-URL experiments the middleware
@@ -309,8 +309,8 @@ this request. Outside a request scope (static generation) it renders nothing.
   prefetch is redirected to warm the variant into the router cache, but no cookie
   is written and no exposure is emitted until a real navigation commits.
 - **DOM changes apply on the client, behind a shield.** For same-URL experiments
-  `<TestaExperiments/>` applies the assigned variation's DOM changes after
-  hydration and re-applies on App-Router soft navigation. `<TestaShield/>` hides
+  `<TestaProvider/>` applies the assigned variation's DOM changes after
+  hydration and re-applies on App-Router soft navigation. `<TestaGuard/>` hides
   the page before first paint so control content is never shown before the
   variant, and reveals it once the variant is applied (or after the timeout).
 - **Exposures feed results.** When tracking is enabled, the middleware emits one

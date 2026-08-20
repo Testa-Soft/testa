@@ -106,19 +106,19 @@ export const config = {
 }
 ```
 
-Fetched configs are cached (30s by default, `cacheTtlMs`).
+Fetched configs are cached for the visitor session (30 min by default, `cacheTtlMs`).
 
 ---
 
 ## HTML/DOM experiments
 
 Add two **zero-config server components** to your root layout (App Router):
-`<TestaShield/>` as high in `<head>` as possible, and `<TestaExperiments/>` in
+`<TestaGuard/>` as high in `<head>` as possible, and `<TestaProvider/>` in
 the body. Keep the proxy too — DOM experiments reuse its server-side assignment.
 
 ```tsx
 // app/layout.tsx
-import { TestaShield, TestaExperiments } from '@testa-soft/next/server'
+import { TestaGuard, TestaProvider } from '@testa-soft/next/server'
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -127,17 +127,17 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         {/* Anti-flicker. Self-gating: renders ONLY when the proxy flagged a
             pending DOM change for this request — split-URL-only pages and
             visitors with nothing to apply never get shielded. */}
-        <TestaShield selector="body" timeoutMs={4000} />
+        <TestaGuard selector="body" timeoutMs={4000} />
       </head>
       <body>
         {children}
         {/* Fetches the same ProjectConfig the proxy resolves — server-side, on
-            the first request, cached in the Next data cache (30s background
+            the first request, cached in the Next data cache (session-length background
             revalidation). No app-side fetch code. Then reads _testa_exp and
             applies the assigned variation's DOM changes client-side,
             re-applying on App-Router soft navigation. Fails open (renders
             nothing) if the config host is unreachable. */}
-        <TestaExperiments projectId="3fa85f64e1c2b" />
+        <TestaProvider projectId="3fa85f64e1c2b" />
       </body>
     </html>
   )
@@ -155,10 +155,10 @@ explicit `config` prop instead — or pass `config` straight to the `/server`
 components to skip their fetch:
 
 ```tsx
-import { TestaShield, TestaExperiments } from '@testa-soft/next/experiments'
+import { TestaGuard, TestaProvider } from '@testa-soft/next/experiments'
 import projectConfig from './testa.config.json'
-// <TestaShield selector="body"/> in <head> (always renders — not self-gating),
-// <TestaExperiments config={projectConfig}/> in the body.
+// <TestaGuard selector="body"/> in <head> (always renders — not self-gating),
+// <TestaProvider config={projectConfig}/> in the body.
 ```
 
 Supported change types:
@@ -173,18 +173,18 @@ Supported change types:
 | `move_element_append`  | Move matched elements under a target selector (append).      |
 | `move_element_prepend` | Move matched elements under a target selector (prepend).     |
 
-> Split-URL-only deployments don't need `<TestaShield/>` — the `307` is already
+> Split-URL-only deployments don't need `<TestaGuard/>` — the `307` is already
 > flicker-free. The shield only matters when applying DOM changes on top of
 > server-rendered content.
 
 ### Preview mode (for editors)
 
 Preview **unpublished** variation drafts without exposing them to real visitors.
-Pass `previewApiUrl` (your Testa backend base URL) to `<TestaExperiments/>`
+Pass `previewApiUrl` (your Testa backend base URL) to `<TestaProvider/>`
 (works on both the `/server` and `/experiments` variants):
 
 ```tsx
-<TestaExperiments projectId="3fa85f64e1c2b" previewApiUrl="https://new.testa-soft.tech" />
+<TestaProvider projectId="3fa85f64e1c2b" previewApiUrl="https://new.testa-soft.tech" />
 ```
 
 Then open any page with the preview query params:
@@ -224,7 +224,7 @@ It reads the same sticky `_testa_exp` cookie and, on a navigation to a control U
 for a split-URL experiment the visitor is bucketed to a variant of, redirects to
 the variant before the control page renders.
 
-> **App Router users don't need this.** `<TestaExperiments/>` re-applies DOM
+> **App Router users don't need this.** `<TestaProvider/>` re-applies DOM
 > experiments on soft navigation, and the proxy handles split-URL redirects
 > (including a prefetch-safe path for `<Link>` prefetches).
 
@@ -233,7 +233,7 @@ the variant before the control page renders.
 ## Goals & conversions
 
 Goals are created in crobot and attached to an experiment; the SDK arms them
-client-side (via `<TestaExperiments/>`) on every navigation, for every
+client-side (via `<TestaProvider/>`) on every navigation, for every
 experiment the visitor is **assigned** to and whose session is live. Goals are
 deliberately **not page-gated** — a goal usually completes on a different page
 than the experiment runs on. Conversions POST the legacy
@@ -501,7 +501,7 @@ Exported constants: `DEFAULT_CONFIG_HOST`, `DEFAULT_TRACKING_HOST`,
 
 The handler receives a `VariationEvent`: `{ project_id, experiment, variation, uuid, title, url }`.
 
-### `<TestaExperiments>` — `@testa-soft/next/server` (recommended)
+### `<TestaProvider>` — `@testa-soft/next/server` (recommended)
 
 Async React **Server Component**. Fetches the project config server-side on the
 first request and caches it in the Next data cache, then renders the client
@@ -515,12 +515,12 @@ applier. Fails open (renders nothing) when the config can't be resolved.
 | `revalidateSec` | `number`        | `30`                             | Next data-cache revalidation window for the config fetch.             |
 | `previewApiUrl` | `string`        | —                                | Backend base URL; enables `?testa_preview`.                           |
 
-### `<TestaShield>` — `@testa-soft/next/server` (recommended)
+### `<TestaGuard>` — `@testa-soft/next/server` (recommended)
 
 Async React **Server Component**, self-gating: renders the anti-flicker script
 **only** when the proxy set `x-testa-shield: 1` for this request (i.e. the
 visitor has a pending DOM change on this page). Same props as the client
-`<TestaShield>` below. Renders nothing outside a request scope (static
+`<TestaGuard>` below. Renders nothing outside a request scope (static
 generation) — fail open, no shield.
 
 ### `loadTestaConfig(options)` — `@testa-soft/next/server`
@@ -529,14 +529,14 @@ The config loader the server components use, exported for custom server code:
 `loadTestaConfig({ projectId, host?, revalidateSec? })` → `Promise<ProjectConfig | null>`.
 Fail-open: resolves `null` on any network/HTTP/shape failure.
 
-### `<TestaExperiments>` — `@testa-soft/next/experiments` (client entry)
+### `<TestaProvider>` — `@testa-soft/next/experiments` (client entry)
 
 | Prop            | Type            | Default | Description                                                        |
 | --------------- | --------------- | ------- | ----------------------------------------------------------------- |
 | `config`        | `ProjectConfig` | —       | **Required.** Same config the proxy uses.                         |
 | `previewApiUrl` | `string`        | —       | Backend base URL; enables `?testa_preview`.                       |
 
-### `<TestaShield>` — `@testa-soft/next/experiments` (client entry)
+### `<TestaGuard>` — `@testa-soft/next/experiments` (client entry)
 
 | Prop        | Type                        | Default     | Description                                             |
 | ----------- | --------------------------- | ----------- | ------------------------------------------------------ |
@@ -555,7 +555,7 @@ Fail-open: resolves `null` on any network/HTTP/shape failure.
 
 ## Troubleshooting
 
-**A DOM change flashes control before the variant.** Make sure `<TestaShield/>` is
+**A DOM change flashes control before the variant.** Make sure `<TestaGuard/>` is
 in `<head>` (not the body), so it runs before first paint. On App-Router *soft*
 navigations there is no shield by design; the re-apply is near-instant.
 
