@@ -39,6 +39,22 @@ export interface RedirectInputs {
 }
 
 /**
+ * At-destination equality. `finalUrl` is often RELATIVE (crobot sends
+ * path-relative `to_url`s like `/calculator?testa=aa`), so it must be
+ * absolutized against the current URL before canonical comparison — a
+ * relative-vs-absolute compare never tests equal and loops the redirect.
+ */
+function isAtDestination(finalUrl: string, currentUrl: string): boolean {
+  let absolute = finalUrl;
+  try {
+    absolute = new URL(finalUrl, currentUrl).toString();
+  } catch {
+    // unparsable base/target — fall back to comparing as-is
+  }
+  return canonicalize(absolute) === canonicalize(currentUrl);
+}
+
+/**
  * Resolve a redirect destination for an ALREADY-ENROLLED visitor. Unlike
  * `decideRedirect`, it does NOT re-match `from_url` — enrollment (the page gate)
  * is the engine's job and uses the experiment's own match mode, while the
@@ -69,7 +85,7 @@ export function resolveRedirectDestination(
     return { shouldRedirect: false, reason: 'aborted_invalid_target' };
   }
 
-  if (canonicalize(finalUrl) === canonicalize(currentUrl)) {
+  if (isAtDestination(finalUrl, currentUrl)) {
     return { shouldRedirect: false, reason: 'skipped_same_url' };
   }
 
@@ -109,7 +125,7 @@ export function decideRedirect(inputs: RedirectInputs, _store: CookieStore): Red
   }
 
   // Same canonical URL → no-op (covers query-mode + any residual self-target).
-  if (canonicalize(finalUrl) === canonicalize(currentUrl)) {
+  if (isAtDestination(finalUrl, currentUrl)) {
     return { shouldRedirect: false, reason: 'skipped_same_url' };
   }
 

@@ -102,6 +102,33 @@ describe('decideRedirect', () => {
     expect(atDest.reason).toBe('skipped_same_url');
   });
 
+  it('exact mode with a RELATIVE to_url (crobot-native) redirects once and terminates', () => {
+    // crobot sends path-relative URLs: from '/calculator' to '/calculator?testa=aa'.
+    // The at-destination equality must absolutize the relative destination
+    // against the current URL — otherwise it never tests equal and loops.
+    const c = change({
+      from_url: '/calculator',
+      to_url: '/calculator?testa=aa',
+      url_match_type: 'exact',
+    });
+
+    const hop = resolveRedirectDestination(c, 'http://localhost:3200/calculator');
+    expect(hop.shouldRedirect).toBe(true);
+
+    const atDest = resolveRedirectDestination(c, 'http://localhost:3200/calculator?testa=aa');
+    expect(atDest.shouldRedirect).toBe(false);
+    expect(atDest.reason).toBe('skipped_same_url');
+
+    // decideRedirect (pixel path) also must not loop; it stops at the from-match
+    // (a relative from_url doesn't exact-match an absolute URL) — either reason
+    // is a safe non-redirect.
+    const viaDecide = decideRedirect(
+      { experimentId: 1, change: c, currentUrl: 'http://localhost:3200/calculator?testa=aa' },
+      memoryStore(),
+    );
+    expect(viaDecide.shouldRedirect).toBe(false);
+  });
+
   it('is a no-op when the destination canonicalizes to the current URL', () => {
     const d = decideRedirect(
       {
