@@ -12,13 +12,5 @@ export { TestaProvider } from './TestaProvider.tsx';
 export type { TestaProviderProps } from './TestaProvider.tsx';
 export { TestaGuard } from './TestaGuard.tsx';
 export type { TestaGuardProps } from './TestaGuard.tsx';
-/** @deprecated Renamed — use `TestaProvider`. */
-export { TestaProvider as TestaExperiments } from './TestaProvider.tsx';
-/** @deprecated Renamed — use `TestaProviderProps`. */
-export type { TestaProviderProps as TestaExperimentsProps } from './TestaProvider.tsx';
-/** @deprecated Renamed — use `TestaGuard`. */
-export { TestaGuard as TestaShield } from './TestaGuard.tsx';
-/** @deprecated Renamed — use `TestaGuardProps`. */
-export type { TestaGuardProps as TestaShieldProps } from './TestaGuard.tsx';
 export { loadTestaConfig } from './load-config.ts';
 export type { LoadTestaConfigOptions } from './load-config.ts';
