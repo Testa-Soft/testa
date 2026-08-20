@@ -19,18 +19,18 @@ hashed JSON / Edge Config) — see `docs/prds/003-nextjs-redirect-middleware.md`
 
 ```sh
 pnpm install
-pnpm --filter @testa-demo/next-split-url dev   # http://localhost:3100
+pnpm --filter @testa-demo/next-split-url dev   # http://localhost:3200
 ```
 
 ## Prove it from the CLI
 
 ```sh
 # Force the variant bucket via a seeded assignment cookie → 307 to /pricing-v2
-curl -sI --cookie '_testa_exp=101.2.0.0' http://localhost:3100/pricing | grep -i '^location'
+curl -sI --cookie '_testa_exp=101.2.0.0' http://localhost:3200/pricing | grep -i '^location'
 
 # Force control → 200, no redirect
-curl -sI --cookie '_testa_exp=101.1.0.0' http://localhost:3100/pricing | grep -i 'HTTP/'
+curl -sI --cookie '_testa_exp=101.1.0.0' http://localhost:3200/pricing | grep -i 'HTTP/'
 
 # Fresh visitor → deterministic bucket; a _testa_uuid cookie is minted
-curl -sI http://localhost:3100/pricing | grep -i 'set-cookie'
+curl -sI http://localhost:3200/pricing | grep -i 'set-cookie'
 ```

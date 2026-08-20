@@ -58,7 +58,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         {useProdConfig ? (
           <TestaExperiments projectId={PROD_PROJECT_ID} />
         ) : (
-          <TestaExperiments config={demoConfig} previewApiUrl="http://localhost:3100" />
+          <TestaExperiments config={demoConfig} previewApiUrl="http://localhost:3200" />
         )}
         <TestaDebug />
         <ReloadSentinel />

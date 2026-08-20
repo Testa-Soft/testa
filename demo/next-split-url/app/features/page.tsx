@@ -1,3 +1,5 @@
+import { WatchedFeatures } from './watched-features.tsx';
+
 export default function Features() {
   return (
     <main>
@@ -12,6 +14,7 @@ export default function Features() {
         On a soft nav there is no shield, so if you watch closely the badge appears a beat after the
         heading. On a hard reload (Cmd/Ctrl+R) the shield hides the page until it is applied.
       </p>
+      <WatchedFeatures />
     </main>
   );
 }
