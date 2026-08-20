@@ -116,6 +116,8 @@ export function createTestaProxy(options: TestaProxyOptions): TestaProxy {
       projectId,
       Date.now(),
       event?.waitUntil ? event.waitUntil.bind(event) : undefined,
+      // Document load vs RSC soft-nav/prefetch — drives 'per-pageload' caching.
+      req.headers.get('rsc') !== '1',
     );
 
     // No config → behave as a no-op pass-through (fail open).

@@ -23,13 +23,17 @@ export interface ConfigSource {
   loadConfig?: (slug: string) => Promise<ProjectConfig | null> | ProjectConfig | null;
   configUrl?: string;
   /**
-   * Server-side config caching. Default `true`: fresh for 60s, then served
-   * stale while revalidating in the background, never older than 5 min.
-   * `false`: NO server-side cache — every request fetches the config
-   * (adds the fetch's latency to every matched request; use for
-   * fast-iteration testing, not steady-state production).
+   * Server-side config caching.
+   * - `true` (default): fresh for 60s, then served stale while revalidating in
+   *   the background, never older than 5 min.
+   * - `'per-pageload'`: DOCUMENT requests always fetch fresh (no cache between
+   *   hard reloads — a publish is live on the very next pageview); soft-nav
+   *   RSC/prefetch requests reuse the last fetched copy, so the config stays
+   *   pinned during an SPA session.
+   * - `false`: NO server-side cache — every request fetches (adds the fetch's
+   *   latency to every matched request; fast-iteration testing only).
    */
-  cache?: boolean;
+  cache?: boolean | 'per-pageload';
   /** Fresh window override (ms) when caching is on. Default 60s. */
   cacheTtlMs?: number;
 }
@@ -48,16 +52,19 @@ interface CacheEntry {
 const DEFAULT_TTL_MS = 60_000;
 const MAX_STALE_MS = 300_000;
 
+export type ConfigCacheMode = 'swr' | 'per-pageload' | 'off';
+
 export class ConfigClient {
   private readonly source: ConfigSource;
-  private readonly enabled: boolean;
+  private readonly mode: ConfigCacheMode;
   private readonly ttlMs: number;
   private cache = new Map<string, CacheEntry>();
   private inflight = new Map<string, Promise<void>>();
 
   constructor(source: ConfigSource) {
     this.source = source;
-    this.enabled = source.cache ?? true;
+    const cache = source.cache ?? true;
+    this.mode = cache === true ? 'swr' : cache === false ? 'off' : 'per-pageload';
     this.ttlMs = source.cacheTtlMs ?? DEFAULT_TTL_MS;
   }
 
@@ -71,12 +78,29 @@ export class ConfigClient {
     slug: string,
     nowMs: number,
     waitUntil?: (promise: Promise<unknown>) => void,
+    /** True when this request is a full document load (not an RSC soft nav). */
+    isDocumentRequest = true,
   ): Promise<ProjectConfig | null> {
     // Static config short-circuits — always fresh, never cached/fetched.
     if (this.source.config) return this.source.config;
 
     // Caching disabled: fetch fresh on every request, store nothing.
-    if (!this.enabled) return this.resolve(slug);
+    if (this.mode === 'off') return this.resolve(slug);
+
+    if (this.mode === 'per-pageload') {
+      if (isDocumentRequest) {
+        // Hard reload: ALWAYS fetch fresh; store for the soft navs that follow.
+        const config = await this.resolve(slug);
+        if (config) this.cache.set(slug, { config, fetchedAtMs: nowMs });
+        return config ?? this.cache.get(slug)?.config ?? null; // fail open to last-known
+      }
+      // Soft nav / prefetch: reuse the copy the last hard load fetched.
+      const pinned = this.cache.get(slug);
+      if (pinned) return pinned.config;
+      const config = await this.resolve(slug); // cold instance mid-session
+      this.cache.set(slug, { config, fetchedAtMs: nowMs });
+      return config;
+    }
 
     const cached = this.cache.get(slug);
     if (cached) {

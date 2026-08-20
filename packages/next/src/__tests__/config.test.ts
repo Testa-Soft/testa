@@ -148,3 +148,43 @@ describe('ConfigClient', () => {
     vi.unstubAllGlobals();
   });
 });
+
+describe("ConfigClient — cache: 'per-pageload'", () => {
+  it('fetches fresh on every document request, reuses it for soft navs', async () => {
+    let version = 0;
+    const loadConfig = vi.fn(async () => {
+      version += 1;
+      return { ...splitUrlConfig(), config_hash: `v${version}` };
+    });
+    const client = new ConfigClient({ loadConfig, cache: 'per-pageload' });
+
+    // Hard load #1 → fresh fetch.
+    expect((await client.get('acme', 0, undefined, true))?.config_hash).toBe('v1');
+    // Soft navs → pinned to the hard load's copy, no matter how much later.
+    expect((await client.get('acme', 900_000, undefined, false))?.config_hash).toBe('v1');
+    expect(loadConfig).toHaveBeenCalledTimes(1);
+    // Hard load #2 → fresh again (no cache between hard reloads).
+    expect((await client.get('acme', 900_001, undefined, true))?.config_hash).toBe('v2');
+    expect(loadConfig).toHaveBeenCalledTimes(2);
+  });
+
+  it('cold-instance soft nav fetches once, then stays pinned', async () => {
+    const loadConfig = vi.fn(async () => splitUrlConfig());
+    const client = new ConfigClient({ loadConfig, cache: 'per-pageload' });
+    await client.get('acme', 0, undefined, false);
+    await client.get('acme', 1, undefined, false);
+    expect(loadConfig).toHaveBeenCalledTimes(1);
+  });
+
+  it('a failed document fetch fails open to the last-known config', async () => {
+    const good = splitUrlConfig();
+    const loadConfig = vi
+      .fn(async (): Promise<typeof good | null> => good)
+      .mockImplementationOnce(async () => good)
+      .mockImplementationOnce(async () => null);
+    const client = new ConfigClient({ loadConfig, cache: 'per-pageload' });
+
+    await client.get('acme', 0, undefined, true);
+    expect(await client.get('acme', 1, undefined, true)).toBe(good);
+  });
+});
