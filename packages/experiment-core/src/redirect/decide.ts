@@ -52,7 +52,13 @@ export function resolveRedirectDestination(
   const mode = resolveMode(change);
   if (!change.to_url) return { shouldRedirect: false, reason: 'aborted_invalid_target' };
 
-  if (mode !== 'query' && matchesForMode(currentUrl, change.to_url, mode)) {
+  // Already-at-destination pre-check for the string-y modes ONLY. `exact` must
+  // NOT use it: exact matching ignores query params, so it would declare
+  // `/calculator` "already at" `/calculator?testa=aa` and make a
+  // query-only-different destination unreachable. Exact relies on the
+  // canonical-equality check below, which keeps real query params (only
+  // `_testa_*` is stripped) and is the correct loop terminator.
+  if (mode !== 'query' && mode !== 'exact' && matchesForMode(currentUrl, change.to_url, mode)) {
     return { shouldRedirect: false, reason: 'skipped_same_url' };
   }
 
@@ -87,8 +93,11 @@ export function decideRedirect(inputs: RedirectInputs, _store: CookieStore): Red
   // Already at the destination → no-op. Replaces the once-per-experiment dedup:
   // stateless, sticky-safe, and loop-safe even for broad `contains`/`regex`
   // `from_url` patterns that would otherwise re-match the variant URL.
-  // (`query` mode's `to_url` is a param string, not a URL, so skip the check.)
-  if (mode !== 'query' && matchesForMode(currentUrl, change.to_url, mode)) {
+  // (`query` mode's `to_url` is a param string, not a URL, so skip the check.
+  // `exact` skips it too: exact matching ignores query params, so it would make
+  // a query-only-different `to_url` unreachable — the canonical-equality check
+  // below is exact's loop terminator.)
+  if (mode !== 'query' && mode !== 'exact' && matchesForMode(currentUrl, change.to_url, mode)) {
     return { shouldRedirect: false, reason: 'skipped_same_url' };
   }
 

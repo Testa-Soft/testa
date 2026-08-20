@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { redirectedName } from '../cookie-store.ts';
-import { type RedirectChange, decideRedirect } from '../redirect/decide.ts';
+import {
+  type RedirectChange,
+  decideRedirect,
+  resolveRedirectDestination,
+} from '../redirect/decide.ts';
 import { markRedirected } from '../redirect/dedup.ts';
 import { memoryStore } from './memory-store.ts';
 
@@ -40,6 +44,62 @@ describe('decideRedirect', () => {
     );
     expect(d.shouldRedirect).toBe(true);
     expect(d.reason).toBe('match');
+  });
+
+  it('exact mode: redirects when to_url differs from the current URL only by a query param', () => {
+    // crobot setup: /calculator (exact) → /calculator?testa=aa. Exact matching
+    // ignores query params on the FROM side, but that must not make the
+    // destination unreachable.
+    const c = change({
+      from_url: 'https://acme.com/calculator',
+      to_url: 'https://acme.com/calculator?testa=aa',
+      url_match_type: 'exact',
+    });
+    const d = decideRedirect(
+      { experimentId: 1, change: c, currentUrl: 'https://acme.com/calculator' },
+      memoryStore(),
+    );
+    expect(d.shouldRedirect).toBe(true);
+    expect(d.finalUrl).toBe('https://acme.com/calculator?testa=aa');
+
+    // With current query params: merged cleanly (3.3.3 mergeParams — one '?').
+    const withUtm = decideRedirect(
+      {
+        experimentId: 1,
+        change: c,
+        currentUrl: 'https://acme.com/calculator?utm_source=facebook',
+      },
+      memoryStore(),
+    );
+    expect(withUtm.shouldRedirect).toBe(true);
+    expect(withUtm.finalUrl).toBe('https://acme.com/calculator?testa=aa&utm_source=facebook');
+
+    // Loop safety intact: already on the destination → no-op.
+    const atDest = decideRedirect(
+      {
+        experimentId: 1,
+        change: c,
+        currentUrl: 'https://acme.com/calculator?testa=aa&utm_source=facebook',
+      },
+      memoryStore(),
+    );
+    expect(atDest.shouldRedirect).toBe(false);
+    expect(atDest.reason).toBe('skipped_same_url');
+  });
+
+  it('resolveRedirectDestination: exact mode reaches a query-only-different to_url (engine path)', () => {
+    const c = change({
+      from_url: 'https://acme.com/calculator',
+      to_url: 'https://acme.com/calculator?testa=aa',
+      url_match_type: 'exact',
+    });
+    const d = resolveRedirectDestination(c, 'https://acme.com/calculator');
+    expect(d.shouldRedirect).toBe(true);
+    expect(d.finalUrl).toBe('https://acme.com/calculator?testa=aa');
+
+    const atDest = resolveRedirectDestination(c, 'https://acme.com/calculator?testa=aa');
+    expect(atDest.shouldRedirect).toBe(false);
+    expect(atDest.reason).toBe('skipped_same_url');
   });
 
   it('is a no-op when the destination canonicalizes to the current URL', () => {

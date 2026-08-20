@@ -1,6 +1,6 @@
 {
   "name": "@testa-soft/react",
-  "version": "0.0.2-dev.10",
+  "version": "0.0.2-dev.11",
   "type": "module",
   "description": "Testa client-side A/B testing for React + Vite SPAs (single-page apps with no server).",
   "license": "UNLICENSED",
