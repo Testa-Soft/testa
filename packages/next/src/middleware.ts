@@ -247,15 +247,26 @@ export function createTestaProxy(options: TestaProxyOptions): TestaProxy {
   };
 }
 
-/** Run the composed handler with the request untouched (bypass / no-config / prefetch paths). */
+/**
+ * Bypass / no-config / prefetch paths: testa adds nothing of its own, but must
+ * stay TRANSPARENT to upstream request mutation — a customer proxy that runs
+ * first and tail-calls testa with a mutated `NextRequest` (extra request
+ * headers) expects those headers to reach the app on every path. A bare
+ * `NextResponse.next()` would forward the ORIGINAL headers instead, silently
+ * dropping the mutations, so we always emit `req.headers` as the override set.
+ */
 async function delegate(
   handler: TestaHandler | undefined,
   req: NextRequest,
   event: NextFetchEvent | undefined,
 ): Promise<NextResponse> {
-  if (!handler) return NextResponse.next();
+  const forward = (): NextResponse => NextResponse.next({ request: { headers: req.headers } });
+  if (!handler) return forward();
   const out = await handler(req, event);
-  return toNextResponse(out, () => NextResponse.next());
+  const res = toNextResponse(out, forward);
+  // A plain `next()` from the handler still forwards the (possibly mutated)
+  // request headers; a handler that set its own overrides keeps them as-is.
+  return isRedirect(res) ? res : applyRequestHeaders(res, {}, req);
 }
 
 /**

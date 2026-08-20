@@ -177,6 +177,47 @@ describe('createTestaProxy', () => {
     });
   });
 
+  describe('tail-call composition (customer proxy runs FIRST, then calls testa)', () => {
+    // The customer pattern: mutate request headers, then hand testa the
+    // mutated request. Testa must forward those headers downstream on EVERY
+    // path, so it is transparent to upstream request mutation.
+    function mutatedRequest(url: string, opts: { cookie?: string } = {}): NextRequest {
+      const base = request(url, opts);
+      const headers = new Headers(base.headers);
+      headers.set('x-domain', 'acme.com');
+      return new NextRequest(base, { headers });
+    }
+
+    it('forwards upstream header mutations on the pass-through path', async () => {
+      const res = await mw()(
+        mutatedRequest('https://acme.com/pricing', { cookie: `${ASSIGNMENT_COOKIE}=101.1.0.0` }),
+      );
+      expect(res.headers.get('x-middleware-request-x-domain')).toBe('acme.com');
+      expect(res.headers.get('x-middleware-request-x-testa-shield')).toBe('0');
+    });
+
+    it('forwards upstream header mutations on the bypass path (/api/*)', async () => {
+      const res = await mw()(mutatedRequest('https://acme.com/api/leads'));
+      expect(res.headers.get('x-middleware-request-x-domain')).toBe('acme.com');
+      expect(res.headers.get('set-cookie')).toBeNull();
+    });
+
+    it('forwards upstream header mutations when config fails to resolve', async () => {
+      const proxy = createTestaProxy({ projectId: 'acme', loadConfig: async () => null });
+      const res = await proxy(mutatedRequest('https://acme.com/pricing'));
+      expect(res.headers.get('x-middleware-request-x-domain')).toBe('acme.com');
+    });
+
+    it('forwards upstream header mutations on a prefetch pass-through', async () => {
+      const base = request('https://acme.com/pricing', { prefetch: true });
+      const headers = new Headers(base.headers);
+      headers.set('x-domain', 'acme.com');
+      const res = await mw()(new NextRequest(base, { headers }));
+      expect(res.headers.get('x-middleware-request-x-domain')).toBe('acme.com');
+      expect(res.headers.get('set-cookie')).toBeNull(); // prefetch still never commits
+    });
+  });
+
   describe('internal request filter (safe without a matcher)', () => {
     /** A loose `contains` page rule that would also match asset URLs like /pricing-hero.png. */
     const looseConfig = () => {

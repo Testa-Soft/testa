@@ -123,10 +123,33 @@ Semantics:
   the `x-testa-shield` override even if you return a plain `NextResponse.next()`
   or `undefined`.
 
-### The proxy inside your middleware (outer wrapper)
+### Your logic first, then testa (tail call)
 
-If you'd rather own the outer function — e.g. to short-circuit before testa
-runs — call the proxy and post-process its response. Response headers and
+To run your logic **before** testa — short-circuit on auth/maintenance without
+testa assigning or tracking anything, or compute request headers testa should
+carry — mutate the request and tail-call the proxy. Testa is transparent to
+upstream request mutation: headers on the request you hand it are forwarded
+downstream on **every** path (pass-through, bypassed `/api/*`/assets, redirects,
+fail-open):
+
+```ts
+const testa = createTestaProxy({ projectId: '3fa85f64e1c2b' })
+
+export async function proxy(req: NextRequest, event: NextFetchEvent) {
+  // Short-circuit BEFORE testa: no exposure fired, no cookies written.
+  if (!isAllowed(req)) return NextResponse.redirect(new URL('/login', req.url))
+
+  const headers = new Headers(req.headers)
+  headers.set('x-domain', 'acme.com')
+  headers.set('x-search', req.nextUrl.search)
+  return testa(new NextRequest(req, { headers }), event) // forward `event`!
+}
+```
+
+### Testa first, then post-process (outer wrapper)
+
+To act on testa's response — add response headers, or request-header overrides
+computed after the fact — call the proxy and post-process. Response headers and
 cookies merge fine with standard APIs; for **request**-header overrides use the
 exported `applyRequestHeaders` (it appends to the proxy's override set instead
 of clobbering it):

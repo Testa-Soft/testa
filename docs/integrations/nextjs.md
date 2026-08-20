@@ -162,11 +162,34 @@ export const proxy = createTestaProxy({
 - Testa merges its cookies onto whatever you return and re-patches the
   `x-testa-shield` override even if you return a plain `next()` or `undefined`.
 
-**Outer wrapper — the proxy inside your middleware.** For short-circuiting
-before testa (auth walls, maintenance mode) or post-processing, call the proxy
-and add request-header overrides via the exported `applyRequestHeaders` — it
-appends to the proxy's override set instead of clobbering it (plain response
-headers and cookies merge fine with the standard APIs):
+**Yours first, then testa (tail call).** To run your logic before testa —
+short-circuit on auth/maintenance without testa assigning or tracking anything,
+or compute request headers testa should carry — mutate the request and
+tail-call the proxy. Testa is transparent to upstream request mutation: headers
+on the request you hand it are forwarded downstream on **every** path
+(pass-through, bypassed `/api/*`/assets, fail-open):
+
+```ts
+const testa = createTestaProxy({ projectId: '3fa85f64e1c2b' })
+
+export async function proxy(req: NextRequest, event: NextFetchEvent) {
+  // Short-circuit BEFORE testa: no exposure fired, no cookies written.
+  if (!isAllowed(req)) return NextResponse.redirect(new URL('/login', req.url))
+
+  const headers = new Headers(req.headers)
+  headers.set('x-domain', 'acme.com')
+  headers.set('x-search', req.nextUrl.search)
+  return testa(new NextRequest(req, { headers }), event) // forward `event`!
+}
+```
+
+**Testa first, then post-process (outer wrapper).** To act on testa's response,
+call the proxy and add request-header overrides via the exported
+`applyRequestHeaders` — it appends to the proxy's override set instead of
+clobbering it (plain response headers and cookies merge fine with the standard
+APIs). It is a no-op on redirect responses and needs `req` to seed the full
+override set when the response has none (overrides are wholesale — seeding only
+your headers would drop all the others downstream):
 
 ```ts
 import { applyRequestHeaders, createTestaProxy } from '@testa-soft/next'
@@ -174,16 +197,11 @@ import { applyRequestHeaders, createTestaProxy } from '@testa-soft/next'
 const testa = createTestaProxy({ projectId: '3fa85f64e1c2b' })
 
 export async function proxy(req: NextRequest, event: NextFetchEvent) {
-  if (!isAllowed(req)) return NextResponse.redirect(new URL('/login', req.url))
-
   const res = await testa(req, event) // forward `event` — exposure tracking uses waitUntil
+  res.headers.set('x-frame-options', 'DENY') // response headers merge trivially
   return applyRequestHeaders(res, { 'x-domain': 'acme.com' }, req)
 }
 ```
-
-`applyRequestHeaders(res, headers, req)` is a no-op on redirect responses and
-needs `req` to seed the full override set when the response has none (overrides
-are wholesale — seeding only your headers would drop all the others downstream).
 
 ---
 
