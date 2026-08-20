@@ -1,4 +1,4 @@
-import { TestaExperiments, TestaShield } from '@testa-soft/next/server';
+import { TestaProvider, TestaGuard } from '@testa-soft/next/server';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { PROD_PROJECT_ID, demoConfig, useProdConfig } from '../testa.config.ts';
@@ -21,7 +21,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             the shield script when the middleware signals a pending DOM change for
             this request (the `x-testa-shield` header), so split-URL-only pages
             never get shielded needlessly. */}
-        <TestaShield selector="body" timeoutMs={4000} />
+        <TestaGuard selector="body" timeoutMs={4000} />
       </head>
       <body
         style={{
@@ -56,9 +56,9 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             draft changes from the backend (crobot). Here it points at the demo origin so the
             preview endpoint can be stubbed; in production it's the crobot app URL. */}
         {useProdConfig ? (
-          <TestaExperiments projectId={PROD_PROJECT_ID} />
+          <TestaProvider projectId={PROD_PROJECT_ID} />
         ) : (
-          <TestaExperiments config={demoConfig} previewApiUrl="http://localhost:3200" />
+          <TestaProvider config={demoConfig} previewApiUrl="http://localhost:3200" />
         )}
         <TestaDebug />
         <ReloadSentinel />

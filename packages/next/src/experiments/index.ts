@@ -5,8 +5,16 @@
  * server-side; these render the assignment client-side.
  */
 
+// Canonical names: <TestaProvider/> (DOM apply + goals) and <TestaGuard/>
+// (anti-flicker). The originals stay exported as deprecated aliases.
+export { TestaExperiments as TestaProvider } from './TestaExperiments.tsx';
+export type { TestaExperimentsProps as TestaProviderProps } from './TestaExperiments.tsx';
+export { TestaShield as TestaGuard } from './TestaShield.tsx';
+export type { TestaShieldProps as TestaGuardProps } from './TestaShield.tsx';
+/** @deprecated Renamed — use `TestaProvider`. */
 export { TestaExperiments } from './TestaExperiments.tsx';
 export type { TestaExperimentsProps } from './TestaExperiments.tsx';
+/** @deprecated Renamed — use `TestaGuard`. */
 export { TestaShield } from './TestaShield.tsx';
 export type { TestaShieldProps } from './TestaShield.tsx';
 export {

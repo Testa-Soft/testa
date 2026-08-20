@@ -48,7 +48,7 @@ describe('loadTestaConfig', () => {
     expect(url).toBe('https://cfg.example/api/v1/config/a%20b%2Fc');
   });
 
-  it('sends the accept header and default next.revalidate (30)', async () => {
+  it('sends the accept header and default next.revalidate (1800 — once per session)', async () => {
     const fetchImpl = vi.fn(async () => jsonResponse(VALID));
     await loadTestaConfig({ projectId: 'abc', host: 'https://cfg.example', fetchImpl });
     const [, init] = fetchImpl.mock.calls[0] as unknown as [
@@ -56,7 +56,7 @@ describe('loadTestaConfig', () => {
       RequestInit & { next?: unknown },
     ];
     expect(init.headers).toEqual({ accept: 'application/json' });
-    expect((init as { next?: { revalidate?: number } }).next).toEqual({ revalidate: 30 });
+    expect((init as { next?: { revalidate?: number } }).next).toEqual({ revalidate: 1800 });
   });
 
   it('honours a custom revalidateSec', async () => {

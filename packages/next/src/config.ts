@@ -31,7 +31,11 @@ interface CacheEntry {
   fetchedAtMs: number;
 }
 
-const DEFAULT_TTL_MS = 30_000;
+// One fetch per visitor session: the config is not expected to change while a
+// visitor browses, so cache for the session window (30 min, = SESSION_LENGTH).
+// A crobot publish reaches long-lived server instances when this expires;
+// override with `cacheTtlMs` where faster propagation matters (demos, previews).
+const DEFAULT_TTL_MS = 1_800_000;
 
 export class ConfigClient {
   private readonly source: ConfigSource;
