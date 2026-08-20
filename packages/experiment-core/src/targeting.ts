@@ -13,7 +13,8 @@
  *   - experiment     → visitor is ASSIGNED (variation ≥ 0) to experiment
  *     `value` — crobot's cross-experiment (mutual) exclusion. Parses the packed
  *     cookie FRESH via `getCookie`, so an assignment made earlier in the same
- *     request (read-through store) already counts: config order = priority.
+ *     request (read-through store) already counts: the per-visitor shuffled
+ *     order (order.ts) = priority.
  *   - anything else  → a URL query param looked up by the dimension name
  *     (utm_source, gclid, …) — 3.3.3's `handleURLParameter` default case.
  *

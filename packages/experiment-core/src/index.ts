@@ -62,6 +62,7 @@ export {
   resolveExposures,
   resolveGoalExperiments,
 } from './engine.ts';
+export { shuffleForVisitor } from './order.ts';
 export type { Exposure, GoalAssignment } from './engine.ts';
 export {
   SESSION_LENGTH_SEC,

@@ -48,6 +48,7 @@ import {
   assign,
   recordExposure,
 } from './experiments/traffic.ts';
+import { shuffleForVisitor } from '@testa-soft/experiment-core';
 import { pushLeadToDataLayer } from './legacy/data-layer.ts';
 import { fireEvent, installLegacy, publishLoaded, publishUuid } from './legacy/index.ts';
 import { snapshot as healthSnapshot } from './network/health.ts';
@@ -674,7 +675,14 @@ export function runExperimentCycle(): void {
   const stats = { matched: 0, excluded: 0 };
   const assigned: AssignedExperiment[] = [];
 
-  for (const expConfig of project.experiments) {
+  // Randomized evaluation order — 3.3.3 `shuffleArray` parity, but
+  // deterministic per visitor (same reasoning as hash bucketing: no SRM, no
+  // cross-pageview flip-flop). With mutual exclusions + 100% traffic on N
+  // experiments this splits NEW visitors evenly between them.
+  for (const expConfig of shuffleForVisitor(
+    project.experiments,
+    cookies.getUuid() ?? '',
+  )) {
     if (expConfig.status !== 'active') continue;
 
     if (expConfig.audience !== undefined && !evaluate(expConfig.audience, ctx)) {

@@ -57,6 +57,7 @@ import {
   isFresh,
   refreshSession,
 } from './session.ts';
+import { shuffleForVisitor } from './order.ts';
 import { type TargetingContext, isExcludedByRules, passesTargeting } from './targeting.ts';
 
 /** Payload passed to the `onVariationApplied` listener when a visitor is enrolled. */
@@ -145,7 +146,10 @@ export function runExperiments(ctx: EngineContext, store: CookieStore): EngineRe
   const expiresSec = nowSec + (ctx.sessionLengthSec ?? SESSION_LENGTH_SEC);
   const packed = parsePacked(store.get(ASSIGNMENT_COOKIE));
 
-  for (const experiment of ctx.config.experiments) {
+  // Randomized evaluation order (3.3.3 `shuffleArray` parity, deterministic
+  // per visitor): with mutual exclusions + 100% traffic on N experiments, the
+  // shuffle splits NEW visitors evenly between them. See order.ts.
+  for (const experiment of shuffleForVisitor(ctx.config.experiments, ctx.visitorId)) {
     const id = experiment.experiment_id;
     const title = experiment.title;
     const base = { experimentId: id, ...(title ? { title } : {}) };

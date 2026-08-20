@@ -8,8 +8,8 @@
  * ASSIGNED (variation ≥ 0, control included) to experiment `<value>`. Parked
  * eligibility (-2) and cached exclusions do NOT count as assignment. The lookup
  * parses the packed cookie FRESH via `getCookie`, so an assignment made earlier
- * in the SAME request (read-through store) is visible — config order is the
- * priority order.
+ * in the SAME request (read-through store) is visible — the per-visitor
+ * shuffled order (order.ts) is the priority order.
  *
  * The classic even-split setup this enables: A excludes B, B excludes A, A at
  * 50% traffic → every visitor lands in exactly one of the two (A's in-slice
@@ -19,7 +19,22 @@
 import type { ProjectConfig } from '@testa-platform/shared-types';
 import { describe, expect, it } from 'vitest';
 import { ASSIGNMENT_COOKIE, parsePacked, runExperiments } from '../index.ts';
+import { shuffleForVisitor } from '../order.ts';
 import { memoryStore } from './memory-store.ts';
+
+/**
+ * Evaluation order is the per-visitor shuffle (see order.ts), not config
+ * order. For order-sensitive assertions, pick a visitor whose shuffle puts
+ * experiment 1 first — deterministic, so the test never flakes.
+ */
+function visitorWithExpFirst(firstId: number): string {
+  const ids = [{ experiment_id: 1 }, { experiment_id: 2 }];
+  for (let i = 0; i < 100; i++) {
+    const visitor = `order-probe-${i}`;
+    if (shuffleForVisitor(ids, visitor)[0]?.experiment_id === firstId) return visitor;
+  }
+  throw new Error('no probe visitor found — hash badly skewed?');
+}
 
 const PAGE = 'https://acme.com/calculator';
 
@@ -64,9 +79,9 @@ function assignedIds(store: Store): number[] {
 }
 
 describe('cross-experiment exclusion (dimension: experiment)', () => {
-  it('same request: first experiment assigns, second is excluded by it', () => {
+  it('same request: first-evaluated experiment assigns, second is excluded by it', () => {
     const store = memoryStore();
-    const res = run(store, mutexConfig(100));
+    const res = run(store, mutexConfig(100), visitorWithExpFirst(1));
     expect(assignedIds(store)).toEqual([1]);
     expect(res.applied.map((a) => a.experimentId)).toEqual([1]);
   });
@@ -79,9 +94,10 @@ describe('cross-experiment exclusion (dimension: experiment)', () => {
   });
 
   it('parked eligibility (-2) does NOT count as assignment', () => {
-    // 2.-2.0.9999999 = exp 2 eligible-parked, not assigned → exp 1 must enroll
+    // 2.-2.0.9999999 = exp 2 eligible-parked, not assigned. With exp 1
+    // evaluating first, a parked exp 2 must NOT exclude it → exp 1 enrolls.
     const store = memoryStore({ [ASSIGNMENT_COOKIE]: '2.-2.0.9999999' });
-    run(store, mutexConfig(100));
+    run(store, mutexConfig(100), visitorWithExpFirst(1));
     expect(assignedIds(store)).toContain(1);
   });
 
