@@ -89,6 +89,67 @@ resolver (e.g. read Vercel Edge Config). Config caching (`cache` option), shared
 - `false` — no server-side cache; every request fetches (testing only). If no config can be resolved, the middleware fails open
 and passes the request through untouched.
 
+## Composing with your own middleware
+
+Next.js runs **one** middleware and allows **one** response — and request-header
+overrides (`NextResponse.next({ request: { headers } })`) travel on that
+response as a wholesale set. Two separately-built responses can never be merged
+by hand, so if you already have middleware logic (auth, locale, custom headers),
+compose it with the proxy in one of two ways.
+
+### Your logic inside the proxy — the `handler` option (recommended)
+
+```ts
+export const proxy = createTestaProxy({
+  projectId: '3fa85f64e1c2b',
+  handler: (req, event) => {
+    // Your middleware logic. `req.headers` already carries x-testa-shield —
+    // clone them when overriding request headers, as you normally would:
+    const headers = new Headers(req.headers)
+    headers.set('x-domain', 'acme.com')
+    return NextResponse.next({ request: { headers } })
+  },
+})
+```
+
+Semantics:
+
+- Requests testa bypasses (`/api/*`, assets, `skipPaths`) go **straight to your
+  handler**, so your headers still reach API routes.
+- A split-URL redirect short-circuits — your handler is not called (nothing
+  downstream renders). A redirect **you** return wins on pass-through requests
+  and gets testa's cookies.
+- On pass-through, testa merges its cookies onto your response and re-patches
+  the `x-testa-shield` override even if you return a plain `NextResponse.next()`
+  or `undefined`.
+
+### The proxy inside your middleware (outer wrapper)
+
+If you'd rather own the outer function — e.g. to short-circuit before testa
+runs — call the proxy and post-process its response. Response headers and
+cookies merge fine with standard APIs; for **request**-header overrides use the
+exported `applyRequestHeaders` (it appends to the proxy's override set instead
+of clobbering it):
+
+```ts
+import { applyRequestHeaders, createTestaProxy } from '@testa-soft/next'
+
+const testa = createTestaProxy({ projectId: '3fa85f64e1c2b' })
+
+export async function proxy(req: NextRequest, event: NextFetchEvent) {
+  if (isMaintenanceMode()) return NextResponse.rewrite(new URL('/down', req.url))
+
+  const res = await testa(req, event) // forward `event` — tracking uses waitUntil
+  res.headers.set('x-frame-options', 'DENY') // response headers merge trivially
+  return applyRequestHeaders(res, { 'x-domain': 'acme.com' }, req)
+}
+```
+
+`applyRequestHeaders(res, headers, req)` is a no-op on redirects, appends when
+the response already carries an override set, and seeds the full set from
+`req.headers` otherwise (pass `req` — override semantics are wholesale, and
+seeding only your headers would drop every other request header downstream).
+
 ## HTML/DOM experiments
 
 For "same URL, different content" tests, Testa applies **crobot-native DOM
@@ -235,6 +296,7 @@ Returns a Next.js middleware function. Import from `@testa-soft/next`.
 | `tracking`           | `boolean`                                      | `true`                               | Emit exposures (impressions) so experiment results populate. Set `false` for redirects-only, or if a pixel owns tracking. |
 | `trackingHost`       | `string`                                       | `https://new.testa-soft.tech`        | Host for exposure tracking (`{trackingHost}/api/leads`). Also settable via the `TESTA_TRACKING_HOST` env var. |
 | `skipPaths`          | `(string \| RegExp)[]`                         | —                                    | Extra paths to pass through untouched, on top of the built-in filter (`/_next/*`, `/api/*`, `/.well-known/*`, asset extensions). Strings match as segment-aligned prefixes (`'/admin'` matches `/admin/users`, not `/administrator`); RegExps test the pathname. |
+| `handler`            | `(req, event) => Response \| null \| undefined \| Promise<…>` | —                     | Your own middleware logic, composed inside the proxy — see [Composing with your own middleware](#composing-with-your-own-middleware). |
 | `onVariationAssigned`| `(event, ctx) => void \| Promise<void>`       | —                                    | **Server-side** hook per assignment. `ctx.waitUntil(promise)` keeps async work (PostHog server, webhook) alive past the response — never delays it. Guard on `event.firstAssignment` for once-per-visitor. |
 
 Exported constants: `DEFAULT_CONFIG_HOST`, `DEFAULT_TRACKING_HOST`. Exported

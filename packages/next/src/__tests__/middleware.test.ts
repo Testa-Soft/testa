@@ -5,7 +5,7 @@
  */
 
 import { ASSIGNMENT_COOKIE } from '@testa-soft/experiment-core';
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { describe, expect, it } from 'vitest';
 import { createTestaProxy } from '../middleware.ts';
 import { splitUrlConfig } from './helpers.ts';
@@ -68,6 +68,113 @@ describe('createTestaProxy', () => {
       request('https://acme.com/pricing', { cookie: `${ASSIGNMENT_COOKIE}=101.2.0.0` }),
     );
     expect(res.status).not.toBe(307);
+  });
+
+  describe('handler composition (customer middleware runs INSIDE the proxy)', () => {
+    it('passes x-testa-shield to the handler and keeps its own request overrides', async () => {
+      const proxy = createTestaProxy({
+        projectId: 'acme',
+        config: splitUrlConfig(),
+        handler: (req) => {
+          const headers = new Headers(req.headers);
+          headers.set('x-domain', 'acme.com');
+          return NextResponse.next({ request: { headers } });
+        },
+      });
+      const res = await proxy(request('https://acme.com/pricing', { cookie: `${ASSIGNMENT_COOKIE}=101.1.0.0` }));
+      // Handler's own override AND testa's shield both survive on ONE response.
+      expect(res.headers.get('x-middleware-request-x-domain')).toBe('acme.com');
+      expect(res.headers.get('x-middleware-request-x-testa-shield')).toBe('0');
+      // Testa cookies merge onto the handler's response.
+      expect(res.headers.get('set-cookie')).toContain('_testa_uuid=');
+    });
+
+    it('patches the shield override even when the handler returns a plain next()', async () => {
+      const proxy = createTestaProxy({
+        projectId: 'acme',
+        config: splitUrlConfig(),
+        handler: () => NextResponse.next(),
+      });
+      const res = await proxy(request('https://acme.com/pricing', { cookie: `${ASSIGNMENT_COOKIE}=101.1.0.0` }));
+      expect(res.headers.get('x-middleware-request-x-testa-shield')).toBe('0');
+      expect(res.headers.get('set-cookie')).toContain('_testa_uuid=');
+    });
+
+    it('treats a handler returning undefined as pass-through (shield + cookies intact)', async () => {
+      const proxy = createTestaProxy({
+        projectId: 'acme',
+        config: splitUrlConfig(),
+        handler: () => undefined,
+      });
+      const res = await proxy(request('https://acme.com/pricing', { cookie: `${ASSIGNMENT_COOKIE}=101.1.0.0` }));
+      expect(res.headers.get('x-middleware-request-x-testa-shield')).toBe('0');
+      expect(res.headers.get('set-cookie')).toContain('_testa_uuid=');
+    });
+
+    it('delegates bypassed requests (e.g. /api/*) straight to the handler', async () => {
+      let sawShield: string | null = 'sentinel';
+      const proxy = createTestaProxy({
+        projectId: 'acme',
+        config: splitUrlConfig(),
+        handler: (req) => {
+          sawShield = req.headers.get('x-testa-shield');
+          const headers = new Headers(req.headers);
+          headers.set('x-domain', 'acme.com');
+          return NextResponse.next({ request: { headers } });
+        },
+      });
+      const res = await proxy(request('https://acme.com/api/leads'));
+      // Handler ran and its API-route headers survive; testa stayed out entirely.
+      expect(res.headers.get('x-middleware-request-x-domain')).toBe('acme.com');
+      expect(sawShield).toBeNull();
+      expect(res.headers.get('set-cookie')).toBeNull();
+    });
+
+    it('skips the handler on a split-URL redirect (nothing downstream renders)', async () => {
+      let handlerRan = false;
+      const proxy = createTestaProxy({
+        projectId: 'acme',
+        config: splitUrlConfig(),
+        handler: () => {
+          handlerRan = true;
+          return NextResponse.next();
+        },
+      });
+      const res = await proxy(
+        request('https://acme.com/pricing', { cookie: `${ASSIGNMENT_COOKIE}=101.2.0.0` }),
+      );
+      expect(res.status).toBe(307);
+      expect(handlerRan).toBe(false);
+    });
+
+    it('delegates to the handler when config fails to resolve (fail open THROUGH the handler)', async () => {
+      const proxy = createTestaProxy({
+        projectId: 'acme',
+        loadConfig: async () => null,
+        handler: (req) => {
+          const headers = new Headers(req.headers);
+          headers.set('x-domain', 'acme.com');
+          return NextResponse.next({ request: { headers } });
+        },
+      });
+      const res = await proxy(request('https://acme.com/pricing'));
+      expect(res.headers.get('x-middleware-request-x-domain')).toBe('acme.com');
+    });
+
+    it('returns a handler redirect as-is, with testa cookies applied', async () => {
+      const proxy = createTestaProxy({
+        projectId: 'acme',
+        config: splitUrlConfig(),
+        handler: (req) => NextResponse.redirect(new URL('/login', req.url), 307),
+      });
+      // Control-assigned visitor → testa passes through, handler's redirect wins.
+      const res = await proxy(
+        request('https://acme.com/pricing', { cookie: `${ASSIGNMENT_COOKIE}=101.1.0.0` }),
+      );
+      expect(res.status).toBe(307);
+      expect(res.headers.get('location')).toContain('/login');
+      expect(res.headers.get('set-cookie')).toContain('_testa_uuid=');
+    });
   });
 
   describe('internal request filter (safe without a matcher)', () => {

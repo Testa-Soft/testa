@@ -19,8 +19,9 @@ import {
   hasPendingDomChange,
   runExperiments,
 } from '@testa-soft/experiment-core';
-import { NextResponse } from 'next/server';
-import type { NextFetchEvent, NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
+import type { NextFetchEvent } from 'next/server';
+import { applyRequestHeaders, isRedirect, toNextResponse } from './compose.ts';
 import { ConfigClient, type ConfigSource } from './config.ts';
 import { DEFAULT_CONFIG_HOST, DEFAULT_TRACKING_HOST, SHIELD_HEADER, readEnv } from './constants.ts';
 import { NextCookieStore } from './cookie-store.ts';
@@ -93,7 +94,28 @@ export interface TestaProxyOptions extends ConfigSource {
    * pathname.
    */
   skipPaths?: ReadonlyArray<SkipPath>;
+  /**
+   * Your own middleware logic, run INSIDE the proxy so both end up on the ONE
+   * response Next.js allows (request-header overrides are wholesale per
+   * response — two separately-built responses can't be merged). Semantics:
+   * - Bypassed requests (`/api/*`, assets, `skipPaths`) delegate straight to
+   *   the handler, so its headers still reach API routes testa skips.
+   * - A split-URL redirect short-circuits — the handler is NOT called
+   *   (nothing downstream renders).
+   * - Otherwise the handler runs with `x-testa-shield` already in
+   *   `req.headers`; clone them (`new Headers(req.headers)`) when overriding
+   *   request headers. Testa merges its cookies onto the returned response and
+   *   re-patches the shield override even if the handler returned a plain
+   *   `NextResponse.next()`. Returning `null`/`undefined` means "continue".
+   */
+  handler?: TestaHandler;
 }
+
+/** Customer middleware logic composed inside the proxy — see `handler`. */
+export type TestaHandler = (
+  req: NextRequest,
+  event?: NextFetchEvent,
+) => Response | null | undefined | Promise<Response | null | undefined>;
 
 export type TestaProxy = (req: NextRequest, event?: NextFetchEvent) => Promise<NextResponse>;
 
@@ -120,7 +142,7 @@ export function createTestaProxy(options: TestaProxyOptions): TestaProxy {
     // correct even with no `config.matcher` at all (the matcher is then purely
     // a cost optimization — it skips the edge invocation entirely).
     if (shouldBypassRequest(new URL(req.url).pathname, options.skipPaths)) {
-      return NextResponse.next();
+      return delegate(options.handler, req, event);
     }
 
     const cookieDomain = resolveCookieDomain(new URL(req.url).hostname, {
@@ -139,8 +161,9 @@ export function createTestaProxy(options: TestaProxyOptions): TestaProxy {
       req.headers.get('rsc') !== '1',
     );
 
-    // No config → behave as a no-op pass-through (fail open).
-    if (!config) return NextResponse.next();
+    // No config → behave as a no-op pass-through (fail open) — THROUGH the
+    // composed handler, so the customer's own middleware still runs.
+    if (!config) return delegate(options.handler, req, event);
 
     // Soft-nav M1 prefetch trap: App Router prefetches `<Link>` targets (RSC
     // requests) on hover/viewport. We compute the decision but NEVER commit —
@@ -164,7 +187,7 @@ export function createTestaProxy(options: TestaProxyOptions): TestaProxy {
       );
       return redirectTo
         ? NextResponse.redirect(new URL(redirectTo, req.url), 307)
-        : NextResponse.next();
+        : delegate(options.handler, req, event);
     }
 
     const visitorId = ensureVisitorId(store);
@@ -218,10 +241,47 @@ export function createTestaProxy(options: TestaProxyOptions): TestaProxy {
     const requestHeaders = new Headers(req.headers);
     requestHeaders.set(SHIELD_HEADER, shield ? '1' : '0');
 
-    const res = NextResponse.next({ request: { headers: requestHeaders } });
+    const res = await resolveDownstream(options.handler, req, requestHeaders, event);
     store.applyTo(res.cookies);
     return res;
   };
+}
+
+/** Run the composed handler with the request untouched (bypass / no-config / prefetch paths). */
+async function delegate(
+  handler: TestaHandler | undefined,
+  req: NextRequest,
+  event: NextFetchEvent | undefined,
+): Promise<NextResponse> {
+  if (!handler) return NextResponse.next();
+  const out = await handler(req, event);
+  return toNextResponse(out, () => NextResponse.next());
+}
+
+/**
+ * Pass-through path: run the composed handler with `x-testa-shield` already in
+ * the request headers, then make sure the shield override survives whatever
+ * response shape the handler returned (its own overrides, a plain `next()`, a
+ * rewrite). Handler redirects are returned as-is — nothing downstream renders.
+ */
+async function resolveDownstream(
+  handler: TestaHandler | undefined,
+  req: NextRequest,
+  requestHeaders: Headers,
+  event: NextFetchEvent | undefined,
+): Promise<NextResponse> {
+  if (!handler) return NextResponse.next({ request: { headers: requestHeaders } });
+  const downstreamReq = new NextRequest(req, { headers: requestHeaders });
+  const out = await handler(downstreamReq, event);
+  const res = toNextResponse(out, () =>
+    NextResponse.next({ request: { headers: requestHeaders } }),
+  );
+  if (isRedirect(res)) return res;
+  return applyRequestHeaders(
+    res,
+    { [SHIELD_HEADER]: requestHeaders.get(SHIELD_HEADER) ?? '0' },
+    downstreamReq,
+  );
 }
 
 /** Context passed to `onVariationAssigned` — keep an async task alive past the response. */

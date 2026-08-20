@@ -132,6 +132,59 @@ Config caching (`cache` option), shared per server instance:
   the config never shifts mid-SPA-session.
 - `false` — no server-side cache; every request fetches (testing only).
 
+### Already have middleware? Composing with your own logic
+
+Next.js runs **one** middleware and forwards **one** response. Request-header
+overrides (`NextResponse.next({ request: { headers } })`) ride on that response
+as a **wholesale set** — so returning testa's response drops your headers and
+vice versa. Never build two responses; compose instead.
+
+**Recommended — your logic inside the proxy** (`handler` option):
+
+```ts
+export const proxy = createTestaProxy({
+  projectId: '3fa85f64e1c2b',
+  handler: (req, event) => {
+    // Standard middleware code. `req.headers` already includes x-testa-shield.
+    const headers = new Headers(req.headers)
+    headers.set('x-domain', 'acme.com')
+    headers.set('x-search', req.nextUrl.search)
+    return NextResponse.next({ request: { headers } })
+  },
+})
+```
+
+- Requests testa bypasses (`/api/*`, assets, `skipPaths`) delegate **straight to
+  your handler** — your headers still reach API routes.
+- A testa split-URL redirect short-circuits (your handler isn't called; nothing
+  downstream renders). Your own redirects win on pass-through and carry testa's
+  cookies.
+- Testa merges its cookies onto whatever you return and re-patches the
+  `x-testa-shield` override even if you return a plain `next()` or `undefined`.
+
+**Outer wrapper — the proxy inside your middleware.** For short-circuiting
+before testa (auth walls, maintenance mode) or post-processing, call the proxy
+and add request-header overrides via the exported `applyRequestHeaders` — it
+appends to the proxy's override set instead of clobbering it (plain response
+headers and cookies merge fine with the standard APIs):
+
+```ts
+import { applyRequestHeaders, createTestaProxy } from '@testa-soft/next'
+
+const testa = createTestaProxy({ projectId: '3fa85f64e1c2b' })
+
+export async function proxy(req: NextRequest, event: NextFetchEvent) {
+  if (!isAllowed(req)) return NextResponse.redirect(new URL('/login', req.url))
+
+  const res = await testa(req, event) // forward `event` — exposure tracking uses waitUntil
+  return applyRequestHeaders(res, { 'x-domain': 'acme.com' }, req)
+}
+```
+
+`applyRequestHeaders(res, headers, req)` is a no-op on redirect responses and
+needs `req` to seed the full override set when the response has none (overrides
+are wholesale — seeding only your headers would drop all the others downstream).
+
 ---
 
 ## HTML/DOM experiments
@@ -504,9 +557,13 @@ Returns a Next.js proxy/middleware function. Import from `@testa-soft/next`.
 | `tracking`           | `boolean`                                        | `true`                           | Emit exposures so results populate. `false` for redirects-only, or if a pixel owns tracking. |
 | `trackingHost`       | `string`                                         | `https://new.testa-soft.tech`    | Host for exposure tracking (`{trackingHost}/api/leads`). Also via `TESTA_TRACKING_HOST`. |
 | `onVariationAssigned`| `(event, ctx) => void \| Promise<void>`         | —                                | **Server-side** hook per assignment. `ctx.waitUntil(promise)` keeps async work alive past the response — never delays it. Guard on `event.firstAssignment` for once-per-visitor. |
+| `skipPaths`          | `(string \| RegExp)[]`                           | —                                | Extra paths passed through untouched, on top of the built-in filter (`/_next/*`, `/api/*`, `/.well-known/*`, asset extensions). Strings are segment-aligned prefixes; RegExps test the pathname. |
+| `handler`            | `(req, event) => Response \| null \| undefined \| Promise<…>` | —                   | Your own middleware logic, composed inside the proxy — see [Composing with your own logic](#already-have-middleware-composing-with-your-own-logic). |
 
 Exported constants: `DEFAULT_CONFIG_HOST`, `DEFAULT_TRACKING_HOST`,
-`SHIELD_HEADER`. Exported types: `TestaProxy`, `TestaProxyOptions`,
+`SHIELD_HEADER`. Exported helpers: `applyRequestHeaders(res, headers, req?)`
+(outer-wrapper composition), `shouldBypassRequest(pathname, skipPaths?)`.
+Exported types: `TestaProxy`, `TestaProxyOptions`, `TestaHandler`, `SkipPath`,
 `VariationHookContext`, `VariationAppliedEvent` (the server hook's `event`).
 
 ### Client event bus — `@testa-soft/next`
