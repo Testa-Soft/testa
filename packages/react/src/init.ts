@@ -40,6 +40,7 @@ import {
   getPreviewToken,
   isPreviewRequested,
 } from './preview.ts';
+import { startGoalTracking } from './goal-tracking.ts';
 import { DEFAULT_TRACKING_HOST, emitExposure } from './tracking.ts';
 
 export interface InitOptions {
@@ -161,6 +162,13 @@ export async function initTesta(opts: InitOptions): Promise<InitResult> {
       });
     }
   }
+
+  // Arm goal tracking (page_view / click / custom) for every assigned,
+  // session-live experiment — NOT page-gated: a goal usually completes on a
+  // different page than the experiment runs on. Conversions POST the legacy
+  // `/api/leads/convert` payload; the teardown re-arms cleanly on SPA nav.
+  teardowns.push(startGoalTracking(config, assignmentCookie, currentUrl, uuid, trackingHost, nowSec));
+
   return { applied: result.applied, teardowns, redirected: false };
 }
 
