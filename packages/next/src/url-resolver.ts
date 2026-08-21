@@ -92,25 +92,44 @@ function parseExplicit<R extends PublicUrlRequest>(
   return host ? { host } : {};
 }
 
+/** Which mechanism produced the public HOST — surfaced by debug tracing. */
+export type PublicUrlSource =
+  | 'option'
+  | 'x-testa-host'
+  | 'forwarded'
+  | 'x-forwarded-host'
+  | 'host'
+  | 'request-url';
+
+export interface ResolvedPublicUrl {
+  url: URL;
+  source: PublicUrlSource;
+}
+
 /**
- * The public URL for a request: public origin + the request's path/query.
- * Never throws — any failure returns the request URL unchanged (fail open).
+ * The public URL for a request — public origin + the request's path/query —
+ * plus WHICH mechanism won (for debug tracing). Never throws: any failure
+ * returns the request URL unchanged (fail open).
  */
-export function resolvePublicUrl<R extends PublicUrlRequest>(
+export function resolvePublicUrlDetailed<R extends PublicUrlRequest>(
   req: R,
   option?: PublicHostOption<R>,
-): URL {
+): ResolvedPublicUrl {
   const url = new URL(req.url);
   const explicit = parseExplicit(option, req);
   const forwarded = parseForwarded(req.headers.get('forwarded'));
 
-  const host =
-    explicit.host ??
-    validHost(req.headers.get(PUBLIC_HOST_HEADER)) ??
-    validHost(forwarded.host) ??
-    validHost(firstValue(req.headers.get('x-forwarded-host'))) ??
-    validHost(req.headers.get('host')) ??
-    url.host;
+  const hostCandidates: ReadonlyArray<[string | undefined, PublicUrlSource]> = [
+    [explicit.host, 'option'],
+    [validHost(req.headers.get(PUBLIC_HOST_HEADER)), 'x-testa-host'],
+    [validHost(forwarded.host), 'forwarded'],
+    [validHost(firstValue(req.headers.get('x-forwarded-host'))), 'x-forwarded-host'],
+    [validHost(req.headers.get('host')), 'host'],
+  ];
+  const winner = hostCandidates.find(([candidate]) => candidate !== undefined);
+  const host = winner?.[0] ?? url.host;
+  const source: PublicUrlSource = winner?.[1] ?? 'request-url';
+
   const proto =
     explicit.proto ??
     validProto(req.headers.get(PUBLIC_PROTO_HEADER)) ??
@@ -118,10 +137,18 @@ export function resolvePublicUrl<R extends PublicUrlRequest>(
     validProto(firstValue(req.headers.get('x-forwarded-proto'))) ??
     url.protocol.replace(/:$/, '');
 
-  if (host === url.host && `${proto}:` === url.protocol) return url;
+  if (host === url.host && `${proto}:` === url.protocol) return { url, source };
   try {
-    return new URL(`${proto}://${host}${url.pathname}${url.search}`);
+    return { url: new URL(`${proto}://${host}${url.pathname}${url.search}`), source };
   } catch {
-    return url;
+    return { url, source: 'request-url' };
   }
+}
+
+/** The public URL alone — see `resolvePublicUrlDetailed`. */
+export function resolvePublicUrl<R extends PublicUrlRequest>(
+  req: R,
+  option?: PublicHostOption<R>,
+): URL {
+  return resolvePublicUrlDetailed(req, option).url;
 }

@@ -25,12 +25,13 @@ import { applyRequestHeaders, isRedirect, toNextResponse } from './compose.ts';
 import { ConfigClient, type ConfigSource } from './config.ts';
 import { DEFAULT_CONFIG_HOST, DEFAULT_TRACKING_HOST, SHIELD_HEADER, readEnv } from './constants.ts';
 import { NextCookieStore } from './cookie-store.ts';
+import { createDebugEmitter, envDebugEnabled } from './debug.ts';
 import { resolveCookieDomain } from './domain.ts';
 import { type SkipPath, isDocumentMethod, shouldBypassRequest } from './request-filter.ts';
 import { computePrefetchRedirect } from './soft-nav/prefetch-guard.ts';
 import { isPrefetchRequest } from './soft-nav/rsc-redirect.ts';
 import { emitExposure } from './tracking.ts';
-import { type PublicHostOption, resolvePublicUrl } from './url-resolver.ts';
+import { type PublicHostOption, resolvePublicUrlDetailed } from './url-resolver.ts';
 import { ensureVisitorId } from './uuid.ts';
 
 export type { VariationAppliedEvent };
@@ -78,6 +79,16 @@ export interface TestaProxyOptions extends ConfigSource {
    * `X-Forwarded-Host` + `X-Forwarded-Proto` headers, then `Host`.
    */
   publicHost?: string | ((req: NextRequest) => string | null | undefined);
+  /**
+   * Emit a per-request decision trace: a `[testa] {…}` console line AND an
+   * `x-testa-debug` response header (readable in the browser network tab /
+   * `curl -sI`, no log access needed) carrying the resolved public URL and
+   * which mechanism produced it, the bypass reason if any (method / path /
+   * no-config), assignments, redirect target, and shield verdict. Also
+   * enabled via `TESTA_DEBUG=1`. Off by default — don't leave on in
+   * production; the header exposes experiment internals.
+   */
+  debug?: boolean;
   /**
    * Server-side hook, fired for each variation the visitor is assigned on a
    * request (control + variant) — e.g. capture the exposure to PostHog server,
@@ -146,6 +157,9 @@ export function createTestaProxy(options: TestaProxyOptions): TestaProxy {
   ).replace(/\/+$/, '');
   const publicHost: PublicHostOption<NextRequest> | undefined =
     options.publicHost ?? readEnv('TESTA_PUBLIC_HOST');
+  const emitDebug = createDebugEmitter(
+    options.debug ?? envDebugEnabled(readEnv('TESTA_DEBUG')),
+  );
 
   return async function testaMiddleware(
     req: NextRequest,
@@ -160,13 +174,19 @@ export function createTestaProxy(options: TestaProxyOptions): TestaProxy {
       !isDocumentMethod(req.method) ||
       shouldBypassRequest(new URL(req.url).pathname, options.skipPaths)
     ) {
-      return delegate(options.handler, req, event);
+      const res = await delegate(options.handler, req, event);
+      emitDebug?.(res, {
+        url: req.url,
+        bypass: isDocumentMethod(req.method) ? 'path' : 'method',
+        method: req.method,
+      });
+      return res;
     }
 
     // The URL the VISITOR requested — `req.url` can carry an internal host on
     // self-hosted container/ingress stacks (istio et al. rewrite `Host`), which
     // would break split-URL targeting, cookie discovery, and redirect bases.
-    const publicUrl = resolvePublicUrl(req, publicHost);
+    const { url: publicUrl, source: urlSource } = resolvePublicUrlDetailed(req, publicHost);
 
     const cookieDomain = resolveCookieDomain(publicUrl.hostname, {
       ...(options.cookieDomain ? { cookieDomain: options.cookieDomain } : {}),
@@ -186,7 +206,11 @@ export function createTestaProxy(options: TestaProxyOptions): TestaProxy {
 
     // No config → behave as a no-op pass-through (fail open) — THROUGH the
     // composed handler, so the customer's own middleware still runs.
-    if (!config) return delegate(options.handler, req, event);
+    if (!config) {
+      const res = await delegate(options.handler, req, event);
+      emitDebug?.(res, { url: publicUrl.href, urlSource, bypass: 'no-config' });
+      return res;
+    }
 
     // Soft-nav M1 prefetch trap: App Router prefetches `<Link>` targets (RSC
     // requests) on hover/viewport. We compute the decision but NEVER commit —
@@ -208,9 +232,16 @@ export function createTestaProxy(options: TestaProxyOptions): TestaProxy {
         },
         store, // written into by the engine, then intentionally discarded (no applyTo)
       );
-      return redirectTo
+      const res = redirectTo
         ? NextResponse.redirect(new URL(redirectTo, publicUrl), 307)
-        : delegate(options.handler, req, event);
+        : await delegate(options.handler, req, event);
+      emitDebug?.(res, {
+        url: publicUrl.href,
+        urlSource,
+        prefetch: true,
+        ...(redirectTo ? { redirect: redirectTo } : {}),
+      });
+      return res;
     }
 
     const visitorId = ensureVisitorId(store);
@@ -252,6 +283,14 @@ export function createTestaProxy(options: TestaProxyOptions): TestaProxy {
     if (result.redirectTo) {
       const res = NextResponse.redirect(new URL(result.redirectTo, publicUrl), 307);
       store.applyTo(res.cookies);
+      emitDebug?.(res, {
+        url: publicUrl.href,
+        urlSource,
+        visitor: visitorId,
+        configHash: config.config_hash,
+        applied: summarizeApplied(result.applied),
+        redirect: result.redirectTo,
+      });
       return res;
     }
 
@@ -266,8 +305,27 @@ export function createTestaProxy(options: TestaProxyOptions): TestaProxy {
 
     const res = await resolveDownstream(options.handler, req, requestHeaders, event);
     store.applyTo(res.cookies);
+    emitDebug?.(res, {
+      url: publicUrl.href,
+      urlSource,
+      visitor: visitorId,
+      configHash: config.config_hash,
+      applied: summarizeApplied(result.applied),
+      shield,
+    });
     return res;
   };
+}
+
+/** Compact per-assignment summary for the debug trace. */
+function summarizeApplied(
+  applied: ReadonlyArray<VariationAppliedEvent>,
+): ReadonlyArray<{ experiment: number; variation: number; first: boolean }> {
+  return applied.map((a) => ({
+    experiment: a.experimentId,
+    variation: a.variationId,
+    first: a.firstAssignment,
+  }));
 }
 
 /**

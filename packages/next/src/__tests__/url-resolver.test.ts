@@ -5,7 +5,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { resolvePublicUrl } from '../url-resolver.ts';
+import { resolvePublicUrl, resolvePublicUrlDetailed } from '../url-resolver.ts';
 
 function req(url: string, headers: Record<string, string> = {}): { url: string; headers: Headers } {
   return { url, headers: new Headers(headers) };
@@ -146,6 +146,31 @@ describe('resolvePublicUrl', () => {
         'not a host!!',
       );
       expect(url.host).toBe('www.acme.com');
+    });
+  });
+
+  describe('resolvePublicUrlDetailed (which mechanism won — surfaced by debug tracing)', () => {
+    it('labels each source', () => {
+      expect(resolvePublicUrlDetailed(req('http://10.0.3.17:3000/'), 'acme.com').source).toBe(
+        'option',
+      );
+      expect(
+        resolvePublicUrlDetailed(req('http://10.0.3.17:3000/', { 'x-testa-host': 'acme.com' }))
+          .source,
+      ).toBe('x-testa-host');
+      expect(
+        resolvePublicUrlDetailed(req('http://10.0.3.17:3000/', { forwarded: 'host=acme.com' }))
+          .source,
+      ).toBe('forwarded');
+      expect(
+        resolvePublicUrlDetailed(
+          req('http://10.0.3.17:3000/', { 'x-forwarded-host': 'acme.com' }),
+        ).source,
+      ).toBe('x-forwarded-host');
+      expect(
+        resolvePublicUrlDetailed(req('http://10.0.3.17:3000/', { host: 'acme.com' })).source,
+      ).toBe('host');
+      expect(resolvePublicUrlDetailed(req('http://10.0.3.17:3000/')).source).toBe('request-url');
     });
   });
 });

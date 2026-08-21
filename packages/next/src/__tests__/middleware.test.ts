@@ -337,6 +337,78 @@ describe('createTestaProxy', () => {
     });
   });
 
+  describe('debug tracing (`debug: true`)', () => {
+    const debugMw = () =>
+      createTestaProxy({ projectId: 'acme', config: splitUrlConfig(), debug: true });
+    const trace = (res: Response): Record<string, unknown> =>
+      JSON.parse(res.headers.get('x-testa-debug') ?? '{}');
+
+    it('emits no header (and no log) by default', async () => {
+      const res = await mw()(
+        request('https://acme.com/pricing', { cookie: `${ASSIGNMENT_COOKIE}=101.2.0.0` }),
+      );
+      expect(res.headers.get('x-testa-debug')).toBeNull();
+    });
+
+    it('traces a redirect decision: resolved URL, its source, assignment, target', async () => {
+      const res = await debugMw()(
+        request('https://acme.com/pricing', { cookie: `${ASSIGNMENT_COOKIE}=101.2.0.0` }),
+      );
+      expect(res.status).toBe(307);
+      expect(trace(res)).toMatchObject({
+        url: 'https://acme.com/pricing',
+        urlSource: 'request-url',
+        applied: [{ experiment: 101, variation: 2 }],
+        redirect: 'https://acme.com/pricing-v2',
+      });
+    });
+
+    it('traces a pass-through decision with the shield verdict', async () => {
+      const res = await debugMw()(
+        request('https://acme.com/pricing', { cookie: `${ASSIGNMENT_COOKIE}=101.1.0.0` }),
+      );
+      expect(trace(res)).toMatchObject({ url: 'https://acme.com/pricing', shield: false });
+      expect(trace(res)).not.toHaveProperty('redirect');
+    });
+
+    it('traces WHY a request was bypassed — the Server Action POST case', async () => {
+      const res = await debugMw()(
+        new NextRequest(new URL('https://acme.com/pricing'), { method: 'POST' }),
+      );
+      expect(trace(res)).toMatchObject({ bypass: 'method', method: 'POST' });
+    });
+
+    it('traces a path bypass and a no-config fail-open', async () => {
+      const asset = await debugMw()(request('https://acme.com/logo.png'));
+      expect(trace(asset)).toMatchObject({ bypass: 'path' });
+
+      const noConfig = createTestaProxy({
+        projectId: 'acme',
+        loadConfig: async () => null,
+        debug: true,
+      });
+      const res = await noConfig(request('https://acme.com/pricing'));
+      expect(trace(res)).toMatchObject({ bypass: 'no-config' });
+    });
+
+    it('traces the winning URL mechanism behind an ingress', async () => {
+      const res = await debugMw()(
+        new NextRequest(new URL('http://10.0.3.17:3000/pricing'), {
+          headers: new Headers({
+            cookie: `${ASSIGNMENT_COOKIE}=101.2.0.0`,
+            'x-forwarded-host': 'acme.com',
+            'x-forwarded-proto': 'https',
+          }),
+        }),
+      );
+      expect(trace(res)).toMatchObject({
+        url: 'https://acme.com/pricing',
+        urlSource: 'x-forwarded-host',
+        redirect: 'https://acme.com/pricing-v2',
+      });
+    });
+  });
+
   describe('public-URL resolution (container/ingress rewrites Host to an internal one)', () => {
     // The regression this fixes: split-URL rules target PUBLIC URLs, so a
     // request whose Host was rewritten by istio/ingress would never match.

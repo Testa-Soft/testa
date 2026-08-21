@@ -356,6 +356,52 @@ cookie discovery, redirect `Location`s, and exposure-tracking URLs.
 > own `x-testa-host` / `X-Forwarded-Host` should strip client-sent values, as
 > proxies conventionally do for forwarded headers.
 
+## Debugging (`debug: true`)
+
+When an experiment doesn't fire and you can't tell why, turn on tracing:
+
+```ts
+export const middleware = createTestaProxy({
+  projectId: '3fa85f64e1c2b',
+  debug: true, // or set TESTA_DEBUG=1 — no code change
+});
+```
+
+Every request then emits ONE compact JSON decision trace, in two places:
+
+- a **`[testa] {…}` console line** — Vercel function logs, `next start`
+  stdout, your pod's logs;
+- an **`x-testa-debug` response header** — open the browser network tab (or
+  `curl -sI https://acme.com/pricing`) and read the decision right off the
+  response, no log access needed.
+
+What it answers:
+
+```jsonc
+// why did nothing happen? → the proxy never saw it as a page
+{"url":"https://acme.com/pricing","bypass":"method","method":"POST"}
+{"url":"https://acme.com/logo.png","bypass":"path"}
+{"url":"https://acme.com/pricing","urlSource":"host","bypass":"no-config"}
+
+// what URL did targeting actually run against, and which mechanism produced it?
+{"url":"https://acme.com/pricing","urlSource":"x-forwarded-host",
+ "visitor":"9f2…","configHash":"hash-1",
+ "applied":[{"experiment":101,"variation":2,"first":true}],
+ "redirect":"https://acme.com/pricing-v2"}
+
+// pass-through: assignment + whether the anti-flicker shield was raised
+{"url":"https://acme.com/pricing","urlSource":"request-url",
+ "applied":[{"experiment":101,"variation":1,"first":false}],"shield":false}
+```
+
+`urlSource` is the winning mechanism from
+[public-URL resolution](#behind-a-proxy--ingress-k8s-istio-cdn): `option`,
+`x-testa-host`, `forwarded`, `x-forwarded-host`, `host`, or `request-url`.
+
+> Don't leave `debug` on in production: the header exposes experiment
+> internals (experiment/variation ids, visitor id) to anyone who can see the
+> response.
+
 ## API reference
 
 ### `createTestaProxy(options)`
@@ -375,6 +421,7 @@ Returns a Next.js middleware function. Import from `@testa-soft/next`.
 | `cookieDomain`       | `string`                                       | —                                    | Explicit cookie `Domain` for cross-subdomain tracking (e.g. `.example.com`). Wins over `discoverRootDomain`.     |
 | `discoverRootDomain` | `boolean`                                      | `false`                              | Auto-derive the registrable domain from the request host for cookies.                                        |
 | `publicHost`         | `string \| (req) => string \| null`           | —                                    | The site's **public** host (`'www.acme.com'` or `'https://www.acme.com'`) when your ingress rewrites `Host` — see [Behind a proxy / ingress](#behind-a-proxy--ingress-k8s-istio-cdn). Also settable via the `TESTA_PUBLIC_HOST` env var. |
+| `debug`              | `boolean`                                      | `false`                              | Per-request decision trace: a `[testa] {…}` console line + an `x-testa-debug` response header — see [Debugging](#debugging-debug-true). Also settable via the `TESTA_DEBUG=1` env var. |
 | `tracking`           | `boolean`                                      | `true`                               | Emit exposures (impressions) so experiment results populate. Set `false` for redirects-only, or if a pixel owns tracking. |
 | `trackingHost`       | `string`                                       | `https://new.testa-soft.tech`        | Host for exposure tracking (`{trackingHost}/api/leads`). Also settable via the `TESTA_TRACKING_HOST` env var. |
 | `skipPaths`          | `(string \| RegExp)[]`                         | —                                    | Extra paths to pass through untouched, on top of the built-in filter (`/_next/*`, `/api/*`, `/.well-known/*`, asset extensions). Strings match as segment-aligned prefixes (`'/admin'` matches `/admin/users`, not `/administrator`); RegExps test the pathname. |
