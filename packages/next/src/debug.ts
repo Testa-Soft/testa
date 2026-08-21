@@ -24,11 +24,15 @@ export interface DebugTrace {
   /** Which mechanism produced the public host — see url-resolver.ts. */
   urlSource?: string;
   /** Why the request was passed through untouched, when it was. */
-  bypass?: 'method' | 'path' | 'no-config';
+  bypass?: 'method' | 'path' | 'bot' | 'no-config';
   /** Request method, included on method bypasses. */
   method?: string;
-  /** Prefetch trap: decision computed (and maybe redirected) but never committed. */
-  prefetch?: boolean;
+  /**
+   * Compute-but-never-commit requests: an App-Router/Speculation-Rules
+   * prefetch, or a HEAD (curl -I, uptime monitors). A redirect may still be
+   * returned, but no cookie is written and no exposure fires.
+   */
+  speculative?: 'prefetch' | 'head';
   visitor?: string;
   configHash?: string;
   applied?: ReadonlyArray<{ experiment: number; variation: number; first: boolean }>;

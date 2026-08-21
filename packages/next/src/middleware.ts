@@ -21,6 +21,7 @@ import {
 } from '@testa-soft/experiment-core';
 import { NextRequest, NextResponse } from 'next/server';
 import type { NextFetchEvent } from 'next/server';
+import { isCrawlerUserAgent } from './bot.ts';
 import { applyRequestHeaders, isRedirect, toNextResponse } from './compose.ts';
 import { ConfigClient, type ConfigSource } from './config.ts';
 import { DEFAULT_CONFIG_HOST, DEFAULT_TRACKING_HOST, SHIELD_HEADER, readEnv } from './constants.ts';
@@ -89,6 +90,16 @@ export interface TestaProxyOptions extends ConfigSource {
    * production; the header exposes experiment internals.
    */
   debug?: boolean;
+  /**
+   * Skip experiments for crawlers, scripts, and monitors (user-agent based —
+   * Googlebot, curl, HeadlessChrome, UptimeRobot, …). Default true: bots get
+   * a clean pass-through — no assignment cookies, no redirects, no exposures —
+   * so they never inflate visitor counts or skew results, and search engines
+   * consistently see the control. Set false to treat them as visitors.
+   * NOTE: this means `curl` shows control unless you send a browser UA
+   * (`curl -A 'Mozilla/5.0 …'`); the `debug` trace marks these `bypass: bot`.
+   */
+  skipBots?: boolean;
   /**
    * Server-side hook, fired for each variation the visitor is assigned on a
    * request (control + variant) — e.g. capture the exposure to PostHog server,
@@ -160,6 +171,7 @@ export function createTestaProxy(options: TestaProxyOptions): TestaProxy {
   const emitDebug = createDebugEmitter(
     options.debug ?? envDebugEnabled(readEnv('TESTA_DEBUG')),
   );
+  const skipBots = options.skipBots ?? true;
 
   return async function testaMiddleware(
     req: NextRequest,
@@ -180,6 +192,15 @@ export function createTestaProxy(options: TestaProxyOptions): TestaProxy {
         bypass: isDocumentMethod(req.method) ? 'path' : 'method',
         method: req.method,
       });
+      return res;
+    }
+
+    // Crawlers/scripts/monitors are never experiment traffic: no assignment,
+    // no redirect, no exposure — they'd inflate visitor counts and skew
+    // results, and search engines should consistently see the control.
+    if (skipBots && isCrawlerUserAgent(req.headers.get('user-agent'))) {
+      const res = await delegate(options.handler, req, event);
+      emitDebug?.(res, { url: req.url, bypass: 'bot' });
       return res;
     }
 
@@ -212,12 +233,20 @@ export function createTestaProxy(options: TestaProxyOptions): TestaProxy {
       return res;
     }
 
-    // Soft-nav M1 prefetch trap: App Router prefetches `<Link>` targets (RSC
-    // requests) on hover/viewport. We compute the decision but NEVER commit —
-    // redirect the prefetch to the variant (warming the variant RSC into the
-    // router cache so the click is flash-free) without writing any cookie or
-    // emitting an exposure. See soft-nav/prefetch-guard.ts + rsc-redirect.ts.
-    if (isPrefetchRequest(req)) {
+    // Speculative loads — compute the decision but NEVER commit (no cookie,
+    // no exposure), while still returning the redirect:
+    //   - prefetches: App Router `<Link>` RSC prefetches AND Speculation-Rules
+    //     full-document prefetch/prerenders (Sec-Purpose) — redirecting them
+    //     warms the variant so the real navigation is flash-free;
+    //   - HEAD: curl -I / uptime monitors see the true redirect behavior
+    //     without minting visitors or firing exposures.
+    // See soft-nav/prefetch-guard.ts + rsc-redirect.ts.
+    const speculative = isPrefetchRequest(req)
+      ? ('prefetch' as const)
+      : req.method === 'HEAD'
+        ? ('head' as const)
+        : undefined;
+    if (speculative) {
       const redirectTo = computePrefetchRedirect(
         {
           config,
@@ -238,7 +267,7 @@ export function createTestaProxy(options: TestaProxyOptions): TestaProxy {
       emitDebug?.(res, {
         url: publicUrl.href,
         urlSource,
-        prefetch: true,
+        speculative,
         ...(redirectTo ? { redirect: redirectTo } : {}),
       });
       return res;

@@ -15,6 +15,7 @@ export { hasPendingDomChange, resolveExposures } from '@testa-soft/experiment-co
 export type { Exposure } from '@testa-soft/experiment-core';
 export type { TestaProxy, TestaProxyOptions, VariationHookContext } from './middleware.ts';
 export { isDocumentMethod, shouldBypassRequest } from './request-filter.ts';
+export { isCrawlerUserAgent } from './bot.ts';
 export type { SkipPath } from './request-filter.ts';
 export type { TestaHandler } from './middleware.ts';
 // For OUTER wrappers (your middleware calls the testa proxy): safely add your

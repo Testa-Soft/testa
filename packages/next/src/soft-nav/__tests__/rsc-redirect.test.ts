@@ -27,6 +27,15 @@ describe('request detection', () => {
     expect(isPrefetchRequest(headers({ purpose: 'prefetch' }))).toBe(true);
     expect(isPrefetchRequest(headers({ rsc: '1' }))).toBe(false);
   });
+
+  it('isPrefetchRequest true for Chrome Speculation Rules (Sec-Purpose)', () => {
+    // Full-document prefetch/prerender — committing an assignment + exposure
+    // here would count a page the visitor may never see.
+    expect(isPrefetchRequest(headers({ 'sec-purpose': 'prefetch' }))).toBe(true);
+    expect(isPrefetchRequest(headers({ 'sec-purpose': 'prefetch;prerender' }))).toBe(true);
+    expect(isPrefetchRequest(headers({ 'sec-purpose': 'Prefetch;Prerender' }))).toBe(true);
+    expect(isPrefetchRequest(headers({ 'sec-purpose': 'anonymous-prefetch' }))).toBe(true);
+  });
 });
 
 describe('computePrefetchRedirect — compute but do not commit', () => {

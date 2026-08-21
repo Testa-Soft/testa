@@ -16,6 +16,8 @@
  *   3. RFC 7239 `Forwarded` (`host=` / `proto=` of the first element).
  *   4. `X-Forwarded-Host` / `X-Forwarded-Proto` (first value of each list).
  *   5. The `Host` header, then the request URL as-is.
+ * `X-Forwarded-Port` (first value, 1–65535) fills in the port whenever the
+ * winning host doesn't carry one of its own.
  *
  * Host and proto resolve independently through the same chain, so a bare
  * `publicHost: 'www.acme.com'` still picks up `https` from the forwarded
@@ -44,7 +46,20 @@ const HOST_RE =
 
 function validHost(value: string | null | undefined): string | undefined {
   const host = value?.trim().toLowerCase();
-  return host && HOST_RE.test(host) ? host : undefined;
+  if (!host || !HOST_RE.test(host)) return undefined;
+  // An out-of-range port rejects THIS candidate (falls through to the next
+  // mechanism) instead of blowing up URL construction later and discarding a
+  // perfectly valid hostname along with it.
+  const port = /:(\d{1,5})$/.exec(host)?.[1];
+  return port === undefined || validPort(port) ? host : undefined;
+}
+
+/** A syntactically valid TCP port (1–65535), or undefined. */
+function validPort(value: string | null | undefined): string | undefined {
+  const port = value?.trim();
+  if (!port || !/^\d{1,5}$/.test(port)) return undefined;
+  const n = Number(port);
+  return n >= 1 && n <= 65535 ? port : undefined;
 }
 
 function validProto(value: string | null | undefined): string | undefined {
@@ -127,8 +142,16 @@ export function resolvePublicUrlDetailed<R extends PublicUrlRequest>(
     [validHost(req.headers.get('host')), 'host'],
   ];
   const winner = hostCandidates.find(([candidate]) => candidate !== undefined);
-  const host = winner?.[0] ?? url.host;
+  const bareHost = winner?.[0] ?? url.host;
   const source: PublicUrlSource = winner?.[1] ?? 'request-url';
+
+  // `X-Forwarded-Port` (nginx et al. send it alongside a portless
+  // X-Forwarded-Host) — only when the winning host carries no port of its
+  // own. Default ports (443+https / 80+http) normalize away in the URL.
+  const forwardedPort = /:\d{1,5}$/.test(bareHost)
+    ? undefined
+    : validPort(firstValue(req.headers.get('x-forwarded-port')));
+  const host = forwardedPort ? `${bareHost}:${forwardedPort}` : bareHost;
 
   const proto =
     explicit.proto ??

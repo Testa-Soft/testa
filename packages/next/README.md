@@ -37,10 +37,14 @@ config host (`https://config.testa-soft.tech/api/v1/config/{projectId}`).
 
 The proxy is safe on **every** request out of the box: it internally passes
 through `/_next/*`, `/api/*`, `/.well-known/*`, static-asset files (images,
-fonts, scripts, `robots.txt`, …), and **all non-GET/HEAD requests** (Server
+fonts, scripts, `robots.txt`, …), **all non-GET/HEAD requests** (Server
 Actions and form submits POST to the page URL — redirecting them would break
-the action) without touching cookies, fetching config, or emitting exposures —
-no `matcher` needed for correctness.
+the action), and **crawlers/scripts/monitors** (Googlebot, curl,
+HeadlessChrome, UptimeRobot, … — see `skipBots`) without touching cookies,
+fetching config, or emitting exposures — no `matcher` needed for correctness.
+Prefetches (App Router `<Link>`, Chrome Speculation Rules) and HEAD requests
+get the real redirect but never commit: no cookie is written and no exposure
+fires for a page the visitor may never actually see.
 
 ### Optional: skip invocations with a `matcher`
 
@@ -320,6 +324,9 @@ host and scheme resolve independently, and malformed values fall through):
 4. **`X-Forwarded-Host`** / **`X-Forwarded-Proto`** (first value of each list).
 5. The `Host` header, then the request URL as-is.
 
+`X-Forwarded-Port` (first value, 1–65535) fills in the port whenever the
+winning host doesn't carry one of its own; default ports normalize away.
+
 Most reverse proxies (nginx ingress, traefik, Cloudflare) already send
 `X-Forwarded-Host`/`-Proto`, so usually **it just works with no config**. If
 yours doesn't (or istio overwrites them), pin it explicitly:
@@ -381,6 +388,7 @@ What it answers:
 // why did nothing happen? → the proxy never saw it as a page
 {"url":"https://acme.com/pricing","bypass":"method","method":"POST"}
 {"url":"https://acme.com/logo.png","bypass":"path"}
+{"url":"https://acme.com/pricing","bypass":"bot"}   // crawler/script UA — curl included!
 {"url":"https://acme.com/pricing","urlSource":"host","bypass":"no-config"}
 
 // what URL did targeting actually run against, and which mechanism produced it?
@@ -422,6 +430,7 @@ Returns a Next.js middleware function. Import from `@testa-soft/next`.
 | `discoverRootDomain` | `boolean`                                      | `false`                              | Auto-derive the registrable domain from the request host for cookies.                                        |
 | `publicHost`         | `string \| (req) => string \| null`           | —                                    | The site's **public** host (`'www.acme.com'` or `'https://www.acme.com'`) when your ingress rewrites `Host` — see [Behind a proxy / ingress](#behind-a-proxy--ingress-k8s-istio-cdn). Also settable via the `TESTA_PUBLIC_HOST` env var. |
 | `debug`              | `boolean`                                      | `false`                              | Per-request decision trace: a `[testa] {…}` console line + an `x-testa-debug` response header — see [Debugging](#debugging-debug-true). Also settable via the `TESTA_DEBUG=1` env var. |
+| `skipBots`           | `boolean`                                      | `true`                               | Skip experiments for crawlers/scripts/monitors (UA-based): clean pass-through, no cookies, no redirect, no exposures. Note `curl` counts as a bot — send a browser UA (`curl -A 'Mozilla/5.0 …'`) to see experiment behavior. |
 | `tracking`           | `boolean`                                      | `true`                               | Emit exposures (impressions) so experiment results populate. Set `false` for redirects-only, or if a pixel owns tracking. |
 | `trackingHost`       | `string`                                       | `https://new.testa-soft.tech`        | Host for exposure tracking (`{trackingHost}/api/leads`). Also settable via the `TESTA_TRACKING_HOST` env var. |
 | `skipPaths`          | `(string \| RegExp)[]`                         | —                                    | Extra paths to pass through untouched, on top of the built-in filter (`/_next/*`, `/api/*`, `/.well-known/*`, asset extensions). Strings match as segment-aligned prefixes (`'/admin'` matches `/admin/users`, not `/administrator`); RegExps test the pathname. |

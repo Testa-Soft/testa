@@ -30,11 +30,16 @@ export function isRscRequest(req: RequestLike): boolean {
 }
 
 /**
- * True for a prefetch warm-up — App Router (`Next-Router-Prefetch: 1`) or the
- * generic `Purpose: prefetch` hint. Checked BEFORE {@link isRscRequest} so a
- * prefetched RSC request is treated as a prefetch (compute, never commit).
+ * True for a prefetch warm-up — App Router (`Next-Router-Prefetch: 1`), the
+ * legacy `Purpose: prefetch` hint, or Chrome Speculation Rules (`Sec-Purpose:
+ * prefetch` / `prefetch;prerender`, which Next.js full-page prefetches use —
+ * a FULL DOCUMENT request for a page the visitor may never see, so committing
+ * an assignment or exposure on it would skew results). Checked BEFORE
+ * {@link isRscRequest} so a prefetched RSC request is treated as a prefetch
+ * (compute, never commit).
  */
 export function isPrefetchRequest(req: RequestLike): boolean {
   const h = req.headers;
-  return h.get('next-router-prefetch') === '1' || h.get('purpose') === 'prefetch';
+  if (h.get('next-router-prefetch') === '1' || h.get('purpose') === 'prefetch') return true;
+  return (h.get('sec-purpose') ?? '').toLowerCase().includes('prefetch');
 }

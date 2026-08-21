@@ -149,6 +149,73 @@ describe('resolvePublicUrl', () => {
     });
   });
 
+  describe('X-Forwarded-Port', () => {
+    it('applies the forwarded port when the winning host has none', () => {
+      const url = resolvePublicUrl(
+        req('http://10.0.3.17:3000/pricing', {
+          'x-forwarded-host': 'staging.acme.com',
+          'x-forwarded-proto': 'https',
+          'x-forwarded-port': '8443',
+        }),
+      );
+      expect(url.href).toBe('https://staging.acme.com:8443/pricing');
+    });
+
+    it('never overrides an explicit port on the forwarded host', () => {
+      const url = resolvePublicUrl(
+        req('http://10.0.3.17:3000/', {
+          'x-forwarded-host': 'staging.acme.com:9443',
+          'x-forwarded-port': '8443',
+        }),
+      );
+      expect(url.host).toBe('staging.acme.com:9443');
+    });
+
+    it('normalizes the default port away (443 + https)', () => {
+      const url = resolvePublicUrl(
+        req('http://10.0.3.17:3000/', {
+          'x-forwarded-host': 'www.acme.com',
+          'x-forwarded-proto': 'https',
+          'x-forwarded-port': '443',
+        }),
+      );
+      expect(url.port).toBe('');
+      expect(url.href).toBe('https://www.acme.com/');
+    });
+
+    it('uses the FIRST value of a comma-separated port list', () => {
+      const url = resolvePublicUrl(
+        req('http://10.0.3.17:3000/', {
+          'x-forwarded-host': 'www.acme.com',
+          'x-forwarded-port': '8443, 443',
+        }),
+      );
+      expect(url.host).toBe('www.acme.com:8443');
+    });
+
+    it('ignores an out-of-range or malformed forwarded port', () => {
+      for (const port of ['99999', '0', 'abc']) {
+        const url = resolvePublicUrl(
+          req('http://10.0.3.17:3000/', {
+            'x-forwarded-host': 'www.acme.com',
+            'x-forwarded-port': port,
+          }),
+        );
+        expect(url.host, `port=${port}`).toBe('www.acme.com');
+      }
+    });
+
+    it('rejects a HOST candidate with an out-of-range port instead of discarding the whole resolution', () => {
+      const url = resolvePublicUrl(
+        req('http://10.0.3.17:3000/', {
+          'x-forwarded-host': 'evil.acme.com:99999',
+          host: 'www.acme.com',
+        }),
+      );
+      expect(url.host).toBe('www.acme.com');
+    });
+  });
+
   describe('resolvePublicUrlDetailed (which mechanism won — surfaced by debug tracing)', () => {
     it('labels each source', () => {
       expect(resolvePublicUrlDetailed(req('http://10.0.3.17:3000/'), 'acme.com').source).toBe(

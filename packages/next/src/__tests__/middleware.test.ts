@@ -326,7 +326,9 @@ describe('createTestaProxy', () => {
       expect(sawMethod).toBe('POST');
     });
 
-    it('treats HEAD like GET (still redirects a redirect-variation visitor)', async () => {
+    it('redirects HEAD for an assigned visitor but never commits (no Set-Cookie)', async () => {
+      // curl -I / uptime monitors: show the real redirect, but never mint a
+      // visitor or fire an exposure for a request that isn't a real pageview.
       const res = await mw()(
         new NextRequest(new URL('https://acme.com/pricing'), {
           method: 'HEAD',
@@ -334,6 +336,107 @@ describe('createTestaProxy', () => {
         }),
       );
       expect(res.status).toBe(307);
+      expect(res.headers.get('set-cookie')).toBeNull();
+    });
+
+    it('passes a fresh visitor’s HEAD through without minting cookies', async () => {
+      const res = await mw()(
+        new NextRequest(new URL('https://acme.com/pricing'), { method: 'HEAD' }),
+      );
+      expect(res.status).not.toBe(307);
+      expect(res.headers.get('set-cookie')).toBeNull();
+    });
+  });
+
+  describe('speculative loads (Sec-Purpose) and crawlers never commit', () => {
+    it('warms a Speculation-Rules prefetch/prerender to the variant without committing', async () => {
+      const res = await mw()(
+        new NextRequest(new URL('https://acme.com/pricing'), {
+          headers: new Headers({
+            cookie: `${ASSIGNMENT_COOKIE}=101.2.0.0`,
+            'sec-purpose': 'prefetch;prerender',
+          }),
+        }),
+      );
+      expect(res.status).toBe(307);
+      expect(res.headers.get('location')).toContain('/pricing-v2');
+      expect(res.headers.get('set-cookie')).toBeNull();
+    });
+
+    const crawlerUa =
+      'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)';
+
+    it('bypasses a crawler entirely: no redirect, no cookies, no config fetch', async () => {
+      let configFetched = false;
+      const proxy = createTestaProxy({
+        projectId: 'acme',
+        loadConfig: async () => {
+          configFetched = true;
+          return splitUrlConfig();
+        },
+      });
+      const res = await proxy(
+        new NextRequest(new URL('https://acme.com/pricing'), {
+          headers: new Headers({
+            cookie: `${ASSIGNMENT_COOKIE}=101.2.0.0`,
+            'user-agent': crawlerUa,
+          }),
+        }),
+      );
+      expect(res.status).not.toBe(307);
+      expect(res.headers.get('set-cookie')).toBeNull();
+      expect(configFetched).toBe(false);
+    });
+
+    it('traces the bot bypass when debug is on', async () => {
+      const proxy = createTestaProxy({
+        projectId: 'acme',
+        config: splitUrlConfig(),
+        debug: true,
+      });
+      const res = await proxy(
+        new NextRequest(new URL('https://acme.com/pricing'), {
+          headers: new Headers({ 'user-agent': crawlerUa }),
+        }),
+      );
+      expect(JSON.parse(res.headers.get('x-testa-debug') ?? '{}')).toMatchObject({
+        bypass: 'bot',
+      });
+    });
+
+    it('skipBots: false opts back into treating crawlers as visitors', async () => {
+      const proxy = createTestaProxy({
+        projectId: 'acme',
+        config: splitUrlConfig(),
+        skipBots: false,
+      });
+      const res = await proxy(
+        new NextRequest(new URL('https://acme.com/pricing'), {
+          headers: new Headers({
+            cookie: `${ASSIGNMENT_COOKIE}=101.2.0.0`,
+            'user-agent': crawlerUa,
+          }),
+        }),
+      );
+      expect(res.status).toBe(307);
+    });
+
+    it('still runs the composed handler for a crawler (bypass stays transparent)', async () => {
+      let sawUa: string | null = null;
+      const proxy = createTestaProxy({
+        projectId: 'acme',
+        config: splitUrlConfig(),
+        handler: (req) => {
+          sawUa = req.headers.get('user-agent');
+          return NextResponse.next();
+        },
+      });
+      await proxy(
+        new NextRequest(new URL('https://acme.com/pricing'), {
+          headers: new Headers({ 'user-agent': crawlerUa }),
+        }),
+      );
+      expect(sawUa).toBe(crawlerUa);
     });
   });
 
