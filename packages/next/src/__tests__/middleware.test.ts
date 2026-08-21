@@ -276,6 +276,67 @@ describe('createTestaProxy', () => {
     });
   });
 
+  describe('non-GET requests (Server Actions, form posts) are never experiment traffic', () => {
+    // The regression this fixes: a Server Action POSTs to the CURRENT page URL;
+    // a matching split-URL rule 307-redirected the POST (307 preserves the
+    // method), breaking the action — the visitor just stayed on the page.
+    const post = (headers: Record<string, string> = {}): NextRequest =>
+      new NextRequest(new URL('https://acme.com/pricing'), {
+        method: 'POST',
+        headers: new Headers({ cookie: `${ASSIGNMENT_COOKIE}=101.2.0.0`, ...headers }),
+      });
+
+    it('passes a POST through untouched even when a redirect rule matches (no 307, no cookies)', async () => {
+      const res = await mw()(post());
+      expect(res.status).not.toBe(307);
+      expect(res.headers.get('location')).toBeNull();
+      expect(res.headers.get('set-cookie')).toBeNull();
+    });
+
+    it('passes a Server Action POST (next-action header) through untouched', async () => {
+      const res = await mw()(post({ 'next-action': 'abc123' }));
+      expect(res.status).not.toBe(307);
+      expect(res.headers.get('set-cookie')).toBeNull();
+    });
+
+    it('never fetches config for a POST', async () => {
+      let configFetched = false;
+      const proxy = createTestaProxy({
+        projectId: 'acme',
+        loadConfig: async () => {
+          configFetched = true;
+          return splitUrlConfig();
+        },
+      });
+      await proxy(post());
+      expect(configFetched).toBe(false);
+    });
+
+    it('still runs the composed handler on a POST (bypass stays transparent)', async () => {
+      let sawMethod: string | undefined;
+      const proxy = createTestaProxy({
+        projectId: 'acme',
+        config: splitUrlConfig(),
+        handler: (req) => {
+          sawMethod = req.method;
+          return NextResponse.next();
+        },
+      });
+      await proxy(post());
+      expect(sawMethod).toBe('POST');
+    });
+
+    it('treats HEAD like GET (still redirects a redirect-variation visitor)', async () => {
+      const res = await mw()(
+        new NextRequest(new URL('https://acme.com/pricing'), {
+          method: 'HEAD',
+          headers: new Headers({ cookie: `${ASSIGNMENT_COOKIE}=101.2.0.0` }),
+        }),
+      );
+      expect(res.status).toBe(307);
+    });
+  });
+
   describe('public-URL resolution (container/ingress rewrites Host to an internal one)', () => {
     // The regression this fixes: split-URL rules target PUBLIC URLs, so a
     // request whose Host was rewritten by istio/ingress would never match.

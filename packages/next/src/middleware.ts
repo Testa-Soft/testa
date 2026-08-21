@@ -26,7 +26,7 @@ import { ConfigClient, type ConfigSource } from './config.ts';
 import { DEFAULT_CONFIG_HOST, DEFAULT_TRACKING_HOST, SHIELD_HEADER, readEnv } from './constants.ts';
 import { NextCookieStore } from './cookie-store.ts';
 import { resolveCookieDomain } from './domain.ts';
-import { type SkipPath, shouldBypassRequest } from './request-filter.ts';
+import { type SkipPath, isDocumentMethod, shouldBypassRequest } from './request-filter.ts';
 import { computePrefetchRedirect } from './soft-nav/prefetch-guard.ts';
 import { isPrefetchRequest } from './soft-nav/rsc-redirect.ts';
 import { emitExposure } from './tracking.ts';
@@ -152,10 +152,14 @@ export function createTestaProxy(options: TestaProxyOptions): TestaProxy {
     event?: NextFetchEvent,
   ): Promise<NextResponse> {
     // Blackbox safety net, BEFORE any config fetch or cookie work: never treat
-    // assets / framework internals / API routes as pages, so the proxy is
-    // correct even with no `config.matcher` at all (the matcher is then purely
-    // a cost optimization — it skips the edge invocation entirely).
-    if (shouldBypassRequest(new URL(req.url).pathname, options.skipPaths)) {
+    // assets / framework internals / API routes — or non-GET/HEAD requests
+    // (Server Actions / form posts hit the page URL with POST) — as pages, so
+    // the proxy is correct even with no `config.matcher` at all (the matcher
+    // is then purely a cost optimization — it skips the edge invocation).
+    if (
+      !isDocumentMethod(req.method) ||
+      shouldBypassRequest(new URL(req.url).pathname, options.skipPaths)
+    ) {
       return delegate(options.handler, req, event);
     }
 

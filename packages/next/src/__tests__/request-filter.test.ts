@@ -4,7 +4,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { shouldBypassRequest } from '../request-filter.ts';
+import { isDocumentMethod, shouldBypassRequest } from '../request-filter.ts';
 
 describe('shouldBypassRequest', () => {
   it.each([
@@ -55,5 +55,15 @@ describe('shouldBypassRequest', () => {
   it('bypasses custom skipPaths regexes', () => {
     expect(shouldBypassRequest('/de/pricing', [/^\/(de|fr)\//])).toBe(true);
     expect(shouldBypassRequest('/pricing', [/^\/(de|fr)\//])).toBe(false);
+  });
+});
+
+describe('isDocumentMethod', () => {
+  it('allows only GET and HEAD', () => {
+    expect(isDocumentMethod('GET')).toBe(true);
+    expect(isDocumentMethod('HEAD')).toBe(true);
+    for (const method of ['POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS']) {
+      expect(isDocumentMethod(method)).toBe(false);
+    }
   });
 });

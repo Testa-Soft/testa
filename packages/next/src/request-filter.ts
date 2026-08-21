@@ -64,6 +64,18 @@ const ASSET_EXTENSIONS = new Set([
 export type SkipPath = string | RegExp;
 
 /**
+ * True for the only methods that can be a visitor-facing document load.
+ * Everything else must pass through untouched: Server Actions and form
+ * submits POST to the CURRENT page URL, so a matching split-URL rule would
+ * 307-redirect the POST (307 preserves the method) and break the action —
+ * the visitor just stays on the page. Method comparison is case-sensitive
+ * per the fetch spec (methods are normalized to uppercase).
+ */
+export function isDocumentMethod(method: string): boolean {
+  return method === 'GET' || method === 'HEAD';
+}
+
+/**
  * True when the middleware must pass this request through untouched — it is a
  * framework/API/asset request (or matches a caller-supplied skip rule), not a
  * page a visitor sees.

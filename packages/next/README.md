@@ -36,9 +36,11 @@ just `projectId`, the package fetches your project config from the built-in
 config host (`https://config.testa-soft.tech/api/v1/config/{projectId}`).
 
 The proxy is safe on **every** request out of the box: it internally passes
-through `/_next/*`, `/api/*`, `/.well-known/*`, and static-asset files (images,
-fonts, scripts, `robots.txt`, …) without touching cookies, fetching config, or
-emitting exposures — no `matcher` needed for correctness.
+through `/_next/*`, `/api/*`, `/.well-known/*`, static-asset files (images,
+fonts, scripts, `robots.txt`, …), and **all non-GET/HEAD requests** (Server
+Actions and form submits POST to the page URL — redirecting them would break
+the action) without touching cookies, fetching config, or emitting exposures —
+no `matcher` needed for correctness.
 
 ### Optional: skip invocations with a `matcher`
 
