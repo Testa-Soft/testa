@@ -51,3 +51,8 @@ export type { ReadableCookies, WritableCookies, NextCookieStoreOptions } from '.
 export { ensureVisitorId } from './uuid.ts';
 export { rootDomainOf, resolveCookieDomain } from './domain.ts';
 export type { CookieDomainOptions } from './domain.ts';
+// Public-URL resolution for container/ingress stacks that rewrite `Host` —
+// see url-resolver.ts for the resolution chain and the x-testa-host escape hatch.
+export { resolvePublicUrl } from './url-resolver.ts';
+export type { PublicHostOption, PublicUrlRequest } from './url-resolver.ts';
+export { PUBLIC_HOST_HEADER, PUBLIC_PROTO_HEADER } from './constants.ts';

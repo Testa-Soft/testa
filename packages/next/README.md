@@ -300,6 +300,60 @@ the guard fires — both read the one cookie.
 > experiments on soft navigation, and the middleware handles split-URL
 > redirects (including a prefetch-safe path for `<Link>` prefetches).
 
+## Behind a proxy / ingress (k8s, istio, CDN)
+
+On Vercel the middleware sees the real public URL. On self-hosted stacks the
+ingress/mesh layer (k8s ingress, istio sidecars, a CDN in front) often rewrites
+`Host` before the request reaches Next.js, so the middleware sees an internal
+URL like `http://10.0.3.17:3000/pricing`. Split-URL rules target **public**
+URLs, so experiments would silently never match.
+
+The proxy recovers the public URL through this chain (first valid value wins;
+host and scheme resolve independently, and malformed values fall through):
+
+1. **`publicHost` option / `TESTA_PUBLIC_HOST` env** — explicit, always wins.
+2. **`x-testa-host`** (+ optional **`x-testa-proto`**) request headers — set
+   them at the ingress when it mangles `Host` and you can't change app code.
+3. **`Forwarded`** (RFC 7239, `host=`/`proto=` of the first element).
+4. **`X-Forwarded-Host`** / **`X-Forwarded-Proto`** (first value of each list).
+5. The `Host` header, then the request URL as-is.
+
+Most reverse proxies (nginx ingress, traefik, Cloudflare) already send
+`X-Forwarded-Host`/`-Proto`, so usually **it just works with no config**. If
+yours doesn't (or istio overwrites them), pin it explicitly:
+
+```ts
+export const middleware = createTestaProxy({
+  projectId: '3fa85f64e1c2b',
+  publicHost: 'https://www.acme.com', // or bare host: 'www.acme.com'
+});
+```
+
+or per-request (multi-tenant):
+
+```ts
+publicHost: (req) => req.headers.get('x-tenant-host'),
+```
+
+or with zero code changes, via env (`TESTA_PUBLIC_HOST=https://www.acme.com`)
+or by injecting the header at the ingress (istio `VirtualService` example):
+
+```yaml
+http:
+  - headers:
+      request:
+        set:
+          x-testa-host: www.acme.com
+          x-testa-proto: https
+```
+
+The resolved public URL drives experiment URL matching, `discoverRootDomain`
+cookie discovery, redirect `Location`s, and exposure-tracking URLs.
+
+> Security note: forwarded headers are request headers. An ingress that doesn't
+> own `x-testa-host` / `X-Forwarded-Host` should strip client-sent values, as
+> proxies conventionally do for forwarded headers.
+
 ## API reference
 
 ### `createTestaProxy(options)`
@@ -318,13 +372,14 @@ Returns a Next.js middleware function. Import from `@testa-soft/next`.
 | `secureCookies`      | `boolean`                                      | `true`                               | Emit `Secure` cookies. Set `false` for local http dev.                                                       |
 | `cookieDomain`       | `string`                                       | —                                    | Explicit cookie `Domain` for cross-subdomain tracking (e.g. `.example.com`). Wins over `discoverRootDomain`.     |
 | `discoverRootDomain` | `boolean`                                      | `false`                              | Auto-derive the registrable domain from the request host for cookies.                                        |
+| `publicHost`         | `string \| (req) => string \| null`           | —                                    | The site's **public** host (`'www.acme.com'` or `'https://www.acme.com'`) when your ingress rewrites `Host` — see [Behind a proxy / ingress](#behind-a-proxy--ingress-k8s-istio-cdn). Also settable via the `TESTA_PUBLIC_HOST` env var. |
 | `tracking`           | `boolean`                                      | `true`                               | Emit exposures (impressions) so experiment results populate. Set `false` for redirects-only, or if a pixel owns tracking. |
 | `trackingHost`       | `string`                                       | `https://new.testa-soft.tech`        | Host for exposure tracking (`{trackingHost}/api/leads`). Also settable via the `TESTA_TRACKING_HOST` env var. |
 | `skipPaths`          | `(string \| RegExp)[]`                         | —                                    | Extra paths to pass through untouched, on top of the built-in filter (`/_next/*`, `/api/*`, `/.well-known/*`, asset extensions). Strings match as segment-aligned prefixes (`'/admin'` matches `/admin/users`, not `/administrator`); RegExps test the pathname. |
 | `handler`            | `(req, event) => Response \| null \| undefined \| Promise<…>` | —                     | Your own middleware logic, composed inside the proxy — see [Composing with your own middleware](#composing-with-your-own-middleware). |
 | `onVariationAssigned`| `(event, ctx) => void \| Promise<void>`       | —                                    | **Server-side** hook per assignment. `ctx.waitUntil(promise)` keeps async work (PostHog server, webhook) alive past the response — never delays it. Guard on `event.firstAssignment` for once-per-visitor. |
 
-Exported constants: `DEFAULT_CONFIG_HOST`, `DEFAULT_TRACKING_HOST`. Exported
+Exported constants: `DEFAULT_CONFIG_HOST`, `DEFAULT_TRACKING_HOST`, `PUBLIC_HOST_HEADER`, `PUBLIC_PROTO_HEADER`. Exported
 type: `VariationAppliedEvent` (the argument to `onVariationAssigned`).
 
 ## Analytics events (GA4 / GTM / PostHog / Segment)

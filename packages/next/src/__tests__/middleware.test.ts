@@ -275,4 +275,67 @@ describe('createTestaProxy', () => {
       expect(res.headers.get('set-cookie')).toBeNull();
     });
   });
+
+  describe('public-URL resolution (container/ingress rewrites Host to an internal one)', () => {
+    // The regression this fixes: split-URL rules target PUBLIC URLs, so a
+    // request whose Host was rewritten by istio/ingress would never match.
+    const internal = (headers: Record<string, string>): NextRequest =>
+      new NextRequest(new URL('http://10.0.3.17:3000/pricing'), {
+        headers: new Headers({ cookie: `${ASSIGNMENT_COOKIE}=101.2.0.0`, ...headers }),
+      });
+
+    it('does NOT match on the internal URL without any public-host signal (the bug)', async () => {
+      const res = await mw()(internal({}));
+      expect(res.status).not.toBe(307);
+    });
+
+    it('recovers the public URL from X-Forwarded-Host/Proto and redirects', async () => {
+      const res = await mw()(
+        internal({ 'x-forwarded-host': 'acme.com', 'x-forwarded-proto': 'https' }),
+      );
+      expect(res.status).toBe(307);
+      expect(res.headers.get('location')).toBe('https://acme.com/pricing-v2');
+    });
+
+    it('recovers the public URL from RFC 7239 Forwarded', async () => {
+      const res = await mw()(internal({ forwarded: 'for=192.0.2.60;proto=https;host=acme.com' }));
+      expect(res.status).toBe(307);
+      expect(res.headers.get('location')).toBe('https://acme.com/pricing-v2');
+    });
+
+    it('honors the x-testa-host escape hatch over mangled forwarded headers', async () => {
+      const res = await mw()(
+        internal({
+          'x-testa-host': 'acme.com',
+          'x-testa-proto': 'https',
+          'x-forwarded-host': 'svc.cluster.local',
+        }),
+      );
+      expect(res.status).toBe(307);
+      expect(res.headers.get('location')).toBe('https://acme.com/pricing-v2');
+    });
+
+    it('honors the explicit publicHost option with no headers at all', async () => {
+      const proxy = createTestaProxy({
+        projectId: 'acme',
+        config: splitUrlConfig(),
+        publicHost: 'https://acme.com',
+      });
+      const res = await proxy(internal({}));
+      expect(res.status).toBe(307);
+      expect(res.headers.get('location')).toBe('https://acme.com/pricing-v2');
+    });
+
+    it('uses the public hostname (not the internal one) for discoverRootDomain cookies', async () => {
+      const proxy = createTestaProxy({
+        projectId: 'acme',
+        config: splitUrlConfig(),
+        discoverRootDomain: true,
+      });
+      const res = await proxy(
+        internal({ 'x-forwarded-host': 'www.acme.com', 'x-forwarded-proto': 'https' }),
+      );
+      expect(res.headers.get('set-cookie') ?? '').toContain('Domain=acme.com');
+    });
+  });
 });

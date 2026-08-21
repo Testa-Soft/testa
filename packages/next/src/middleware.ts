@@ -30,6 +30,7 @@ import { type SkipPath, shouldBypassRequest } from './request-filter.ts';
 import { computePrefetchRedirect } from './soft-nav/prefetch-guard.ts';
 import { isPrefetchRequest } from './soft-nav/rsc-redirect.ts';
 import { emitExposure } from './tracking.ts';
+import { type PublicHostOption, resolvePublicUrl } from './url-resolver.ts';
 import { ensureVisitorId } from './uuid.ts';
 
 export type { VariationAppliedEvent };
@@ -66,6 +67,17 @@ export interface TestaProxyOptions extends ConfigSource {
   cookieDomain?: string;
   /** Auto-derive the registrable domain from the request host for cookies. */
   discoverRootDomain?: boolean;
+  /**
+   * The site's PUBLIC host, for topologies where the container/ingress layer
+   * (k8s, istio) rewrites `Host` before the request reaches Next.js and the
+   * proxy would otherwise see an internal URL (`pod-ip:3000`) — which makes
+   * split-URL targeting silently never match. Accepts `'www.acme.com'`,
+   * a full origin `'https://www.acme.com'`, or a per-request callback (e.g.
+   * multi-tenant). Env alternative: `TESTA_PUBLIC_HOST`. When unset, the
+   * public URL is recovered from `x-testa-host` / RFC 7239 `Forwarded` /
+   * `X-Forwarded-Host` + `X-Forwarded-Proto` headers, then `Host`.
+   */
+  publicHost?: string | ((req: NextRequest) => string | null | undefined);
   /**
    * Server-side hook, fired for each variation the visitor is assigned on a
    * request (control + variant) — e.g. capture the exposure to PostHog server,
@@ -132,6 +144,8 @@ export function createTestaProxy(options: TestaProxyOptions): TestaProxy {
     readEnv('TESTA_TRACKING_HOST') ??
     DEFAULT_TRACKING_HOST
   ).replace(/\/+$/, '');
+  const publicHost: PublicHostOption<NextRequest> | undefined =
+    options.publicHost ?? readEnv('TESTA_PUBLIC_HOST');
 
   return async function testaMiddleware(
     req: NextRequest,
@@ -145,7 +159,12 @@ export function createTestaProxy(options: TestaProxyOptions): TestaProxy {
       return delegate(options.handler, req, event);
     }
 
-    const cookieDomain = resolveCookieDomain(new URL(req.url).hostname, {
+    // The URL the VISITOR requested — `req.url` can carry an internal host on
+    // self-hosted container/ingress stacks (istio et al. rewrite `Host`), which
+    // would break split-URL targeting, cookie discovery, and redirect bases.
+    const publicUrl = resolvePublicUrl(req, publicHost);
+
+    const cookieDomain = resolveCookieDomain(publicUrl.hostname, {
       ...(options.cookieDomain ? { cookieDomain: options.cookieDomain } : {}),
       ...(options.discoverRootDomain ? { discoverRootDomain: true } : {}),
     });
@@ -174,7 +193,7 @@ export function createTestaProxy(options: TestaProxyOptions): TestaProxy {
       const redirectTo = computePrefetchRedirect(
         {
           config,
-          currentUrl: req.url,
+          currentUrl: publicUrl.href,
           visitorId: store.get(UUID_COOKIE),
           now: Date.now(),
           getCookie: (name) => store.get(name),
@@ -186,7 +205,7 @@ export function createTestaProxy(options: TestaProxyOptions): TestaProxy {
         store, // written into by the engine, then intentionally discarded (no applyTo)
       );
       return redirectTo
-        ? NextResponse.redirect(new URL(redirectTo, req.url), 307)
+        ? NextResponse.redirect(new URL(redirectTo, publicUrl), 307)
         : delegate(options.handler, req, event);
     }
 
@@ -194,7 +213,7 @@ export function createTestaProxy(options: TestaProxyOptions): TestaProxy {
     const result = runExperiments(
       {
         config,
-        currentUrl: req.url,
+        currentUrl: publicUrl.href,
         visitorId,
         now: Date.now(),
         getCookie: (name) => store.get(name),
@@ -227,7 +246,7 @@ export function createTestaProxy(options: TestaProxyOptions): TestaProxy {
     }
 
     if (result.redirectTo) {
-      const res = NextResponse.redirect(new URL(result.redirectTo, req.url), 307);
+      const res = NextResponse.redirect(new URL(result.redirectTo, publicUrl), 307);
       store.applyTo(res.cookies);
       return res;
     }
@@ -237,7 +256,7 @@ export function createTestaProxy(options: TestaProxyOptions): TestaProxy {
     // projects and pages with nothing to change get `0`, so `<TestaGuard/>`
     // never overlays needlessly. Passed as a request header the RSC layout reads
     // via `headers()`. Runs on soft-nav RSC requests too, so it stays per-page.
-    const shield = hasPendingDomChange(config, req.url, store.get(ASSIGNMENT_COOKIE));
+    const shield = hasPendingDomChange(config, publicUrl.href, store.get(ASSIGNMENT_COOKIE));
     const requestHeaders = new Headers(req.headers);
     requestHeaders.set(SHIELD_HEADER, shield ? '1' : '0');
 

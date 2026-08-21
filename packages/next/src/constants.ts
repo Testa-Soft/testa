@@ -21,6 +21,15 @@ export const DEFAULT_TRACKING_HOST = 'https://new.testa-soft.tech';
 export const SHIELD_HEADER = 'x-testa-shield';
 
 /**
+ * Escape-hatch request headers for topologies where the ingress/mesh (istio,
+ * k8s ingress) rewrites `Host` to something internal: set these AT THE INGRESS
+ * to hand the proxy the real public host (and optionally scheme) without any
+ * app-code change. They beat all standard forwarded headers — see url-resolver.ts.
+ */
+export const PUBLIC_HOST_HEADER = 'x-testa-host';
+export const PUBLIC_PROTO_HEADER = 'x-testa-proto';
+
+/**
  * Read a process env var without ever throwing (e.g. edge runtimes where
  * `process` is undefined or partially polyfilled). Returns undefined when
  * unavailable so callers fall back to their own defaults.
