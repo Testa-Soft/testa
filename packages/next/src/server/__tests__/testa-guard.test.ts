@@ -6,7 +6,7 @@ const holder: { get: (name: string) => string | null; throws: boolean } = {
   throws: false,
 };
 
-vi.mock('next/headers', () => ({
+vi.mock('next/headers.js', () => ({
   headers: async () => {
     if (holder.throws) throw new Error('outside request scope');
     return { get: holder.get };

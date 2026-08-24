@@ -17,7 +17,7 @@
  *   its own request-header overrides on top of testa's response.
  */
 
-import { NextResponse } from 'next/server';
+import { NextResponse } from 'next/server.js';
 
 const OVERRIDE_LIST_HEADER = 'x-middleware-override-headers';
 const OVERRIDE_VALUE_PREFIX = 'x-middleware-request-';

@@ -13,10 +13,20 @@
  * generation) `headers()` throws — we catch and render nothing (fail open, no
  * shield), which is correct: a statically rendered page has no per-visitor DOM
  * change to hide.
+ *
+ * The `.js` in the specifier is REQUIRED, not cosmetic. `next` ships no `exports`
+ * map (verified on 13.4 → 15.5), so a bare `next/headers` is resolved by Node's
+ * ESM resolver as a plain file path — and ESM does not guess extensions, so it
+ * fails with ERR_MODULE_NOT_FOUND ("Did you mean to import next/headers.js?").
+ * A consumer's bundler hides this (webpack/turbopack do guess extensions), but
+ * when the app puts us in `serverExternalPackages` /
+ * `experimental.serverComponentsExternalPackages`, Node loads this file directly
+ * and the bare specifier throws. Keep the extension on every `next/*` import in
+ * this package.
  */
 
 import { type ShieldOptions, buildShieldSnippet } from '@testa-soft/dom';
-import { headers } from 'next/headers';
+import { headers } from 'next/headers.js';
 import { SHIELD_HEADER } from '../constants.ts';
 
 export type TestaGuardProps = ShieldOptions;

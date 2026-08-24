@@ -19,8 +19,8 @@ import {
   hasPendingDomChange,
   runExperiments,
 } from '@testa-soft/experiment-core';
-import { NextRequest, NextResponse } from 'next/server';
-import type { NextFetchEvent } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server.js';
+import type { NextFetchEvent } from 'next/server.js';
 import { isCrawlerUserAgent } from './bot.ts';
 import { applyRequestHeaders, isRedirect, toNextResponse } from './compose.ts';
 import { ConfigClient, type ConfigSource } from './config.ts';

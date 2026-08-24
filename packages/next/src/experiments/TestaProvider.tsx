@@ -28,7 +28,7 @@ import {
   installTestaGlobal,
 } from '@testa-soft/dom';
 import { ASSIGNMENT_COOKIE, UUID_COOKIE, resolveExposures } from '@testa-soft/experiment-core';
-import { usePathname } from 'next/navigation';
+import { usePathname } from 'next/navigation.js';
 import { useEffect } from 'react';
 import { readClientCookie } from '../client-cookie.ts';
 import { DEFAULT_TRACKING_HOST } from '../constants.ts';

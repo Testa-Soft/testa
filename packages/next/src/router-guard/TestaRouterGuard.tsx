@@ -18,7 +18,7 @@
 
 import type { ProjectConfig } from '@testa-platform/shared-types';
 import { ASSIGNMENT_COOKIE } from '@testa-soft/experiment-core';
-import { useRouter } from 'next/router';
+import { useRouter } from 'next/router.js';
 import { useEffect } from 'react';
 import { readClientCookie } from '../client-cookie.ts';
 import { installRouterGuard } from './use-cookie-assignment.ts';
