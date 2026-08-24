@@ -5,7 +5,7 @@
  */
 
 import { ASSIGNMENT_COOKIE } from '@testa-soft/experiment-core';
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server.js';
 import { describe, expect, it } from 'vitest';
 import { createTestaProxy } from '../middleware.ts';
 import { splitUrlConfig } from './helpers.ts';

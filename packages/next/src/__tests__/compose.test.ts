@@ -5,7 +5,7 @@
  * internal x-middleware-* encoding).
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server.js';
 import { describe, expect, it } from 'vitest';
 import { applyRequestHeaders } from '../compose.ts';
 
