@@ -35,7 +35,7 @@
     "README.md"
   ],
   "scripts": {
-    "build": "rm -rf dist && tsup && node scripts/add-use-client.mjs",
+    "build": "rm -rf dist && tsup && node scripts/add-use-client.mjs && node scripts/verify-dist.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
