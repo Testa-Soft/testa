@@ -269,6 +269,22 @@ export function makeWaitUntil(
   };
 }
 
+/** Monotonic clock where available (edge + Node both have performance.now). */
+export function monotonicNowMs(): number {
+  return typeof performance !== 'undefined' ? performance.now() : Date.now();
+}
+
+/**
+ * Append testa's per-request cost as a `Server-Timing` entry (visible in the
+ * browser devtools waterfall and most APMs) — the verifiable latency contract
+ * behind the `timing` option. Appends rather than sets, so it composes with
+ * the app's own Server-Timing entries.
+ */
+export function appendServerTiming(headers: Headers, startMs: number): void {
+  const dur = Math.max(0, monotonicNowMs() - startMs);
+  headers.append('server-timing', `testa;dur=${dur.toFixed(2)}`);
+}
+
 /** Compact per-assignment summary for the debug trace. */
 function summarizeApplied(
   applied: ReadonlyArray<VariationAppliedEvent>,

@@ -25,8 +25,10 @@ import { SHIELD_HEADER, readEnv } from './constants.ts';
 import { createDebugEmitter, envDebugEnabled } from './debug.ts';
 import {
   type VariationHookContext,
+  appendServerTiming,
   decideProxyRequest,
   makeWaitUntil,
+  monotonicNowMs,
   prepareProxyRequest,
   resolveProxyPipeline,
 } from './proxy-core.ts';
@@ -87,6 +89,14 @@ export interface TestaProxyOptions extends ConfigSource {
    * production; the header exposes experiment internals.
    */
   debug?: boolean;
+  /**
+   * Emit a `Server-Timing: testa;dur=<ms>` entry on every response — testa's
+   * actual per-request cost, visible in the browser devtools waterfall and in
+   * APMs, so the latency contract is verifiable in production rather than
+   * claimed. Includes the composed `handler`'s time when one is set (it runs
+   * inside the proxy). Off by default.
+   */
+  timing?: boolean;
   /**
    * Skip experiments for crawlers, scripts, and monitors (user-agent based —
    * Googlebot, curl, HeadlessChrome, UptimeRobot, …). Default true: bots get
@@ -159,7 +169,7 @@ export function createTestaProxy(options: TestaProxyOptions): TestaProxy {
   const pipeline = resolveProxyPipeline<NextRequest>(options);
   const emitDebug = createDebugEmitter(options.debug ?? envDebugEnabled(readEnv('TESTA_DEBUG')));
 
-  return async function testaMiddleware(
+  const testaMiddleware = async function testaMiddleware(
     req: NextRequest,
     event?: NextFetchEvent,
   ): Promise<NextResponse> {
@@ -239,6 +249,14 @@ export function createTestaProxy(options: TestaProxyOptions): TestaProxy {
     // 'delegate' — speculative pass-through etc.: testa adds nothing.
     const res = await delegate(options.handler, req, event);
     emitDebug?.(res, decision.debug);
+    return res;
+  };
+
+  if (!options.timing) return testaMiddleware;
+  return async (req, event) => {
+    const start = monotonicNowMs();
+    const res = await testaMiddleware(req, event);
+    appendServerTiming(res.headers, start);
     return res;
   };
 }

@@ -15,8 +15,20 @@
 import type { ProjectConfig } from '@testa-platform/shared-types';
 import { DEFAULT_CONFIG_HOST, readEnv } from './constants.ts';
 
-/** Hard cap on a single config fetch. Generous vs the CDN's typical ~50ms. */
+/**
+ * Hard cap on a single config fetch, OFF the request path (poller, RSC loader
+ * behind Next's data cache). Generous vs the CDN's typical ~50ms.
+ */
 export const DEFAULT_FETCH_TIMEOUT_MS = 2_000;
+
+/**
+ * Hard cap for the ONE fetch that can sit on the request path: the async
+ * proxy's cold-instance fetch. Sized for a hot path, not an API call —
+ * experiments are expendable per-request (fail open to no-experiments),
+ * added latency never is. The CDN-cached config answers in ~50-100ms; a
+ * request that would take longer forfeits its experiments instead of waiting.
+ */
+export const PROXY_FETCH_TIMEOUT_MS = 400;
 
 /** Resolve the config host: explicit option → `TESTA_CONFIG_HOST` env → built-in. */
 export function resolveConfigHost(host?: string): string {

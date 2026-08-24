@@ -35,8 +35,10 @@ import {
   resolveConfigSource,
 } from './middleware.ts';
 import {
+  appendServerTiming,
   decideProxyRequest,
   makeWaitUntil,
+  monotonicNowMs,
   prepareProxyRequest,
   resolveProxyPipeline,
 } from './proxy-core.ts';
@@ -67,7 +69,10 @@ export function createTestaProxySync(options: TestaProxySyncOptions): TestaProxy
   const pipeline = resolveProxyPipeline<NextRequest>(options);
   const emitDebug = createDebugEmitter(options.debug ?? envDebugEnabled(readEnv('TESTA_DEBUG')));
 
-  return function testaMiddlewareSync(req: NextRequest, event?: NextFetchEvent): NextResponse {
+  const testaMiddlewareSync = function testaMiddlewareSync(
+    req: NextRequest,
+    event?: NextFetchEvent,
+  ): NextResponse {
     const waitUntil = makeWaitUntil(event);
 
     // Same blackbox safety net as the async proxy — see middleware.ts.
@@ -130,6 +135,14 @@ export function createTestaProxySync(options: TestaProxySyncOptions): TestaProxy
 
     const res = delegateSync(options.handler, req, event);
     emitDebug?.(res, decision.debug);
+    return res;
+  };
+
+  if (!options.timing) return testaMiddlewareSync;
+  return (req, event) => {
+    const start = monotonicNowMs();
+    const res = testaMiddlewareSync(req, event);
+    appendServerTiming(res.headers, start);
     return res;
   };
 }

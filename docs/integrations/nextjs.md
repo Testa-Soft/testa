@@ -212,8 +212,9 @@ export async function proxy(req: NextRequest, event: NextFetchEvent) {
 By default the proxy fetches config itself (cached per instance, refreshed in
 the background — see the `cache` option above). The only request that ever
 *waits* on testa is the first one on a cold instance, and that wait is capped
-by a hard budget (`fetchTimeoutMs`, default 2s; on expiry the request proceeds
-without experiments). Two opt-ins remove even that:
+by a hard budget (`fetchTimeoutMs`, default 400ms; on expiry the request
+proceeds without experiments — fail open, never slow). Two opt-ins remove
+even that:
 
 **1. Poll the config outside the request path** (self-hosted, long-lived Node
 servers — Docker/k8s `next start`). Two lines in `instrumentation.ts`:
@@ -660,8 +661,14 @@ Returns a Next.js proxy/middleware function. Import from `@testa-soft/next`.
 | `skipPaths`          | `(string \| RegExp)[]`                           | —                                | Extra paths passed through untouched, on top of the built-in filter (`/_next/*`, `/api/*`, `/.well-known/*`, asset extensions). Strings are segment-aligned prefixes; RegExps test the pathname. |
 | `handler`            | `(req, event) => Response \| null \| undefined \| Promise<…>` | —                   | Your own middleware logic, composed inside the proxy — see [Composing with your own logic](#already-have-middleware-composing-with-your-own-logic). |
 
-`fetchTimeoutMs` (default `2000`) caps any single config fetch — on expiry the
-request proceeds without experiments instead of stalling.
+`fetchTimeoutMs` (default `400`) caps the proxy's one blocking case — the
+cold-instance fetch — on expiry the request proceeds without experiments
+instead of stalling. The priority is explicit: experiments are expendable
+per-request; added latency never is. `timing: true` adds a
+`Server-Timing: testa;dur=<ms>` entry to every response so testa's actual
+per-request cost is visible in the browser devtools waterfall and your APM —
+the latency contract is verifiable, not claimed. (Off the request path — the
+instrumentation poller and the RSC loader — the fetch budget stays 2s.)
 
 Exported constants: `DEFAULT_CONFIG_HOST`, `DEFAULT_TRACKING_HOST`,
 `SHIELD_HEADER`. Exported helpers: `applyRequestHeaders(res, headers, req?)`

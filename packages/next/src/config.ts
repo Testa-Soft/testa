@@ -17,7 +17,7 @@
  */
 
 import type { ProjectConfig } from '@testa-platform/shared-types';
-import { fetchProjectConfig } from './config-fetch.ts';
+import { PROXY_FETCH_TIMEOUT_MS, fetchProjectConfig } from './config-fetch.ts';
 import { readConfigSnapshot } from './config-snapshot.ts';
 
 export interface ConfigSource {
@@ -28,7 +28,8 @@ export interface ConfigSource {
    * Hard latency budget (ms) for a single config fetch — caps the one blocking
    * case (a cold instance) so a slow config origin can never stall a request
    * beyond it; on expiry the request proceeds without experiments (fail open).
-   * Default `DEFAULT_FETCH_TIMEOUT_MS` (2s).
+   * Default `PROXY_FETCH_TIMEOUT_MS` (400ms) — sized for a hot path:
+   * experiments are expendable per-request, added latency never is.
    */
   fetchTimeoutMs?: number;
   /**
@@ -211,9 +212,7 @@ export class ConfigClient {
     if (this.source.configUrl) {
       // Shared fetch: timeout budget + body validation + fail-open on any error.
       return fetchProjectConfig(this.source.configUrl, {
-        ...(this.source.fetchTimeoutMs !== undefined
-          ? { timeoutMs: this.source.fetchTimeoutMs }
-          : {}),
+        timeoutMs: this.source.fetchTimeoutMs ?? PROXY_FETCH_TIMEOUT_MS,
       });
     }
     return null;
