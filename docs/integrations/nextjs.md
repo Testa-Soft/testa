@@ -207,6 +207,62 @@ export async function proxy(req: NextRequest, event: NextFetchEvent) {
 }
 ```
 
+### Zero-latency config: background polling + the sync proxy
+
+By default the proxy fetches config itself (cached per instance, refreshed in
+the background — see the `cache` option above). The only request that ever
+*waits* on testa is the first one on a cold instance, and that wait is capped
+by a hard budget (`fetchTimeoutMs`, default 2s; on expiry the request proceeds
+without experiments). Two opt-ins remove even that:
+
+**1. Poll the config outside the request path** (self-hosted, long-lived Node
+servers — Docker/k8s `next start`). Two lines in `instrumentation.ts`:
+
+```ts
+// instrumentation.ts (project root or /src)
+export async function register() {
+  if (process.env.NEXT_RUNTIME === 'nodejs') {
+    const { registerTestaConfig } = await import('@testa-soft/next/instrumentation')
+    await registerTestaConfig({ projectId: '3fa85f64e1c2b' }) // polls every 60s
+  }
+}
+```
+
+`register()` runs — awaited — at boot, so the config is in memory before the
+first request; a background interval keeps it fresh (a failed poll keeps the
+last good config; if testa is down at boot the app starts with experiments off
+and self-heals). `<TestaProvider/>`/`loadTestaConfig` read the snapshot on any
+Next version; the **proxy** reads it when the middleware runs in the Node
+runtime (`runtime: 'nodejs'`, Next 15.2+) — the default edge sandbox can't see
+process memory and keeps its own cache. Not for serverless (Vercel functions
+freeze between requests, intervals don't tick) — use `loadConfig` + Edge Config
+there instead.
+
+**2. `createTestaProxySync` — a proxy that never awaits.** Same options, same
+decisions, but it returns `NextResponse` directly, so it slots into an existing
+**synchronous** middleware at any position without forcing `async` through your
+code:
+
+```ts
+const testa = createTestaProxySync({ projectId: '3fa85f64e1c2b' })
+
+export function proxy(req: NextRequest, event: NextFetchEvent) {
+  if (!isAllowed(req)) return NextResponse.redirect(new URL('/login', req.url))
+  const res = testa(req, event) // no await — plain value
+  res.headers.set('x-frame-options', 'DENY')
+  return res
+}
+```
+
+Config resolution is what makes sync possible: a static `config` object or the
+poller snapshot give **full fidelity from the first request**. With a
+fetch-based source it serves the cached copy and, when cold, passes requests
+through *unexperimented* while a background fetch (via `event.waitUntil`)
+warms the cache — it will never block. Prefer `createTestaProxy` when one cold
+blocking fetch beats a few unexperimented first requests (e.g. serverless).
+The `handler` option is sync-only here — a handler that returns a Promise
+throws (use `createTestaProxy` for async handlers).
+
 ---
 
 ## HTML/DOM experiments
@@ -295,34 +351,59 @@ will ship. A failed or malformed response applies nothing (fail-safe).
 
 ---
 
-## Pages Router soft navigation
+## Pages Router integration
 
-Client-side navigations in the **Pages Router** (static `next/link` navs) never
-reach the server, so the proxy can't see them. `<TestaRouterGuard/>` is an
-optional catch-all — add it once in your Pages-Router layout (`_app`):
+The proxy is router-agnostic — split-URL redirects work identically on the
+Pages Router. The client half comes from `@testa-soft/next/pages`: the same
+`<TestaProvider/>` name as the App Router's `@testa-soft/next/server`, one
+entry per router (a given app can only ever use one). The complete
+integration is one id in two files:
+
+```ts
+// middleware.ts — server-side, flicker-free split-URL redirects on every hard load
+import { createTestaProxy } from '@testa-soft/next'
+
+export const middleware = createTestaProxy({ projectId: '3fa85f64e1c2b' })
+export const config = { matcher: ['/((?!_next/|api/|favicon.ico|sitemap.xml|robots.txt).*)'] }
+```
 
 ```tsx
 // pages/_app.tsx
-import { TestaRouterGuard } from '@testa-soft/next/router-guard'
-import projectConfig from '../testa.config.json'
+import { TestaProvider } from '@testa-soft/next/pages'
 
 export default function App({ Component, pageProps }) {
   return (
-    <>
-      <TestaRouterGuard config={projectConfig} />
+    <TestaProvider projectId="3fa85f64e1c2b">
       <Component {...pageProps} />
-    </>
+    </TestaProvider>
   )
 }
 ```
 
-It reads the same sticky `_testa_exp` cookie and, on a navigation to a control URL
-for a split-URL experiment the visitor is bucketed to a variant of, redirects to
-the variant before the control page renders.
+Optionally, `instrumentation.ts` with
+[`registerTestaConfig`](#zero-latency-config-background-polling--the-sync-proxy)
+keeps the proxy's config polled outside the request path (self-hosted Node).
 
-> **App Router users don't need this.** `<TestaProvider/>` re-applies DOM
-> experiments on soft navigation, and the proxy handles split-URL redirects
-> (including a prefetch-safe path for `<Link>` prefetches).
+Who does what:
+
+What the provider wires up (all sharing ONE config fetch and the proxy's
+cookie contract — assignments made server-side are reused, never re-rolled):
+
+| Traffic | Handled by | How |
+| --- | --- | --- |
+| Hard loads (ads, search, direct, reloads) | `createTestaProxy` | Server-side 307 — the variant is the first thing painted. |
+| Soft navs (`next/link` inside the app) | the built-in router guard | These never reach the server; the guard reads the sticky `_testa_exp` cookie and re-points the navigation at the router-event level, before the control page renders. |
+| DOM changes, goals, exposure events, anti-flicker shield | the built-in client engine (`@testa-soft/react`) | Client-side, on mount and on every navigation. |
+
+Want the pieces individually (e.g. split-URL-only, no DOM engine)?
+`<TestaRouterGuard/>` is exported standalone from `@testa-soft/next/pages`
+(and `/router-guard`), with the same `projectId` zero-config mode or an inline
+`config` object.
+
+> **App Router users don't need this section.** `<TestaProvider/>` /
+> `<TestaGuard/>` from `@testa-soft/next/server` cover the client half, and the
+> proxy sees App-Router soft navs too (they fetch RSC payloads over HTTP,
+> including a prefetch-safe path for `<Link>` prefetches).
 
 ---
 
@@ -579,11 +660,47 @@ Returns a Next.js proxy/middleware function. Import from `@testa-soft/next`.
 | `skipPaths`          | `(string \| RegExp)[]`                           | —                                | Extra paths passed through untouched, on top of the built-in filter (`/_next/*`, `/api/*`, `/.well-known/*`, asset extensions). Strings are segment-aligned prefixes; RegExps test the pathname. |
 | `handler`            | `(req, event) => Response \| null \| undefined \| Promise<…>` | —                   | Your own middleware logic, composed inside the proxy — see [Composing with your own logic](#already-have-middleware-composing-with-your-own-logic). |
 
+`fetchTimeoutMs` (default `2000`) caps any single config fetch — on expiry the
+request proceeds without experiments instead of stalling.
+
 Exported constants: `DEFAULT_CONFIG_HOST`, `DEFAULT_TRACKING_HOST`,
 `SHIELD_HEADER`. Exported helpers: `applyRequestHeaders(res, headers, req?)`
 (outer-wrapper composition), `shouldBypassRequest(pathname, skipPaths?)`.
 Exported types: `TestaProxy`, `TestaProxyOptions`, `TestaHandler`, `SkipPath`,
 `VariationHookContext`, `VariationAppliedEvent` (the server hook's `event`).
+
+### `createTestaProxySync(options)`
+
+The never-awaits flavor: same options and decisions as `createTestaProxy`, but
+returns `NextResponse` directly (no Promise) so it composes into an existing
+synchronous middleware at any position. Differences:
+
+- `handler` must be **synchronous** — a handler returning a Promise throws.
+- Config is resolved without fetching: static `config` and the
+  [instrumentation snapshot](#zero-latency-config-background-polling--the-sync-proxy)
+  give full fidelity; fetch-based sources serve the cached copy and pass cold
+  requests through unexperimented while a background fetch warms the cache.
+
+Exported types: `TestaProxySync`, `TestaProxySyncOptions`, `TestaSyncHandler`.
+
+### `registerTestaConfig(options)` — `@testa-soft/next/instrumentation`
+
+Background config poller for long-lived Node servers — call it (awaited) from
+`instrumentation.ts` so the config is in memory before the first request. See
+[Zero-latency config](#zero-latency-config-background-polling--the-sync-proxy).
+
+| Option           | Type     | Default | Description                                             |
+| ---------------- | -------- | ------- | ------------------------------------------------------- |
+| `projectId`      | `string` | —       | **Required.** Project to poll.                          |
+| `host`           | `string` | built-in / `TESTA_CONFIG_HOST` | Config host.                     |
+| `intervalMs`     | `number` | `60000` | Poll interval (floored at 5s).                          |
+| `fetchTimeoutMs` | `number` | `2000`  | Latency budget per poll.                                |
+
+Returns a `TestaConfigPoller` — `refresh()` polls once immediately, `stop()`
+ends polling (the last snapshot keeps serving). Re-registering a project
+replaces its poller. Also exported: `readConfigSnapshot` /
+`writeConfigSnapshot` for push-based setups (e.g. a publish webhook writing the
+config instead of polling for it).
 
 ### Client event bus — `@testa-soft/next`
 
@@ -637,11 +754,25 @@ The config loader the server components use, exported for custom server code:
 `loadTestaConfig({ projectId, host?, revalidateSec? })` → `Promise<ProjectConfig | null>`.
 Fail-open: resolves `null` on any network/HTTP/shape failure.
 
+### `<TestaProvider>` — `@testa-soft/next/pages` (Pages Router)
+
+The Pages Router twin of `/server`'s provider — add once in `_app.tsx`. Takes
+the `@testa-soft/react` provider props (`projectId` is the only one a normal
+integration passes; `config`, `host`, `tracking`, `shield`, cookie options as
+documented in [react.md](./react.md)) and self-wires the client engine plus
+the soft-nav router guard on one shared config fetch. Mounted in the App
+Router by mistake it degrades safely (guard no-ops with a dev warning) — but
+use `/server` there.
+
 ### `<TestaRouterGuard>` — `@testa-soft/next/router-guard`
 
-| Prop     | Type            | Default | Description                          |
-| -------- | --------------- | ------- | ------------------------------------ |
-| `config` | `ProjectConfig` | —       | **Required.** Same config as above.  |
+Pass **one of** `projectId` (zero-config, recommended) or `config`:
+
+| Prop        | Type            | Default  | Description                                                            |
+| ----------- | --------------- | -------- | ---------------------------------------------------------------------- |
+| `projectId` | `string`        | —        | Fetches the servable config once per page load (shared across mounts, CDN + browser cached). Fails open: on a fetch failure the guard simply never installs — hard loads stay covered by the proxy. |
+| `config`    | `ProjectConfig` | —        | Inline config (fixture / self-managed). Wins over `projectId`.          |
+| `host`      | `string`        | built-in | Config host override for `projectId` mode (staging/self-hosted).        |
 
 ---
 

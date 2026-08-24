@@ -14,6 +14,16 @@ export {
 export { hasPendingDomChange, resolveExposures } from '@testa-soft/experiment-core';
 export type { Exposure } from '@testa-soft/experiment-core';
 export type { TestaProxy, TestaProxyOptions, VariationHookContext } from './middleware.ts';
+// The never-awaits flavor — slots into an existing SYNC middleware unchanged.
+// Full fidelity with a static `config` or the instrumentation poller
+// (`@testa-soft/next/instrumentation`); fetch-based configs warm in the
+// background while cold requests pass through unexperimented.
+export { createTestaProxySync } from './middleware-sync.ts';
+export type {
+  TestaProxySync,
+  TestaProxySyncOptions,
+  TestaSyncHandler,
+} from './middleware-sync.ts';
 export { isDocumentMethod, shouldBypassRequest } from './request-filter.ts';
 export { isCrawlerUserAgent } from './bot.ts';
 export type { SkipPath } from './request-filter.ts';

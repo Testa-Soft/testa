@@ -26,6 +26,10 @@ export default defineConfig({
     'src/router-guard/index.ts',
     'src/experiments/index.ts',
     'src/server/index.ts',
+    // Node-only config poller (`registerTestaConfig`) for instrumentation.ts.
+    'src/instrumentation/index.ts',
+    // Pages Router surface: client provider + self-wired router guard.
+    'src/pages/index.ts',
   ],
   format: ['esm', 'cjs'],
   dts: { compilerOptions: { incremental: false, composite: false } },
@@ -42,6 +46,9 @@ export default defineConfig({
     'react',
     '@testa-soft/experiment-core',
     '@testa-soft/dom',
+    // Real runtime dep of the `/pages` entry (client engine); consumers get it
+    // via our dependencies — never inline it (it ships its own "use client").
+    '@testa-soft/react',
     // Self-reference: the server entry imports the client entry through it so the
     // client `"use client"` boundary is not inlined into the server bundle.
     '@testa-soft/next/_internal/experiments',

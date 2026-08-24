@@ -17,11 +17,20 @@
  */
 
 import type { ProjectConfig } from '@testa-platform/shared-types';
+import { fetchProjectConfig } from './config-fetch.ts';
+import { readConfigSnapshot } from './config-snapshot.ts';
 
 export interface ConfigSource {
   config?: ProjectConfig;
   loadConfig?: (slug: string) => Promise<ProjectConfig | null> | ProjectConfig | null;
   configUrl?: string;
+  /**
+   * Hard latency budget (ms) for a single config fetch — caps the one blocking
+   * case (a cold instance) so a slow config origin can never stall a request
+   * beyond it; on expiry the request proceeds without experiments (fail open).
+   * Default `DEFAULT_FETCH_TIMEOUT_MS` (2s).
+   */
+  fetchTimeoutMs?: number;
   /**
    * Server-side config caching.
    * - `true` (default): fresh for 60s, then served stale while revalidating in
@@ -93,6 +102,13 @@ export class ConfigClient {
     // Static config short-circuits — always fresh, never cached/fetched.
     if (this.source.config) return this.source.config;
 
+    // The instrumentation poller's snapshot (registerTestaConfig) wins over
+    // every fetch path, unconditionally: it is refreshed on its own clock, and
+    // two config sources racing each other would let one request render under
+    // config A while the proxy redirects under config B. Single source, always.
+    const snapshot = readConfigSnapshot(slug);
+    if (snapshot) return snapshot;
+
     if (this.mode === 'per-pageload') {
       if (isDocumentRequest) {
         // Hard reload: ALWAYS fetch fresh; store for the soft navs that follow.
@@ -133,6 +149,44 @@ export class ConfigClient {
     return config;
   }
 
+  /**
+   * SYNCHRONOUS resolution for `createTestaProxySync` — never fetches inline.
+   * Order: static `config` → poller snapshot → the SWR cache's last-known-good
+   * entry (kicking a deduped background refresh when it has aged past the
+   * fresh window). A cold fetch-based instance returns null (the caller passes
+   * the request through unexperimented) while the background fetch warms the
+   * cache for the next request.
+   *
+   * Two deliberate divergences from the async `get`:
+   * - No max-stale cutoff: blocking is impossible here, and last-known-good
+   *   keeps already-assigned visitors consistent — stale beats none.
+   * - `'per-pageload'` cannot mean "fetch fresh per document" without an inline
+   *   fetch; it degrades to this same serve-cached + background-refresh shape.
+   */
+  getSync(
+    slug: string,
+    nowMs: number,
+    waitUntil?: (promise: Promise<unknown>) => void,
+  ): ProjectConfig | null {
+    if (this.source.config) return this.source.config;
+    const snapshot = readConfigSnapshot(slug);
+    if (snapshot) return snapshot;
+
+    const cached = this.cache.get(slug);
+    if (cached) {
+      if (nowMs - cached.fetchedAtMs >= this.ttlMs) {
+        const refresh = this.refresh(slug, nowMs);
+        if (refresh && waitUntil) waitUntil(refresh);
+      }
+      return cached.config;
+    }
+
+    // Cold instance: warm the cache in the background, fail open now.
+    const refresh = this.refresh(slug, nowMs);
+    if (refresh && waitUntil) waitUntil(refresh);
+    return null;
+  }
+
   /** Kick (or join) the background refresh for a slug. Never throws. */
   private refresh(slug: string, nowMs: number): Promise<void> | null {
     if (this.inflight.has(slug)) return null;
@@ -155,19 +209,13 @@ export class ConfigClient {
       return (await this.source.loadConfig(slug)) ?? null;
     }
     if (this.source.configUrl) {
-      return fetchConfig(this.source.configUrl);
+      // Shared fetch: timeout budget + body validation + fail-open on any error.
+      return fetchProjectConfig(this.source.configUrl, {
+        ...(this.source.fetchTimeoutMs !== undefined
+          ? { timeoutMs: this.source.fetchTimeoutMs }
+          : {}),
+      });
     }
-    return null;
-  }
-}
-
-async function fetchConfig(url: string): Promise<ProjectConfig | null> {
-  try {
-    const res = await fetch(url, { headers: { accept: 'application/json' } });
-    if (!res.ok) return null;
-    return (await res.json()) as ProjectConfig;
-  } catch {
-    // Never let a config-fetch failure break the request — fail open (no experiment).
     return null;
   }
 }

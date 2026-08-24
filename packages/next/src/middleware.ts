@@ -1,9 +1,10 @@
 /**
  * `createTestaProxy` — the one-line Next.js integration.
  *
- * This is the ONLY file that imports `next/server` at runtime; all decision
- * logic lives in the host-neutral `engine.ts` + experiment-core, so it stays
- * thin. Usage:
+ * This file is a thin ASYNC executor around the shared, synchronous decision
+ * pipeline in `proxy-core.ts` (which also powers `createTestaProxySync`); the
+ * only work done here is awaiting the config and delegating to a possibly-async
+ * customer handler. Usage:
  *
  *   // middleware.ts
  *   import { createTestaProxy } from '@testa/next'
@@ -13,29 +14,25 @@
  *   export const config = { matcher: ['/((?!_next/|api/|favicon.ico|sitemap.xml|robots.txt).*)'] }
  */
 
-import { ASSIGNMENT_COOKIE, UUID_COOKIE } from '@testa-soft/experiment-core';
-import {
-  type VariationAppliedEvent,
-  hasPendingDomChange,
-  runExperiments,
-} from '@testa-soft/experiment-core';
+import type { VariationAppliedEvent } from '@testa-soft/experiment-core';
 import { NextRequest, NextResponse } from 'next/server.js';
 import type { NextFetchEvent } from 'next/server.js';
 import { isCrawlerUserAgent } from './bot.ts';
 import { applyRequestHeaders, isRedirect, toNextResponse } from './compose.ts';
 import { ConfigClient, type ConfigSource } from './config.ts';
-import { DEFAULT_CONFIG_HOST, DEFAULT_TRACKING_HOST, SHIELD_HEADER, readEnv } from './constants.ts';
-import { NextCookieStore } from './cookie-store.ts';
+import { buildConfigUrl } from './config-fetch.ts';
+import { SHIELD_HEADER, readEnv } from './constants.ts';
 import { createDebugEmitter, envDebugEnabled } from './debug.ts';
-import { resolveCookieDomain } from './domain.ts';
+import {
+  type VariationHookContext,
+  decideProxyRequest,
+  makeWaitUntil,
+  prepareProxyRequest,
+  resolveProxyPipeline,
+} from './proxy-core.ts';
 import { type SkipPath, isDocumentMethod, shouldBypassRequest } from './request-filter.ts';
-import { computePrefetchRedirect } from './soft-nav/prefetch-guard.ts';
-import { isPrefetchRequest } from './soft-nav/rsc-redirect.ts';
-import { emitExposure } from './tracking.ts';
-import { type PublicHostOption, resolvePublicUrlDetailed } from './url-resolver.ts';
-import { ensureVisitorId } from './uuid.ts';
 
-export type { VariationAppliedEvent };
+export type { VariationAppliedEvent, VariationHookContext };
 
 // Re-exported from `./constants.ts` so the server entry can share them without
 // importing this (edge-only) module, while existing imports keep working.
@@ -159,24 +156,15 @@ export function createTestaProxy(options: TestaProxyOptions): TestaProxy {
     throw new Error('createTestaProxy: `projectId` is required');
   }
   const configClient = new ConfigClient(resolveConfigSource(options, projectId));
-  const secure = options.secureCookies ?? true;
-  const trackingEnabled = options.tracking ?? true;
-  const trackingHost = (
-    options.trackingHost ??
-    readEnv('TESTA_TRACKING_HOST') ??
-    DEFAULT_TRACKING_HOST
-  ).replace(/\/+$/, '');
-  const publicHost: PublicHostOption<NextRequest> | undefined =
-    options.publicHost ?? readEnv('TESTA_PUBLIC_HOST');
-  const emitDebug = createDebugEmitter(
-    options.debug ?? envDebugEnabled(readEnv('TESTA_DEBUG')),
-  );
-  const skipBots = options.skipBots ?? true;
+  const pipeline = resolveProxyPipeline<NextRequest>(options);
+  const emitDebug = createDebugEmitter(options.debug ?? envDebugEnabled(readEnv('TESTA_DEBUG')));
 
   return async function testaMiddleware(
     req: NextRequest,
     event?: NextFetchEvent,
   ): Promise<NextResponse> {
+    const waitUntil = makeWaitUntil(event);
+
     // Blackbox safety net, BEFORE any config fetch or cookie work: never treat
     // assets / framework internals / API routes — or non-GET/HEAD requests
     // (Server Actions / form posts hit the page URL with POST) — as pages, so
@@ -198,29 +186,17 @@ export function createTestaProxy(options: TestaProxyOptions): TestaProxy {
     // Crawlers/scripts/monitors are never experiment traffic: no assignment,
     // no redirect, no exposure — they'd inflate visitor counts and skew
     // results, and search engines should consistently see the control.
-    if (skipBots && isCrawlerUserAgent(req.headers.get('user-agent'))) {
+    if (pipeline.skipBots && isCrawlerUserAgent(req.headers.get('user-agent'))) {
       const res = await delegate(options.handler, req, event);
       emitDebug?.(res, { url: req.url, bypass: 'bot' });
       return res;
     }
 
-    // The URL the VISITOR requested — `req.url` can carry an internal host on
-    // self-hosted container/ingress stacks (istio et al. rewrite `Host`), which
-    // would break split-URL targeting, cookie discovery, and redirect bases.
-    const { url: publicUrl, source: urlSource } = resolvePublicUrlDetailed(req, publicHost);
-
-    const cookieDomain = resolveCookieDomain(publicUrl.hostname, {
-      ...(options.cookieDomain ? { cookieDomain: options.cookieDomain } : {}),
-      ...(options.discoverRootDomain ? { discoverRootDomain: true } : {}),
-    });
-    const store = new NextCookieStore(req.cookies, {
-      secure,
-      ...(cookieDomain ? { domain: cookieDomain } : {}),
-    });
+    const prepared = prepareProxyRequest(req, pipeline);
     const config = await configClient.get(
       projectId,
       Date.now(),
-      event?.waitUntil ? event.waitUntil.bind(event) : undefined,
+      waitUntil,
       // Document load vs RSC soft-nav/prefetch — drives 'per-pageload' caching.
       req.headers.get('rsc') !== '1',
     );
@@ -229,132 +205,42 @@ export function createTestaProxy(options: TestaProxyOptions): TestaProxy {
     // composed handler, so the customer's own middleware still runs.
     if (!config) {
       const res = await delegate(options.handler, req, event);
-      emitDebug?.(res, { url: publicUrl.href, urlSource, bypass: 'no-config' });
-      return res;
-    }
-
-    // Speculative loads — compute the decision but NEVER commit (no cookie,
-    // no exposure), while still returning the redirect:
-    //   - prefetches: App Router `<Link>` RSC prefetches AND Speculation-Rules
-    //     full-document prefetch/prerenders (Sec-Purpose) — redirecting them
-    //     warms the variant so the real navigation is flash-free;
-    //   - HEAD: curl -I / uptime monitors see the true redirect behavior
-    //     without minting visitors or firing exposures.
-    // See soft-nav/prefetch-guard.ts + rsc-redirect.ts.
-    const speculative = isPrefetchRequest(req)
-      ? ('prefetch' as const)
-      : req.method === 'HEAD'
-        ? ('head' as const)
-        : undefined;
-    if (speculative) {
-      const redirectTo = computePrefetchRedirect(
-        {
-          config,
-          currentUrl: publicUrl.href,
-          visitorId: store.get(UUID_COOKIE),
-          now: Date.now(),
-          getCookie: (name) => store.get(name),
-          ...(req.headers.get('user-agent')
-            ? { userAgent: req.headers.get('user-agent') as string }
-            : {}),
-          ...(geoCountry(req) ? { country: geoCountry(req) as string } : {}),
-        },
-        store, // written into by the engine, then intentionally discarded (no applyTo)
-      );
-      const res = redirectTo
-        ? NextResponse.redirect(new URL(redirectTo, publicUrl), 307)
-        : await delegate(options.handler, req, event);
       emitDebug?.(res, {
-        url: publicUrl.href,
-        urlSource,
-        speculative,
-        ...(redirectTo ? { redirect: redirectTo } : {}),
+        url: prepared.publicUrl.href,
+        urlSource: prepared.urlSource,
+        bypass: 'no-config',
       });
       return res;
     }
 
-    const visitorId = ensureVisitorId(store);
-    const result = runExperiments(
-      {
-        config,
-        currentUrl: publicUrl.href,
-        visitorId,
-        now: Date.now(),
-        getCookie: (name) => store.get(name),
-        ...(req.headers.get('user-agent')
-          ? { userAgent: req.headers.get('user-agent') as string }
-          : {}),
-        ...(geoCountry(req) ? { country: geoCountry(req) as string } : {}),
-        ...(options.sessionLengthSec !== undefined
-          ? { sessionLengthSec: options.sessionLengthSec }
-          : {}),
-      },
-      store,
-    );
-
-    for (const applied of result.applied) {
-      fireVariationAssigned(options.onVariationAssigned, applied, event);
-      // Emit an exposure once per fresh enrollment (deduped server-side anyway).
-      if (trackingEnabled && applied.firstAssignment && config.project_id != null) {
-        const pending = emitExposure(trackingHost, {
-          project_id: config.project_id,
-          experiment: applied.experimentId,
-          variation: applied.variationId,
-          uuid: applied.visitorId,
-          ...(applied.title ? { title: applied.title } : {}),
-          url: applied.url,
-        });
-        if (event?.waitUntil) event.waitUntil(pending);
-        else void pending;
-      }
-    }
-
-    if (result.redirectTo) {
-      const res = NextResponse.redirect(new URL(result.redirectTo, publicUrl), 307);
-      store.applyTo(res.cookies);
-      emitDebug?.(res, {
-        url: publicUrl.href,
-        urlSource,
-        visitor: visitorId,
-        configHash: config.config_hash,
-        applied: summarizeApplied(result.applied),
-        redirect: result.redirectTo,
-      });
-      return res;
-    }
-
-    // Tell the app whether to raise the anti-flicker shield for THIS request:
-    // only when the visitor has a pending DOM change on this page. Split-URL-only
-    // projects and pages with nothing to change get `0`, so `<TestaGuard/>`
-    // never overlays needlessly. Passed as a request header the RSC layout reads
-    // via `headers()`. Runs on soft-nav RSC requests too, so it stays per-page.
-    const shield = hasPendingDomChange(config, publicUrl.href, store.get(ASSIGNMENT_COOKIE));
-    const requestHeaders = new Headers(req.headers);
-    requestHeaders.set(SHIELD_HEADER, shield ? '1' : '0');
-
-    const res = await resolveDownstream(options.handler, req, requestHeaders, event);
-    store.applyTo(res.cookies);
-    emitDebug?.(res, {
-      url: publicUrl.href,
-      urlSource,
-      visitor: visitorId,
-      configHash: config.config_hash,
-      applied: summarizeApplied(result.applied),
-      shield,
+    const decision = decideProxyRequest({
+      req,
+      config,
+      prepared,
+      pipeline,
+      now: Date.now(),
+      waitUntil,
     });
+
+    if (decision.kind === 'redirect') {
+      const res = NextResponse.redirect(decision.location, 307);
+      if (decision.commit) prepared.store.applyTo(res.cookies);
+      emitDebug?.(res, decision.debug);
+      return res;
+    }
+
+    if (decision.kind === 'pass') {
+      const res = await resolveDownstream(options.handler, req, decision.requestHeaders, event);
+      prepared.store.applyTo(res.cookies);
+      emitDebug?.(res, decision.debug);
+      return res;
+    }
+
+    // 'delegate' — speculative pass-through etc.: testa adds nothing.
+    const res = await delegate(options.handler, req, event);
+    emitDebug?.(res, decision.debug);
     return res;
   };
-}
-
-/** Compact per-assignment summary for the debug trace. */
-function summarizeApplied(
-  applied: ReadonlyArray<VariationAppliedEvent>,
-): ReadonlyArray<{ experiment: number; variation: number; first: boolean }> {
-  return applied.map((a) => ({
-    experiment: a.experimentId,
-    variation: a.variationId,
-    first: a.firstAssignment,
-  }));
 }
 
 /**
@@ -405,49 +291,12 @@ async function resolveDownstream(
   );
 }
 
-/** Context passed to `onVariationAssigned` — keep an async task alive past the response. */
-export interface VariationHookContext {
-  /** Run `promise` to completion after the response is sent (never delays it). */
-  waitUntil: (promise: Promise<unknown>) => void;
-}
-
-/** Invoke the hook without ever letting it break the request; keep async work alive. */
-function fireVariationAssigned(
-  listener: TestaProxyOptions['onVariationAssigned'],
-  event: VariationAppliedEvent,
-  fetchEvent: NextFetchEvent | undefined,
-): void {
-  if (!listener) return;
-  const waitUntil = (promise: Promise<unknown>): void => {
-    if (fetchEvent?.waitUntil) fetchEvent.waitUntil(promise.catch(() => undefined));
-    else void promise.catch(() => undefined);
-  };
-  try {
-    const r = listener(event, { waitUntil });
-    // If the hook itself returned a promise, keep the worker alive for it too.
-    if (r && typeof (r as Promise<void>).then === 'function') waitUntil(r as Promise<void>);
-  } catch {
-    // never break the request on a hook error
-  }
-}
-
-/** Best-effort ISO country from common edge geo headers (Vercel / Cloudflare). */
-function geoCountry(req: NextRequest): string | undefined {
-  return (req.headers.get('x-vercel-ip-country') ?? req.headers.get('cf-ipcountry') ?? undefined) as
-    | string
-    | undefined;
-}
-
 /**
  * Turn `{ projectId, host? }` into a concrete ConfigSource. An explicit
  * `config` / `loadConfig` / `configUrl` always wins; otherwise the config URL is
  * built from the resolved host + projectId, so the caller only needs projectId.
  */
-function resolveConfigSource(options: TestaProxyOptions, projectId: string): ConfigSource {
+export function resolveConfigSource(options: TestaProxyOptions, projectId: string): ConfigSource {
   if (options.config || options.loadConfig || options.configUrl) return options;
-  const host = (options.host ?? readEnv('TESTA_CONFIG_HOST') ?? DEFAULT_CONFIG_HOST).replace(
-    /\/+$/,
-    '',
-  );
-  return { ...options, configUrl: `${host}/api/v1/config/${projectId}` };
+  return { ...options, configUrl: buildConfigUrl(options.host ?? '', projectId) };
 }

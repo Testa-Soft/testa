@@ -23,6 +23,8 @@ const CLIENT_ENTRIES = [
   'router-guard/index.cjs',
   'experiments/index.js',
   'experiments/index.cjs',
+  'pages/index.js',
+  'pages/index.cjs',
 ];
 
 const DIRECTIVE = '"use client";\n';

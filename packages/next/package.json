@@ -2,7 +2,7 @@
   "name": "@testa-soft/next",
   "version": "1.2.1",
   "type": "module",
-  "description": "Testa split-URL A/B testing for Next.js \u2014 server-side, flicker-free redirects via middleware.",
+  "description": "Testa split-URL A/B testing for Next.js — server-side, flicker-free redirects via middleware.",
   "license": "UNLICENSED",
   "sideEffects": false,
   "main": "./dist/index.cjs",
@@ -28,6 +28,16 @@
       "types": "./dist/server/index.d.ts",
       "import": "./dist/server/index.js",
       "require": "./dist/server/index.cjs"
+    },
+    "./instrumentation": {
+      "types": "./dist/instrumentation/index.d.ts",
+      "import": "./dist/instrumentation/index.js",
+      "require": "./dist/instrumentation/index.cjs"
+    },
+    "./pages": {
+      "types": "./dist/pages/index.d.ts",
+      "import": "./dist/pages/index.js",
+      "require": "./dist/pages/index.cjs"
     }
   },
   "files": [
@@ -57,15 +67,18 @@
   },
   "dependencies": {
     "@testa-soft/dom": "workspace:*",
-    "@testa-soft/experiment-core": "workspace:*"
+    "@testa-soft/experiment-core": "workspace:*",
+    "@testa-soft/react": "workspace:*"
   },
   "devDependencies": {
     "@testa-platform/shared-types": "workspace:*",
     "@types/react": "18.3.12",
+    "@types/react-dom": "18.3.1",
     "@vitest/coverage-v8": "2.1.5",
     "happy-dom": "15.11.4",
     "next": "15.0.3",
     "react": "18.3.1",
+    "react-dom": "18.3.1",
     "tsup": "8.3.5",
     "typescript": "5.6.3",
     "vitest": "2.1.5"
