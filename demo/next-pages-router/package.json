@@ -1,0 +1,27 @@
+{
+  "name": "@testa-demo/next-pages-router",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Runnable demo: the PAGES ROUTER integration — createTestaProxy (server-side split-URL 307) + <TestaProvider/> from @testa-soft/next/pages (client engine + soft-nav router guard, self-wired).",
+  "scripts": {
+    "dev": "NODE_OPTIONS='--import tsx' next dev -p 3300",
+    "build": "next build",
+    "start": "NODE_OPTIONS='--import tsx' next start -p 3300"
+  },
+  "dependencies": {
+    "@testa-soft/next": "workspace:*",
+    "next": "15.0.3",
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  },
+  "devDependencies": {
+    "@testa-platform/shared-types": "workspace:*",
+    "@testa-soft/react": "workspace:*",
+    "@types/node": "22.9.0",
+    "@types/react": "18.3.12",
+    "@types/react-dom": "18.3.1",
+    "tsx": "4.19.2",
+    "typescript": "5.6.3"
+  }
+}

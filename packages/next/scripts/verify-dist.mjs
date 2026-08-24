@@ -24,6 +24,28 @@ const listBundles = (dir) =>
 
 const BARE_NEXT_SPECIFIER = /["'](next\/[^"']+)["']/g;
 
+// Because this package is NAMED `next`, some of Next.js's own path heuristics
+// misfire on our dist: babelIncludeRegexes force-compiles anything matching
+// next/dist/pages, next/dist/client, or next/dist/shared/lib (unanchored — it
+// matches `@testa-soft/next/dist/pages/...` too), and its SWC pass emits CJS
+// into an ESM webpack wrapper, so every export reads back undefined. Never
+// emit those directories.
+// The regexes are UNANCHORED at both ends, so even a PREFIX collides
+// (`dist/pages-router` matches `next/dist/pages`). Forbid the prefixes.
+const FORBIDDEN_DIST_PREFIXES = [/^pages/, /^client/, /^shared[\\/]lib/];
+
+for (const entry of readdirSync(distDir, { recursive: true })) {
+  const rel = String(entry);
+  if (FORBIDDEN_DIST_PREFIXES.some((re) => re.test(rel))) {
+    console.error(
+      `[verify-dist] dist/${rel} — forbidden path: Next's babelIncludeRegexes match ` +
+        `'(@testa-soft/)next/dist/(pages|client|shared/lib)…' as an unanchored substring ` +
+        `and corrupt the module (see tsup.config.ts).`,
+    );
+    process.exit(1);
+  }
+}
+
 const violations = listBundles(distDir).flatMap((file) => {
   const body = readFileSync(file, 'utf8');
   return [...body.matchAll(BARE_NEXT_SPECIFIER)]

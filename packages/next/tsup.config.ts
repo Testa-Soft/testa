@@ -21,13 +21,28 @@ import { defineConfig } from 'tsup';
 // `build` script prepends it AFTER tsup (scripts/add-use-client.mjs). The
 // middleware bundle stays free of react + the DOM apply engine (verified in CI).
 export default defineConfig({
-  entry: [
-    'src/index.ts',
-    'src/router-guard/index.ts',
-    'src/experiments/index.ts',
-    'src/server/index.ts',
-  ],
+  // Object form so the Pages Router entry can output to dist/router-pages/:
+  // `dist/pages/` is FORBIDDEN — Next's babelIncludeRegexes force-compile any
+  // path matching /next[\/]dist[\/](esm[\/])?pages/ (meant for Next's OWN
+  // internals, unanchored), and our package being named `next` makes
+  // `@testa-soft/next/dist/pages/*` collide: SWC then emits CJS into an ESM
+  // webpack wrapper and every export reads back undefined ("exports is not
+  // defined" in the browser). Same trap exists for dist/client and
+  // dist/shared/lib — scripts/verify-dist.mjs guards all three.
+  entry: {
+    index: 'src/index.ts',
+    'router-guard/index': 'src/router-guard/index.ts',
+    'experiments/index': 'src/experiments/index.ts',
+    'server/index': 'src/server/index.ts',
+    // Pages Router surface: client provider + self-wired router guard.
+    'router-pages/index': 'src/pages/index.ts',
+  },
   format: ['esm', 'cjs'],
+  // NO shared chunks — every entry is self-contained. Bundlers with partial
+  // externalization (Next transpilePackages over a symlinked package) have
+  // been seen leaving `require('../chunk-*.js')` unresolved at runtime; a few
+  // KB of duplicated helper code beats that whole failure class.
+  splitting: false,
   dts: { compilerOptions: { incremental: false, composite: false } },
   clean: true,
   sourcemap: true,
@@ -42,6 +57,9 @@ export default defineConfig({
     'react',
     '@testa-soft/experiment-core',
     '@testa-soft/dom',
+    // Real runtime dep of the `/pages` entry (client engine); consumers get it
+    // via our dependencies — never inline it (it ships its own "use client").
+    '@testa-soft/react',
     // Self-reference: the server entry imports the client entry through it so the
     // client `"use client"` boundary is not inlined into the server bundle.
     '@testa-soft/next/_internal/experiments',
