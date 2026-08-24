@@ -35,9 +35,9 @@
       "require": "./dist/instrumentation/index.cjs"
     },
     "./pages": {
-      "types": "./dist/pages/index.d.ts",
-      "import": "./dist/pages/index.js",
-      "require": "./dist/pages/index.cjs"
+      "types": "./dist/router-pages/index.d.ts",
+      "import": "./dist/router-pages/index.js",
+      "require": "./dist/router-pages/index.cjs"
     }
   },
   "files": [

@@ -21,16 +21,24 @@ import { defineConfig } from 'tsup';
 // `build` script prepends it AFTER tsup (scripts/add-use-client.mjs). The
 // middleware bundle stays free of react + the DOM apply engine (verified in CI).
 export default defineConfig({
-  entry: [
-    'src/index.ts',
-    'src/router-guard/index.ts',
-    'src/experiments/index.ts',
-    'src/server/index.ts',
+  // Object form so the Pages Router entry can output to dist/router-pages/:
+  // `dist/pages/` is FORBIDDEN — Next's babelIncludeRegexes force-compile any
+  // path matching /next[\/]dist[\/](esm[\/])?pages/ (meant for Next's OWN
+  // internals, unanchored), and our package being named `next` makes
+  // `@testa-soft/next/dist/pages/*` collide: SWC then emits CJS into an ESM
+  // webpack wrapper and every export reads back undefined ("exports is not
+  // defined" in the browser). Same trap exists for dist/client and
+  // dist/shared/lib — scripts/verify-dist.mjs guards all three.
+  entry: {
+    index: 'src/index.ts',
+    'router-guard/index': 'src/router-guard/index.ts',
+    'experiments/index': 'src/experiments/index.ts',
+    'server/index': 'src/server/index.ts',
     // Node-only config poller (`registerTestaConfig`) for instrumentation.ts.
-    'src/instrumentation/index.ts',
+    'instrumentation/index': 'src/instrumentation/index.ts',
     // Pages Router surface: client provider + self-wired router guard.
-    'src/pages/index.ts',
-  ],
+    'router-pages/index': 'src/pages/index.ts',
+  },
   format: ['esm', 'cjs'],
   // NO shared chunks — every entry is self-contained. Bundlers with partial
   // externalization (Next transpilePackages over a symlinked package) have
