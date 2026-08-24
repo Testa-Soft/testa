@@ -32,6 +32,13 @@ export default defineConfig({
     'src/pages/index.ts',
   ],
   format: ['esm', 'cjs'],
+  // NO shared chunks — every entry is self-contained. Bundlers with partial
+  // externalization (Next transpilePackages over a symlinked package) have
+  // been seen leaving `require('../chunk-*.js')` unresolved at runtime; a few
+  // KB of duplicated helper code beats that whole failure class. Cross-entry
+  // state deliberately lives on `globalThis` (config-snapshot.ts), so
+  // duplicated modules stay coherent.
+  splitting: false,
   dts: { compilerOptions: { incremental: false, composite: false } },
   clean: true,
   sourcemap: true,
