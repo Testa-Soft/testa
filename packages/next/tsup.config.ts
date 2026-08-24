@@ -7,11 +7,14 @@ import { defineConfig } from 'tsup';
 // Entry boundaries:
 //   - `index`        — server/edge middleware surface (react-free, no directive).
 //   - `router-guard` — `<TestaRouterGuard/>` client component.
-//   - `experiments`  — `<TestaExperiments/>` + `<TestaShield/>` client entry.
+//   - `experiments`  — INTERNAL client half of the `/server` components. Exposed
+//                      only as `./_internal/experiments` (the self-reference
+//                      below needs an exports-map entry); not a public API.
 //   - `server`       — RSC surface (async server components, NO directive). It
 //                      imports the client entry via the bare self-reference
-//                      `@testa-soft/next/experiments` (kept EXTERNAL below) so the
-//                      client bundle's `"use client"` boundary survives the build.
+//                      `@testa-soft/next/_internal/experiments` (kept EXTERNAL
+//                      below) so the client bundle's `"use client"` boundary
+//                      survives the build.
 //
 // The two client entries need a `"use client"` directive at the top of the
 // shipped file, but esbuild strips module-level directives when bundling. So the
@@ -41,6 +44,6 @@ export default defineConfig({
     '@testa-soft/dom',
     // Self-reference: the server entry imports the client entry through it so the
     // client `"use client"` boundary is not inlined into the server bundle.
-    '@testa-soft/next/experiments',
+    '@testa-soft/next/_internal/experiments',
   ],
 });

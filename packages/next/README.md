@@ -11,7 +11,22 @@ npm install @testa-soft/next
 Peer dependencies (you almost certainly already have these):
 
 - `next` — `>=13.4.0`
-- `react` — `>=18` (optional; only required if you use the client components under `@testa-soft/next/experiments` or `@testa-soft/next/router-guard`)
+- `react` — `>=18` (optional; only required if you render the React components from `@testa-soft/next/server` or `@testa-soft/next/router-guard` — the middleware entry `@testa-soft/next` is react-free)
+
+### Which entry do I import from?
+
+| You want | Import from |
+| --- | --- |
+| The middleware / proxy (`createTestaProxy`), event bus, `pushEvent` | `@testa-soft/next` |
+| `<TestaGuard/>` + `<TestaProvider projectId=.../>` for the root layout | `@testa-soft/next/server` — **the only components you should mount** |
+| `<TestaRouterGuard/>` (optional soft-nav safety net) | `@testa-soft/next/router-guard` |
+
+There is exactly **one** `<TestaProvider>` to use in a Next.js app: the one from
+`@testa-soft/next/server`. (Not using Next.js? Plain React SPAs use
+`@testa-soft/react` instead.) You may see a `./_internal/experiments` path in
+the exports map — that is the private client half of the `/server` components,
+required by the build for the `"use client"` boundary. Never import it; it has
+no semver guarantees.
 
 ## Quick start — split-URL redirects
 
@@ -229,10 +244,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 }
 ```
 
-Managing the config yourself? The client entry
-(`@testa-soft/next/experiments`) exports the same components taking an explicit
-`config` prop (the shield there always renders — not header-gated), and the
-`/server` components also accept `config` to skip their fetch.
+Managing the config yourself (local fixture, demo, self-managed JSON)? Pass it
+inline — the same `/server` components accept a `config` prop, which skips
+their fetch entirely: `<TestaProvider config={projectConfig} />`.
 
 Supported change types are crobot-native and applied by the shared DOM engine:
 
@@ -487,24 +501,13 @@ renders the client applier. Fails open (renders nothing) on any config failure.
 | `host`          | `string`        | `https://config.testa-soft.tech` | Config host. Also via `TESTA_CONFIG_HOST`.                             |
 | `revalidateSec` | `number`        | `30`                             | Next data-cache revalidation window.                                   |
 | `previewApiUrl` | `string`        | —                                | Backend base URL; enables `?testa_preview`.                            |
+| `trackingHost`  | `string`        | `https://new.testa-soft.tech`    | Backend base URL for goal conversions.                                 |
 
-### `<TestaGuard>` — from `@testa-soft/next/server` (recommended)
+### `<TestaGuard>` — from `@testa-soft/next/server`
 
-Async server component with the same props as the client shield below, but
-**self-gating**: renders only when the middleware set `x-testa-shield: 1` for
-this request. Outside a request scope (static generation) it renders nothing.
-
-`loadTestaConfig({ projectId, host?, revalidateSec? })` is also exported from
-`/server` for custom server code — resolves `null` on any failure (fail open).
-
-### `<TestaProvider>` — from `@testa-soft/next/experiments` (client entry)
-
-| Prop            | Type            | Default | Description                                                                                          |
-| --------------- | --------------- | ------- | -------------------------------------------------------------------------------------------------- |
-| `config`        | `ProjectConfig` | —       | **Required.** The same config the middleware uses (local fixture or fetched once).                 |
-| `previewApiUrl` | `string`        | —       | Backend base URL for preview mode. Required for `?testa_preview` to fetch drafts; ignored otherwise. |
-
-### `<TestaGuard>` — from `@testa-soft/next/experiments` (client entry)
+Async server component rendering the anti-flicker shield. **Self-gating**:
+renders only when the middleware set `x-testa-shield: 1` for this request.
+Outside a request scope (static generation) it renders nothing.
 
 | Prop        | Type                        | Default     | Description                                                                                   |
 | ----------- | --------------------------- | ----------- | -------------------------------------------------------------------------------------------- |
@@ -512,6 +515,9 @@ this request. Outside a request scope (static generation) it renders nothing.
 | `timeoutMs` | `number`                    | `4000`      | Hard fallback (ms) after which the shield auto-reveals no matter what.                        |
 | `mode`      | `'opacity' \| 'visibility'` | `'opacity'` | How to hide. `opacity` keeps layout (no reflow on reveal).                                    |
 | `styleId`   | `string`                    | —           | `<style>` element id — makes raising idempotent and reveal targeted.                          |
+
+`loadTestaConfig({ projectId, host?, revalidateSec? })` is also exported from
+`/server` for custom server code — resolves `null` on any failure (fail open).
 
 ### `<TestaRouterGuard>` — from `@testa-soft/next/router-guard`
 

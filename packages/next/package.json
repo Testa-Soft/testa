@@ -19,7 +19,7 @@
       "import": "./dist/router-guard/index.js",
       "require": "./dist/router-guard/index.cjs"
     },
-    "./experiments": {
+    "./_internal/experiments": {
       "types": "./dist/experiments/index.d.ts",
       "import": "./dist/experiments/index.js",
       "require": "./dist/experiments/index.cjs"

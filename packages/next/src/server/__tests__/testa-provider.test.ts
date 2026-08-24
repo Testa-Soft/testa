@@ -1,5 +1,5 @@
 import type { ProjectConfig } from '@testa-platform/shared-types';
-import { TestaProvider as TestaProviderClient } from '@testa-soft/next/experiments';
+import { TestaProvider as TestaProviderClient } from '@testa-soft/next/_internal/experiments';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { TestaProvider } from '../TestaProvider.tsx';
 

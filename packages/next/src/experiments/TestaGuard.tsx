@@ -14,8 +14,14 @@
 
 import { type ShieldOptions, buildShieldSnippet } from '@testa-soft/dom';
 
+/**
+ * @internal Most apps want `TestaGuard` from `@testa-soft/next/server` instead —
+ * same props, but self-gating on the middleware's `x-testa-shield` header. This
+ * raw variant ALWAYS renders the shield.
+ */
 export type TestaGuardProps = ShieldOptions;
 
+/** @internal See {@link TestaGuardProps}. */
 export function TestaGuard(props: TestaGuardProps): JSX.Element {
   // The snippet is built from author-controlled options and JSON-encodes its
   // values; it contains no untrusted input.

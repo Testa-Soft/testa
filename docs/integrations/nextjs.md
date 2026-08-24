@@ -246,18 +246,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 `projectId` is the same id you pass to `createTestaProxy`. That's the whole
 integration — no config fetching, no `headers()` plumbing.
 
-### Inline config (client entry)
+### Inline config
 
-If you manage the config yourself (local dev, demos, self-managed JSON), the
-underlying **client** components from `@testa-soft/next/experiments` take an
-explicit `config` prop instead — or pass `config` straight to the `/server`
-components to skip their fetch:
+If you manage the config yourself (local dev, demos, self-managed JSON), pass
+`config` straight to the same `/server` components — it skips their fetch:
 
 ```tsx
-import { TestaGuard, TestaProvider } from '@testa-soft/next/experiments'
+import { TestaGuard, TestaProvider } from '@testa-soft/next/server'
 import projectConfig from './testa.config.json'
-// <TestaGuard selector="body"/> in <head> (always renders — not self-gating),
-// <TestaProvider config={projectConfig}/> in the body.
+// <TestaGuard/> in <head>, <TestaProvider config={projectConfig}/> in the body.
 ```
 
 Supported change types:
@@ -613,29 +610,19 @@ applier. Fails open (renders nothing) when the config can't be resolved.
 | `host`          | `string`        | `https://config.testa-soft.tech` | Config host. Also via `TESTA_CONFIG_HOST` (matches the proxy).        |
 | `revalidateSec` | `number`        | `30`                             | Next data-cache revalidation window for the config fetch.             |
 | `previewApiUrl` | `string`        | —                                | Backend base URL; enables `?testa_preview`.                           |
+| `trackingHost`  | `string`        | `https://new.testa-soft.tech`    | Backend base URL for goal conversions.                                |
 
-### `<TestaGuard>` — `@testa-soft/next/server` (recommended)
+This is the **only** `<TestaProvider>` to mount in a Next.js app. (The exports
+map also contains `./_internal/experiments` — the private client half of these
+server components, needed by the build for the `"use client"` boundary. Don't
+import it; it has no semver guarantees.)
+
+### `<TestaGuard>` — `@testa-soft/next/server`
 
 Async React **Server Component**, self-gating: renders the anti-flicker script
 **only** when the proxy set `x-testa-shield: 1` for this request (i.e. the
-visitor has a pending DOM change on this page). Same props as the client
-`<TestaGuard>` below. Renders nothing outside a request scope (static
-generation) — fail open, no shield.
-
-### `loadTestaConfig(options)` — `@testa-soft/next/server`
-
-The config loader the server components use, exported for custom server code:
-`loadTestaConfig({ projectId, host?, revalidateSec? })` → `Promise<ProjectConfig | null>`.
-Fail-open: resolves `null` on any network/HTTP/shape failure.
-
-### `<TestaProvider>` — `@testa-soft/next/experiments` (client entry)
-
-| Prop            | Type            | Default | Description                                                        |
-| --------------- | --------------- | ------- | ----------------------------------------------------------------- |
-| `config`        | `ProjectConfig` | —       | **Required.** Same config the proxy uses.                         |
-| `previewApiUrl` | `string`        | —       | Backend base URL; enables `?testa_preview`.                       |
-
-### `<TestaGuard>` — `@testa-soft/next/experiments` (client entry)
+visitor has a pending DOM change on this page). Renders nothing outside a
+request scope (static generation) — fail open, no shield.
 
 | Prop        | Type                        | Default     | Description                                             |
 | ----------- | --------------------------- | ----------- | ------------------------------------------------------ |
@@ -643,6 +630,12 @@ Fail-open: resolves `null` on any network/HTTP/shape failure.
 | `timeoutMs` | `number`                    | `4000`      | Hard fallback before auto-reveal.                      |
 | `mode`      | `'opacity' \| 'visibility'` | `'opacity'` | How to hide (`opacity` avoids reflow).                 |
 | `styleId`   | `string`                    | —           | `<style>` element id — makes raising idempotent.       |
+
+### `loadTestaConfig(options)` — `@testa-soft/next/server`
+
+The config loader the server components use, exported for custom server code:
+`loadTestaConfig({ projectId, host?, revalidateSec? })` → `Promise<ProjectConfig | null>`.
+Fail-open: resolves `null` on any network/HTTP/shape failure.
 
 ### `<TestaRouterGuard>` — `@testa-soft/next/router-guard`
 

@@ -9,16 +9,18 @@
  * (the zero-infra / demo path).
  *
  * CRITICAL: the client component is imported via the bare self-reference
- * `@testa-soft/next/experiments`, NOT a relative path. A relative import would
- * make tsup inline the client component into THIS server bundle, destroying the
- * `"use client"` boundary (Next would then crash on usePathname/useEffect in a
- * server module). Keeping it external means the built server bundle still imports
- * `@testa-soft/next/experiments`, which resolves via package-exports
- * self-reference to the built client entry that carries the directive.
+ * `@testa-soft/next/_internal/experiments`, NOT a relative path. A relative
+ * import would make tsup inline the client component into THIS server bundle,
+ * destroying the `"use client"` boundary (Next would then crash on
+ * usePathname/useEffect in a server module). Keeping it external means the built
+ * server bundle still imports `@testa-soft/next/_internal/experiments`, which
+ * resolves via package-exports self-reference to the built client entry that
+ * carries the directive. That self-reference is the ONLY reason the `_internal`
+ * path is in the exports map at all — it is not a public API.
  */
 
 import type { ProjectConfig } from '@testa-platform/shared-types';
-import { TestaProvider as TestaProviderClient } from '@testa-soft/next/experiments';
+import { TestaProvider as TestaProviderClient } from '@testa-soft/next/_internal/experiments';
 import { loadTestaConfig } from './load-config.ts';
 
 interface CommonProps {

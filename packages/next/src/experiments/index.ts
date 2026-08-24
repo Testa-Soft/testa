@@ -1,12 +1,20 @@
 /**
- * `@testa-soft/next/experiments` — client-side DOM experiments (css/html/text/
- * attr/js/hide/insert/move) + anti-flicker guard. Separate entry so the
- * middleware bundle stays react-free (see tsup.config.ts). The middleware
- * assigns server-side; these render the assignment client-side.
+ * `@testa-soft/next/_internal/experiments` — INTERNAL. Do not import in app code;
+ * use `@testa-soft/next/server` (`<TestaProvider projectId=.../>`) instead.
  *
- * NOTE: these are the RAW client components (explicit `config` prop, guard is
- * NOT self-gating) for the inline-config / zero-infra path. Normal
- * integrations use `@testa-soft/next/server` instead.
+ * This is the client half of the `/server` components: client-side DOM
+ * experiments (css/html/text/attr/js/hide/insert/move) + anti-flicker guard.
+ * It is a separate entry only because (a) the middleware bundle must stay
+ * react-free and (b) the `/server` RSCs must import the `"use client"` bundle
+ * via a package self-reference, which requires an exports-map path (see
+ * tsup.config.ts). The `_internal` prefix marks it non-public: no semver
+ * guarantees, no docs. Everything an app needs is on `.` (events/goals) and
+ * `/server` (components — pass `config` inline there for the zero-infra path).
+ *
+ * These are the RAW client components: explicit `config` prop, guard is NOT
+ * self-gating.
+ *
+ * @internal
  */
 
 export { TestaProvider } from './TestaProvider.tsx';

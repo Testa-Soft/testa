@@ -16,7 +16,7 @@ const distDir = join(dirname(fileURLToPath(import.meta.url)), '..', 'dist');
 
 // NOTE: `server/index.*` is intentionally ABSENT — the `@testa-soft/next/server`
 // entry is a React Server Component surface and must stay directive-free. It
-// imports the client entry via the self-reference `@testa-soft/next/experiments`,
+// imports the client entry via the self-reference `@testa-soft/next/_internal/experiments`,
 // which carries the directive on its own bundle.
 const CLIENT_ENTRIES = [
   'router-guard/index.js',

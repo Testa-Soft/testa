@@ -41,6 +41,13 @@ import {
   isPreviewRequested,
 } from './preview.ts';
 
+/**
+ * Props of the INTERNAL client provider.
+ *
+ * @internal Most apps want `TestaProvider` from `@testa-soft/next/server`
+ * instead — it takes `projectId`, fetches the config server-side, and renders
+ * this component with the resolved `config`.
+ */
 export interface TestaProviderProps {
   /** The same ProjectConfig the middleware uses (local fixture or fetched once). */
   config: ProjectConfig;
