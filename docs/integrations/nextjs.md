@@ -337,8 +337,8 @@ cookie contract — assignments made server-side are reused, never re-rolled):
 
 Want the pieces individually (e.g. split-URL-only, no DOM engine)?
 `<TestaRouterGuard/>` is exported standalone from `@testa-soft/next/pages`
-(and `/router-guard`), with the same `projectId` zero-config mode or an inline
-`config` object.
+(and `/router-guard`) — it takes a resolved `config` object and never fetches,
+so you stay in control of when (and whether) the config is loaded.
 
 > **App Router users don't need this section.** `<TestaProvider/>` /
 > `<TestaGuard/>` from `@testa-soft/next/server` cover the client half, and the
@@ -670,13 +670,12 @@ use `/server` there.
 
 ### `<TestaRouterGuard>` — `@testa-soft/next/router-guard`
 
-Pass **one of** `projectId` (zero-config, recommended) or `config`:
+| Prop     | Type            | Default | Description                                                                 |
+| -------- | --------------- | ------- | --------------------------------------------------------------------------- |
+| `config` | `ProjectConfig` | —       | **Required.** The resolved config. The guard never fetches — `<TestaProvider/>` from `/pages` resolves it once per page load and passes it down. |
 
-| Prop        | Type            | Default  | Description                                                            |
-| ----------- | --------------- | -------- | ---------------------------------------------------------------------- |
-| `projectId` | `string`        | —        | Fetches the servable config once per page load (shared across mounts, CDN + browser cached). Fails open: on a fetch failure the guard simply never installs — hard loads stay covered by the proxy. |
-| `config`    | `ProjectConfig` | —        | Inline config (fixture / self-managed). Wins over `projectId`.          |
-| `host`      | `string`        | built-in | Config host override for `projectId` mode (staging/self-hosted).        |
+Mounted without a Pages Router (i.e. in the App Router) it is a no-op with a
+dev-time warning — the proxy already sees App-Router soft navs.
 
 ---
 

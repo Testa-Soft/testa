@@ -5,8 +5,6 @@
 
 export { TestaRouterGuard } from './TestaRouterGuard.tsx';
 export type { TestaRouterGuardProps } from './TestaRouterGuard.tsx';
-export { resolveGuardConfig, clearGuardConfigCache } from './guard-config.ts';
-export type { GuardConfigSource } from './guard-config.ts';
 export {
   resolveGuardRedirect,
   installRouterGuard,

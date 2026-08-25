@@ -25,19 +25,20 @@ import { ASSIGNMENT_COOKIE } from '@testa-soft/experiment-core';
 import { useRouter } from 'next/compat/router.js';
 import { useEffect } from 'react';
 import { readClientCookie } from '../client-cookie.ts';
-import { type GuardConfigSource, resolveGuardConfig } from './guard-config.ts';
 import { installRouterGuard } from './use-cookie-assignment.ts';
 
-/**
- * Zero-config mode (`projectId`) fetches the same servable config the proxy
- * uses — once per page load, shared across mounts, from the CDN-cached
- * endpoint. Inline `config` wins when both are passed. See guard-config.ts.
- */
-export type TestaRouterGuardProps = GuardConfigSource;
+export interface TestaRouterGuardProps {
+  /**
+   * The resolved `ProjectConfig`. The guard NEVER fetches: `<TestaProvider/>`
+   * (`@testa-soft/next/pages`) resolves the config once per page load and
+   * passes it down, so the page makes exactly one config request no matter how
+   * many testa components are mounted.
+   */
+  config: ProjectConfig;
+}
 
-export function TestaRouterGuard(props: TestaRouterGuardProps): null {
+export function TestaRouterGuard({ config }: TestaRouterGuardProps): null {
   const router = useRouter();
-  const { config, projectId, host } = props;
 
   useEffect(() => {
     if (!router) {
@@ -51,30 +52,15 @@ export function TestaRouterGuard(props: TestaRouterGuardProps): null {
       }
       return;
     }
-    let uninstall: (() => void) | undefined;
-    let unmounted = false;
-
-    void resolveGuardConfig({
-      ...(config ? { config } : {}),
-      ...(projectId ? { projectId } : {}),
-      ...(host ? { host } : {}),
-    }).then((resolved: ProjectConfig | null) => {
-      if (!resolved || unmounted) return; // fail open — hard loads still covered by the proxy
-      uninstall = installRouterGuard(router, {
-        config: resolved,
-        getCookieValue: () => readClientCookie(ASSIGNMENT_COOKIE),
-        toAbsoluteUrl: (path) =>
-          typeof window !== 'undefined' ? new URL(path, window.location.origin).href : path,
-      });
+    return installRouterGuard(router, {
+      config,
+      getCookieValue: () => readClientCookie(ASSIGNMENT_COOKIE),
+      toAbsoluteUrl: (path) =>
+        typeof window !== 'undefined' ? new URL(path, window.location.origin).href : path,
     });
-
-    return () => {
-      unmounted = true;
-      uninstall?.();
-    };
     // router.events identity is stable for the app lifetime; re-subscribe only
-    // if the config source changes.
-  }, [router, config, projectId, host]);
+    // if the config changes.
+  }, [router, config]);
 
   return null;
 }

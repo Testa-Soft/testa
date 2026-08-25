@@ -9,10 +9,15 @@
  * split-URL redirects on `next/link` soft navs — hard loads are the proxy's
  * job), so nothing needs to be wired by hand.
  *
- * ONE config fetch total: the guard does not fetch for itself here — this
- * component resolves the config through `preloadConfig`, the same module-level
- * cache the client provider fetches through, and hands the settled config to
- * the guard as a prop.
+ * ONE config fetch per page load, total. The guard cannot fetch — it only
+ * takes a resolved `config` prop. This component resolves the config through
+ * `preloadConfig`, the SAME module-level cache the client provider fetches
+ * through, so both calls collapse onto one request (StrictMode's double-mount
+ * included) and the settled config is handed to the guard as a prop.
+ *
+ * Nothing refetches on soft navigation either: the client engine re-runs its
+ * apply cycle against the config it already holds, and the guard re-installs
+ * only if the config object itself changes.
  *
  * Mounted in the App Router by mistake, everything still behaves: the client
  * engine works anywhere React does, and the guard no-ops without a Pages
