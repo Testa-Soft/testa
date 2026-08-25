@@ -1,5 +1,12 @@
 /**
- * `<TestaGuard/>` — the anti-flicker shield for the PAGES ROUTER.
+ * `<TestaGuard/>` — OPTIONAL head-time acceleration for the PAGES ROUTER.
+ *
+ * The shield itself no longer needs this: `<TestaProvider/>` server-renders one
+ * by default through `next/head` (see `HeadShield.tsx`). What this adds is the
+ * CONFIG FETCH, started while the HTML is still parsing instead of after the
+ * bundle has hydrated — which is what shortens the shielded window, since the
+ * page stays hidden until the config lands. Add it if you care about that (and
+ * for a second, script-based shield with its own JS timeout).
  *
  * Goes in `pages/_document.tsx`, inside `<Head>`:
  *
@@ -15,18 +22,10 @@
  *     );
  *   }
  *
- * WHY THIS EXISTS, when `<TestaProvider/>` already auto-shields: the provider
- * raises its shield from a `useLayoutEffect`, which cannot run until React has
- * mounted. In the Pages Router the server ships complete HTML, so the browser
- * paints the CONTROL content during hydration — before any effect runs. The
- * shield arrives too late and the visitor sees the flash. Only markup inside
- * `<head>`, evaluated while the document is still parsing, can hide content
- * before that first paint. That is this component: an inline `<style>`-raising
- * IIFE, the same snippet `@testa-soft/dom` exposes for hand-rolled setups.
- *
- * It composes with the provider rather than duplicating it — `raiseShield` is
- * idempotent by `styleId`, so the provider finds the shield already up and
- * simply reveals it once the variant is applied.
+ * It composes with the provider's shield rather than fighting it: the two use
+ * different style ids and each is released by its owner when the variant is
+ * applied — this one by `<TestaProvider/>` calling `window.__testa_shield`'s
+ * reveal, the provider's own by unrendering it.
  *
  * Unlike the App Router's `<TestaGuard/>` (`@testa-soft/next/server`) this one
  * is NOT gated on the middleware's `x-testa-shield` header: `_document` renders

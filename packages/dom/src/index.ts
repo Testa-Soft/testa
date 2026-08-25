@@ -17,16 +17,19 @@
  *     the next experiment cycle). Late-rendered elements are handled by a
  *     MutationObserver with a timeout fallback (3.3.3 retry-loop parity, no
  *     polling — see `apply/dom.ts`).
- *   - `raiseShield` / `buildShieldSnippet` — anti-flicker: hide content until
- *     the variation is applied, with a hard timeout fallback.
+ *   - `raiseShield` / `buildShieldSnippet` / `buildShieldCss` — anti-flicker:
+ *     hide content until the variation is applied, with a hard timeout fallback
+ *     (as a runtime call, an inline `<head>` script, or JS-free CSS).
  */
 
 export {
   raiseShield,
   buildShieldSnippet,
+  buildShieldCss,
   DEFAULT_SHIELD_STYLE_ID,
+  SHIELD_CSS_STYLE_ID,
 } from './shield/shield.ts';
-export type { Shield, ShieldOptions, ShieldMode } from './shield/shield.ts';
+export type { Shield, ShieldOptions, ShieldCssOptions, ShieldMode } from './shield/shield.ts';
 // Head-time config preload — starts the fetch during HTML parse so the client
 // engine isn't waiting on the network after hydration. See config-preload.ts.
 export { buildConfigPreloadSnippet, CONFIG_PROMISE_KEY } from './shield/config-preload.ts';

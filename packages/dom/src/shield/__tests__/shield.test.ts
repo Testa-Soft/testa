@@ -1,5 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { DEFAULT_SHIELD_STYLE_ID, buildShieldSnippet, raiseShield } from '../shield.ts';
+import {
+  DEFAULT_SHIELD_STYLE_ID,
+  SHIELD_CSS_STYLE_ID,
+  buildShieldCss,
+  buildShieldSnippet,
+  raiseShield,
+} from '../shield.ts';
 
 beforeEach(() => {
   document.head.innerHTML = '';
@@ -93,5 +99,43 @@ describe('buildShieldSnippet', () => {
     // The hostile-looking values are JSON-encoded string literals, not raw.
     expect(snippet).toContain(JSON.stringify("a'b"));
     expect(snippet).not.toContain('<script>a');
+  });
+});
+
+describe('buildShieldCss', () => {
+  it('hides the body and reveals itself at the timeout — with no JavaScript', () => {
+    const css = buildShieldCss({ timeoutMs: 2500 });
+    expect(css).toContain('opacity:0');
+    // The reveal is the animation's END state, so a page whose JS never runs
+    // still becomes visible.
+    expect(css).toContain('100%{opacity:1}');
+    expect(css).toContain('2500ms');
+    expect(css).toContain('forwards');
+    expect(css).toContain('body{');
+  });
+
+  it('defaults to a 4s reveal so a broken bundle cannot hide a site', () => {
+    expect(buildShieldCss()).toContain('4000ms');
+  });
+
+  it('marks the ANIMATION important, never the hidden property', () => {
+    // `opacity:0 !important` would outrank the keyframes and break the
+    // fallback reveal; `animation: ... !important` protects the shield from
+    // the page's own CSS without touching the cascade the reveal relies on.
+    const css = buildShieldCss();
+    expect(css).toContain('forwards !important');
+    expect(css).not.toContain('opacity:0 !important');
+  });
+
+  it('honours a custom selector and visibility mode', () => {
+    const css = buildShieldCss({ selector: '#root', mode: 'visibility' });
+    expect(css).toContain('#root{');
+    expect(css).toContain('visibility:hidden');
+    expect(css).toContain('100%{visibility:visible}');
+  });
+
+  it('names its keyframes after the css shield id (no collision with the JS shield)', () => {
+    expect(buildShieldCss()).toContain(`@keyframes ${SHIELD_CSS_STYLE_ID}_reveal`);
+    expect(SHIELD_CSS_STYLE_ID).not.toBe(DEFAULT_SHIELD_STYLE_ID);
   });
 });

@@ -1,10 +1,15 @@
 /**
- * The second half of the Pages Router integration: <TestaGuard/> in <Head>.
+ * OPTIONAL half of the Pages Router integration: <TestaGuard/> in <Head>.
  *
- * Without it the browser paints the server-rendered control content before
- * React hydrates, so the provider's own shield (a layout effect) is always too
- * late and DOM experiments visibly flash. Only an inline <head> script runs
- * early enough. <TestaProvider/> in _app.tsx reveals it once the variant is on.
+ * Anti-flicker itself needs nothing here — <TestaProvider/> in _app.tsx
+ * server-renders its own shield into <head>. What this adds is the CONFIG
+ * FETCH, kicked off while the HTML is still parsing instead of after the bundle
+ * has hydrated. The page stays hidden until the config lands, so this is the
+ * difference between a hidden window measured in parse time and one measured in
+ * bundle-download-plus-hydrate time.
+ *
+ * (This demo passes an inline config, so there's nothing to fetch — the guard
+ * is here to exercise the composition: two shields, each released by its owner.)
  */
 
 import { TestaGuard } from '@testa-soft/next/pages';

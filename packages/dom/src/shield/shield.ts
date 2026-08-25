@@ -42,6 +42,14 @@ export interface Shield {
 }
 
 export const DEFAULT_SHIELD_STYLE_ID = '__testa_shield';
+/**
+ * `id` for the CSS-only shield (see {@link buildShieldCss}). Deliberately NOT
+ * {@link DEFAULT_SHIELD_STYLE_ID}: the two shields coexist on an SSR page (the
+ * CSS one from the server render, the JS one from `raiseShield` after mount)
+ * and each must be revealed by its own owner — sharing the id would let the JS
+ * shield's timeout rip out a React-owned element.
+ */
+export const SHIELD_CSS_STYLE_ID = '__testa_shield_css';
 const DEFAULT_SELECTOR = 'body';
 const DEFAULT_TIMEOUT_MS = 4000;
 
@@ -116,4 +124,46 @@ export function buildShieldSnippet(opts: ShieldOptions = {}): string {
 /** JSON-encode a string for safe embedding in the snippet. */
 function json(v: string): string {
   return JSON.stringify(v);
+}
+
+/** Options for the CSS-only shield. `styleId` is fixed ({@link SHIELD_CSS_STYLE_ID}). */
+export type ShieldCssOptions = Pick<ShieldOptions, 'selector' | 'timeoutMs' | 'mode'>;
+
+/**
+ * The shield as PURE CSS — no JavaScript at all, for a `<style>` a server can
+ * render into the document (`next/head` from a Pages Router `_app`, a template,
+ * an `index.html`). The point is timing: server-rendered markup hides content
+ * before the browser's first paint, which is the one thing a client shield can
+ * never do — a React effect runs after the control content has already been
+ * painted, so raising a shield there produces content → blank → variant instead
+ * of preventing the flash.
+ *
+ * The timeout fallback is CSS too, so nothing keeps the page hidden when the
+ * JavaScript that should reveal it never arrives (bundle 404, hydration crash,
+ * scripts blocked): the hide lives in an ANIMATION which flips to visible at
+ * `timeoutMs`. Animated declarations also outrank normal author declarations in
+ * the cascade, so this hides the content whether or not the page's own CSS has
+ * an opinion about `body`'s opacity — without `!important` on the property,
+ * which would beat the animation and break the fallback reveal.
+ *
+ * Reveal is the owner's job: stop rendering the `<style>` (or remove it), which
+ * `<TestaProvider/>` does as soon as the variant is applied.
+ */
+export function buildShieldCss(opts: ShieldCssOptions = {}): string {
+  const selector = opts.selector ?? DEFAULT_SELECTOR;
+  const timeoutMs = Number(opts.timeoutMs ?? DEFAULT_TIMEOUT_MS);
+  const mode = opts.mode ?? 'opacity';
+  const name = `${SHIELD_CSS_STYLE_ID}_reveal`;
+  const [hidden, shown] =
+    mode === 'visibility'
+      ? ['visibility:hidden', 'visibility:visible']
+      : ['opacity:0', 'opacity:1'];
+  // The 99.99% stop keeps the content hidden for the WHOLE window and flips at
+  // the very end; the sub-millisecond ramp between the two stops is invisible.
+  // `!important` sits on `animation` (not on the hidden property) so the page's
+  // own CSS can't cancel the shield, while the animation still wins the cascade.
+  return (
+    `@keyframes ${name}{0%,99.99%{${hidden}}100%{${shown}}}` +
+    `${selector}{animation:${name} ${timeoutMs}ms linear forwards !important}`
+  );
 }

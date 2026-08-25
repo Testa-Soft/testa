@@ -8,6 +8,17 @@ import type { ProjectConfig } from '@testa-platform/shared-types';
  *   - 202 site-wide hero badge (append_html + css): applied client-side by the
  *     provider's engine, re-applied on every navigation.
  */
+
+/** The project id used in slow mode (`pnpm dev:slow`) — any string works. */
+export const DEMO_PROJECT_ID = 'pages-demo';
+
+/**
+ * How long the demo's own config endpoint stalls, in slow mode. The shield is
+ * up for exactly this long, which is the point: with the real (instant) config
+ * there is nothing to see.
+ */
+export const DEMO_DELAY_MS = Number(process.env.NEXT_PUBLIC_TESTA_SLOW_MS ?? 0);
+
 export const demoConfig: ProjectConfig = {
   project_id: 1,
   slug: 'pages-demo',

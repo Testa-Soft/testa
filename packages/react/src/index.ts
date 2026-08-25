@@ -13,6 +13,7 @@ export { TestaProvider } from './TestaProvider.tsx';
 export type { TestaProviderProps } from './TestaProvider.tsx';
 export { useTestaVariant } from './use-variant.ts';
 export type { VariantResult } from './use-variant.ts';
+export { useTestaSettled } from './use-settled.ts';
 export { TestaShield, raiseShield } from './shield.tsx';
 export type { TestaShieldProps } from './shield.tsx';
 export type { TestaContextValue } from './context.ts';

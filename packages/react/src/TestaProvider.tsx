@@ -24,9 +24,15 @@
  */
 
 import type { ProjectConfig } from '@testa-platform/shared-types';
-import { type Shield, type ShieldOptions, type Teardown, raiseShield } from '@testa-soft/dom';
+import {
+  SHIELD_CSS_STYLE_ID,
+  type Shield,
+  type ShieldOptions,
+  type Teardown,
+  raiseShield,
+} from '@testa-soft/dom';
 import { ASSIGNMENT_COOKIE } from '@testa-soft/experiment-core';
-import { type ReactNode, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { type ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { revealShield } from './apply-assignments.ts';
 import { preloadConfig } from './config.ts';
 import { TestaContext, type TestaContextValue } from './context.ts';
@@ -65,7 +71,7 @@ export interface TestaProviderProps {
 }
 
 export function TestaProvider(props: TestaProviderProps): JSX.Element {
-  const [value, setValue] = useState<TestaContextValue>({
+  const [value, setValue] = useState<Omit<TestaContextValue, 'settled'>>({
     config: null,
     assignments: new Map(),
   });
@@ -91,6 +97,10 @@ export function TestaProvider(props: TestaProviderProps): JSX.Element {
   useLayoutEffect(() => {
     const shieldOpt = props.shield ?? true;
     if (shieldOpt === false) return; // app manages its own shield
+    // A server-rendered shield is already hiding the content — and it went up
+    // BEFORE first paint, which this effect cannot. Raising a second one would
+    // add a redundant style element and nothing else.
+    if (typeof document !== 'undefined' && document.getElementById(SHIELD_CSS_STYLE_ID)) return;
     if (readShieldHint() === false) return; // last load had nothing to hide
     shieldHandleRef.current = raiseShield(typeof shieldOpt === 'object' ? shieldOpt : {});
   }, []);
@@ -191,5 +201,10 @@ export function TestaProvider(props: TestaProviderProps): JSX.Element {
     revealShield();
   }, [settled]);
 
-  return <TestaContext.Provider value={value}>{props.children}</TestaContext.Provider>;
+  // `settled` rides along in context so a server-rendered shield (the Pages
+  // Router head shield) can unrender itself at exactly the moment this provider
+  // reveals its own — one signal, no second timer.
+  const ctxValue = useMemo<TestaContextValue>(() => ({ ...value, settled }), [value, settled]);
+
+  return <TestaContext.Provider value={ctxValue}>{props.children}</TestaContext.Provider>;
 }
