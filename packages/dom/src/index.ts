@@ -27,6 +27,10 @@ export {
   DEFAULT_SHIELD_STYLE_ID,
 } from './shield/shield.ts';
 export type { Shield, ShieldOptions, ShieldMode } from './shield/shield.ts';
+// Head-time config preload — starts the fetch during HTML parse so the client
+// engine isn't waiting on the network after hydration. See config-preload.ts.
+export { buildConfigPreloadSnippet, CONFIG_PROMISE_KEY } from './shield/config-preload.ts';
+export type { ConfigPreloadOptions } from './shield/config-preload.ts';
 export { applyVariation } from './apply/index.ts';
 export type { Teardown, ApplyVariationOptions } from './apply/index.ts';
 export {

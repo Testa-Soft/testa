@@ -52,7 +52,14 @@ interface CacheEntry {
 // instantly and refreshed in the background, so a crobot publish propagates
 // within ~one fresh window at zero added request latency.
 const DEFAULT_TTL_MS = 60_000;
-const MAX_STALE_MS = 300_000;
+// How old a cached config may be and still be SERVED (refreshing behind it).
+// Wide on purpose: nothing blocks on the network any more, so this bound is
+// only choosing between "serve last-known-good" and "defer to the client".
+// Serving is better while it is plausibly current, and 15 minutes is far
+// beyond any healthy refresh interval — reaching it means refreshes are
+// failing, at which point deferring to the client (which fetches for itself)
+// is the right call.
+const MAX_STALE_MS = 900_000;
 
 export type ConfigCacheMode = 'swr' | 'per-pageload';
 
@@ -108,29 +115,35 @@ export class ConfigClient {
       return config;
     }
 
+    // SWR mode NEVER blocks a request on the network. A cold (or too-stale)
+    // instance returns null and the proxy passes the request through
+    // unexperimented; the client engine — which fetches its own config — then
+    // owns the decision for that pageview, redirect included, behind the
+    // anti-flicker shield. Meanwhile a background refresh warms this instance
+    // so the NEXT request gets the flicker-free server-side path.
+    //
+    // Why not block for ~50ms instead: on serverless the isolate that would
+    // pay it is often the same one that gets torn down straight after, so the
+    // cost recurs per visitor rather than being amortised. Deferring keeps
+    // TTFB flat and constant, and the fallback is a real experiment rather
+    // than an unexperimented pageview.
     const cached = this.cache.get(slug);
-    if (cached) {
-      const age = nowMs - cached.fetchedAtMs;
-      if (age < this.ttlMs) return cached.config;
-      if (age < MAX_STALE_MS) {
-        // Stale but bounded: serve it NOW, refresh in the background (deduped).
-        const refresh = this.refresh(slug, nowMs);
-        if (refresh && waitUntil) waitUntil(refresh);
-        return cached.config;
-      }
-      // Older than the max-stale bound: too old to serve — block on a refetch
-      // (joining an inflight refresh when one is already running).
-      const inflight = this.inflight.get(slug);
-      if (inflight) {
-        await inflight;
-        return this.cache.get(slug)?.config ?? null;
-      }
-    }
+    const age = cached ? nowMs - cached.fetchedAtMs : Number.POSITIVE_INFINITY;
 
-    // Cold (or max-stale) instance: the paths that block on the network.
-    const config = await this.resolve(slug);
-    this.cache.set(slug, { config, fetchedAtMs: nowMs });
-    return config;
+    if (cached && age < this.ttlMs) return cached.config;
+
+    // Anything not fresh triggers a deduped background refresh, kept alive past
+    // the response by `waitUntil` where the host provides one.
+    const refresh = this.refresh(slug, nowMs);
+    if (refresh && waitUntil) waitUntil(refresh);
+
+    // Stale but within the bound: last-known-good beats deferring — the visitor
+    // still gets a server-side decision, and assignment is cookie-pinned so a
+    // slightly old config cannot move anyone between variations.
+    if (cached && age < MAX_STALE_MS) return cached.config;
+
+    // Cold, or older than the bound: defer to the client for this request.
+    return null;
   }
 
   /** Kick (or join) the background refresh for a slug. Never throws. */

@@ -11,6 +11,7 @@
  */
 
 import type { ProjectConfig } from '@testa-platform/shared-types';
+import { CONFIG_PROMISE_KEY } from '@testa-soft/dom';
 import { isRefreshRequestedHere } from './refresh-flag.ts';
 
 /** Baked-in default config host; a client only needs to pass `projectId`. */
@@ -129,6 +130,25 @@ export function preloadConfig(
     return existing.promise;
   }
 
+  // Adopt the fetch the `<head>` snippet already started (buildConfigPreloadSnippet)
+  // — it began during HTML parse, long before hydration could reach this code.
+  // Taken only once, and never when forcing a refresh, so it can't serve a
+  // stale body later in the page's life.
+  if (!force) {
+    const headStart = takeHeadStartedFetch();
+    if (headStart) {
+      const adopted: PreloadEntry = { promise: Promise.resolve(null), settledAtMs: null };
+      adopted.promise = headStart.then((config) => {
+        adopted.settledAtMs = now();
+        // A failed head fetch resolves null; fall back to a normal fetch rather
+        // than leaving the page unexperimented.
+        return config ?? fetchConfig(url, fetchImpl);
+      });
+      preloadCache.set(url, adopted);
+      return adopted.promise;
+    }
+  }
+
   // `fetchConfig` never rejects (it fails open to null), so `settledAtMs` is
   // always stamped — the null result ages out by TTL rather than poisoning.
   const entry: PreloadEntry = { promise: Promise.resolve(null), settledAtMs: null };
@@ -138,6 +158,20 @@ export function preloadConfig(
   });
   preloadCache.set(url, entry);
   return entry.promise;
+}
+
+/**
+ * Consume the promise the `<head>` preload snippet left on `window`, if any.
+ * Removed as it is taken so exactly one caller adopts it — a second call
+ * fetches normally rather than re-reading a body that may since have aged.
+ */
+function takeHeadStartedFetch(): Promise<ProjectConfig | null> | null {
+  if (typeof window === 'undefined') return null;
+  const host = window as unknown as Record<string, unknown>;
+  const pending = host[CONFIG_PROMISE_KEY];
+  if (!pending || typeof (pending as Promise<unknown>).then !== 'function') return null;
+  delete host[CONFIG_PROMISE_KEY];
+  return pending as Promise<ProjectConfig | null>;
 }
 
 /** Clear the module-level preload cache. Test-only. */

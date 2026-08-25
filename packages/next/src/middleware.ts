@@ -225,11 +225,22 @@ export function createTestaProxy(options: TestaProxyOptions): TestaProxy {
       req.headers.get('rsc') !== '1',
     );
 
-    // No config → behave as a no-op pass-through (fail open) — THROUGH the
-    // composed handler, so the customer's own middleware still runs.
+    // No config in memory (cold instance, or refreshes failing past the stale
+    // bound) → pass through — THROUGH the composed handler, so the customer's
+    // own middleware still runs — and hand this pageview to the client engine,
+    // which fetches its own config and owns the decision, redirect included.
+    //
+    // The shield is raised PESSIMISTICALLY here: without a config we cannot
+    // know whether this page has anything to hide, and a client-side redirect
+    // or DOM apply is exactly the case that flashes without one. Hiding costs
+    // an invisible paint bounded by the snippet's reveal timeout; not hiding
+    // costs a visible flash of the control page. `<TestaGuard/>` reads this
+    // header, and `<TestaProvider/>` reveals once it has decided.
     if (!config) {
-      const res = await delegate(options.handler, req, event);
-      emitDebug?.(res, { url: publicUrl.href, urlSource, bypass: 'no-config' });
+      const requestHeaders = new Headers(req.headers);
+      requestHeaders.set(SHIELD_HEADER, '1');
+      const res = await resolveDownstream(options.handler, req, requestHeaders, event);
+      emitDebug?.(res, { url: publicUrl.href, urlSource, bypass: 'no-config', shield: true });
       return res;
     }
 

@@ -38,15 +38,32 @@
  * when the config fails to load.
  */
 
-import { type ShieldOptions, buildShieldSnippet } from '@testa-soft/dom';
+import { type ShieldOptions, buildConfigPreloadSnippet, buildShieldSnippet } from '@testa-soft/dom';
 import type { JSX } from 'react';
+import { buildConfigUrl } from '../config-fetch.ts';
 
-export type TestaGuardProps = ShieldOptions;
+export interface TestaGuardProps extends ShieldOptions {
+  /**
+   * Project id. Pass it to also START THE CONFIG FETCH here, in `<head>`,
+   * while the HTML is still parsing — rather than after the bundle has
+   * downloaded and hydrated far enough to render `<TestaProvider/>`. The
+   * provider adopts the in-flight request instead of issuing its own, so this
+   * is a head start, not a second fetch. Strongly recommended: everything the
+   * client decides — DOM applies, and the split-URL redirect when the server
+   * instance was cold — is waiting on this response.
+   */
+  projectId?: string;
+  /** Config host override for the head-time fetch. Defaults to the built-in host. */
+  host?: string;
+}
 
-export function TestaGuard(props: TestaGuardProps): JSX.Element {
-  // Built from author-controlled options which the builder JSON-encodes; the
-  // snippet contains no untrusted input.
-  const snippet = buildShieldSnippet(props);
+export function TestaGuard({ projectId, host, ...shield }: TestaGuardProps): JSX.Element {
+  // Both snippets are built from author-controlled options which the builders
+  // JSON-encode; neither contains untrusted input.
+  const snippet = projectId
+    ? buildConfigPreloadSnippet({ url: buildConfigUrl(host ?? '', projectId) }) +
+      buildShieldSnippet(shield)
+    : buildShieldSnippet(shield);
   return (
     // biome-ignore lint/security/noDangerouslySetInnerHtml: inlining our own shield IIFE by design
     <script dangerouslySetInnerHTML={{ __html: snippet }} />

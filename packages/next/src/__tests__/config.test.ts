@@ -27,8 +27,13 @@ describe('ConfigClient', () => {
     });
     const client = new ConfigClient({ loadConfig, cacheTtlMs: 1000 });
 
-    const first = await client.get('acme', 0);
-    expect(first?.config_hash).toBe('v1');
+    // Cold: never blocks on the network — defers this request to the client
+    // and warms the cache in the background.
+    const cold = await client.get('acme', 0);
+    expect(cold).toBeNull();
+    await vi.waitFor(async () => {
+      expect((await client.get('acme', 0))?.config_hash).toBe('v1');
+    });
 
     // Past the window: the call must NOT block on the refetch — it returns the
     // stale entry and kicks the refresh in the background.
@@ -54,10 +59,11 @@ describe('ConfigClient', () => {
     });
     const client = new ConfigClient({ loadConfig, cacheTtlMs: 1000 });
 
-    const cold = client.get('acme', 0);
+    // Cold returns null immediately (deferred to the client) and warms behind it.
+    expect(await client.get('acme', 0)).toBeNull();
     release?.();
-    await cold;
-    expect(loadConfig).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => expect(loadConfig).toHaveBeenCalledTimes(1));
+    await vi.waitFor(async () => expect(await client.get('acme', 0)).not.toBeNull());
 
     // Two stale hits while a refresh is already inflight → ONE refetch.
     await client.get('acme', 1500);
@@ -75,7 +81,8 @@ describe('ConfigClient', () => {
       });
     const client = new ConfigClient({ loadConfig, cacheTtlMs: 1000 });
 
-    await client.get('acme', 0);
+    expect(await client.get('acme', 0)).toBeNull(); // cold → deferred, warms behind
+    await vi.waitFor(async () => expect(await client.get('acme', 0)).toBe(good));
     const stale = await client.get('acme', 1500); // triggers failing refresh
     expect(stale).toBe(good);
 
@@ -90,11 +97,14 @@ describe('ConfigClient', () => {
     const client = new ConfigClient({ loadConfig, cacheTtlMs: 1000 });
     const waitUntil = vi.fn();
 
+    // The cold warm-up is itself a background refresh now — it must ride
+    // waitUntil, or a serverless host can kill it before it populates.
     await client.get('acme', 0, waitUntil);
-    expect(waitUntil).not.toHaveBeenCalled(); // cold fetch is awaited, not deferred
+    expect(waitUntil).toHaveBeenCalledTimes(1);
+    await vi.waitFor(async () => expect(await client.get('acme', 0)).not.toBeNull());
 
     await client.get('acme', 1500, waitUntil);
-    expect(waitUntil).toHaveBeenCalledTimes(1); // stale refresh rides waitUntil
+    expect(waitUntil).toHaveBeenCalledTimes(2); // stale refresh rides waitUntil too
   });
 
   it('caches per slug independently', async () => {
@@ -116,7 +126,7 @@ describe('ConfigClient', () => {
     ).toThrow(/per-pageload/);
   });
 
-  it('blocks on a refetch past the max-stale bound (5 min) instead of serving ancient config', async () => {
+  it('defers to the client past the max-stale bound rather than serving ancient config', async () => {
     let version = 0;
     const loadConfig = vi.fn(async () => {
       version += 1;
@@ -125,8 +135,16 @@ describe('ConfigClient', () => {
     const client = new ConfigClient({ loadConfig, cacheTtlMs: 1000 });
 
     await client.get('acme', 0);
-    const past = await client.get('acme', 400_000); // > 5 min old
-    expect(past?.config_hash).toBe('v2'); // fetched fresh, not served stale
+    await vi.waitFor(async () => expect(await client.get('acme', 0)).not.toBeNull());
+
+    // Within the bound the stale entry is still served (assignment is
+    // cookie-pinned, so an old config cannot move anyone between variations).
+    expect((await client.get('acme', 800_000))?.config_hash).toBe('v1');
+
+    // Past it, refreshes are evidently failing to keep up — hand the pageview
+    // to the client, which fetches for itself, instead of acting on a config
+    // this old. Still NEVER blocks.
+    expect(await client.get('acme', 2_000_000)).toBeNull();
   });
 
   it('returns null when no source resolves', async () => {
