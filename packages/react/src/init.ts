@@ -35,6 +35,8 @@ import {
 import { type VariationAppliedEvent, runExperiments } from '@testa-soft/experiment-core';
 import { applyAssignedExperiments } from './apply-assignments.ts';
 import {
+  PREVIEW_FLAG,
+  PREVIEW_TOKEN,
   PREVIEW_VARIATION_ID,
   fetchPreviewChanges,
   getPreviewToken,
@@ -48,7 +50,12 @@ export interface InitOptions {
   /** The absolute URL of the current page (e.g. `window.location.href`). */
   currentUrl: string;
   store: CookieStore;
-  /** Backend base URL for preview mode; required for `?testa_preview` to fetch drafts. */
+  /**
+   * Backend base URL for preview mode (`/api/preview/<token>`). Defaults to
+   * the tracking host — the same crobot backend exposures are posted to — so
+   * `?testa_preview` works without configuration, matching the pixel (which
+   * reads it from `cfPrefill.apiUrl`). Override only for a self-hosted backend.
+   */
   previewApiUrl?: string;
   /** Emit exposures on fresh enrollment. Default true. */
   tracking?: boolean;
@@ -85,9 +92,20 @@ export async function initTesta(opts: InitOptions): Promise<InitResult> {
   if (isPreviewRequested(search)) {
     const token = getPreviewToken(search);
     const teardowns: Teardown[] = [];
-    if (token && opts.previewApiUrl) {
-      const changes = await fetchPreviewChanges(opts.previewApiUrl, token, opts.fetchImpl ?? fetch);
+    // Falls back to the tracking host so preview needs no configuration; the
+    // pixel gets the same URL from `cfPrefill.apiUrl`.
+    const previewApiUrl = opts.previewApiUrl ?? opts.trackingHost ?? DEFAULT_TRACKING_HOST;
+    if (token) {
+      const changes = await fetchPreviewChanges(previewApiUrl, token, opts.fetchImpl ?? fetch);
       if (changes.length > 0) teardowns.push(...applyVariation(PREVIEW_VARIATION_ID, changes));
+    } else if (process.env.NODE_ENV !== 'production') {
+      // Preview mode suppresses the normal cycle, so an unusable preview would
+      // otherwise render a page with NOTHING applied and no explanation.
+      console.warn(
+        `[testa] ?${PREVIEW_FLAG} is set but ?${PREVIEW_TOKEN} is missing — no ` +
+          'draft changes can be fetched, and normal experiments are skipped in ' +
+          'preview mode. Open the preview link from the dashboard.',
+      );
     }
     return { applied: [], teardowns, redirected: false };
   }

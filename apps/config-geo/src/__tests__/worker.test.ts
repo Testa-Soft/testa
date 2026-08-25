@@ -37,7 +37,7 @@ describe('handleConfigRequest — geo splice', () => {
 
   it('marks the spliced body private, allows CORS, keeps the ETag, drops content-length', async () => {
     const res = await handleConfigRequest(new Request(CONFIG_URL), GEO, fetchReturning(originJson()));
-    expect(res.headers.get('cache-control')).toBe('private, max-age=60');
+    expect(res.headers.get('cache-control')).toBe('private, max-age=30');
     expect(res.headers.get('access-control-allow-origin')).toBe('*');
     expect(res.headers.get('etag')).toBe('"hash-1"');
     // The origin's content-length no longer applies to the spliced body.

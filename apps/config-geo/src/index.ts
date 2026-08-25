@@ -24,8 +24,12 @@ export interface GeoData {
   city: string;
 }
 
-/** How long the VISITOR'S OWN browser may cache the spliced body (seconds). */
-const BROWSER_CACHE_SECONDS = 60;
+/**
+ * How long the VISITOR'S OWN browser may cache the spliced body (seconds).
+ * Kept short so a publish surfaces quickly; the SDKs fetch with `no-cache`
+ * (always revalidate), so the practical cost of a short window is a 304.
+ */
+const BROWSER_CACHE_SECONDS = 30;
 
 /** Read the visitor's geo off the request. Cloudflare populates `cf` pre-worker. */
 export function geoOf(request: Request): GeoData {

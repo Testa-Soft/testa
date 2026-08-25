@@ -174,7 +174,7 @@ export function makeConfigGetHandler(deps: ConfigRouteDeps) {
     c.header('ETag', etag);
     c.header(
       'Cache-Control',
-      'public, max-age=60, s-maxage=600, stale-while-revalidate=1800',
+      'public, max-age=30, s-maxage=600, stale-while-revalidate=1800',
     );
     if (c.req.header('if-none-match') === etag) return c.body(null, 304);
 

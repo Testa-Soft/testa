@@ -121,7 +121,7 @@ describe('GET /api/v1/config/:projectId', () => {
     await post(app, '12345', SOURCE_PROJECT);
     const res = await get(app, '12345');
     expect(res.headers.get('cache-control')).toBe(
-      'public, max-age=60, s-maxage=600, stale-while-revalidate=1800',
+      'public, max-age=30, s-maxage=600, stale-while-revalidate=1800',
     );
   });
 

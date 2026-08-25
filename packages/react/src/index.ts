@@ -28,6 +28,7 @@ export type {
 export { DocumentCookieStore } from './cookie-store.ts';
 export type { DocumentCookieStoreOptions } from './cookie-store.ts';
 export { ConfigClient, DEFAULT_CONFIG_HOST, preloadConfig, resolveConfigUrl } from './config.ts';
+export { REFRESH_FLAG, isRefreshRequested } from './refresh-flag.ts';
 export type { ClientConfigSource, PreloadOptions } from './config.ts';
 export {
   configNeedsShield,

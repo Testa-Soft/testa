@@ -11,6 +11,7 @@
  */
 
 import type { ProjectConfig } from '@testa-platform/shared-types';
+import { isRefreshRequestedHere } from './refresh-flag.ts';
 
 /** Baked-in default config host; a client only needs to pass `projectId`. */
 export const DEFAULT_CONFIG_HOST = 'https://config.testa-soft.tech';
@@ -34,7 +35,9 @@ interface CacheEntry {
 }
 
 // Refetch window between config polls (client-side, served by the CDN).
-const DEFAULT_TTL_MS = 60_000;
+// 30s rather than 60s so a publish surfaces within half a minute; the fetch
+// revalidates (304s on the edge), so a shorter window costs almost nothing.
+const DEFAULT_TTL_MS = 30_000;
 
 export class ConfigClient {
   private readonly source: ClientConfigSource;
@@ -85,6 +88,12 @@ export interface PreloadOptions {
   now?: () => number;
   /** Fetch impl, injectable for tests. Default global `fetch`. */
   fetchImpl?: typeof fetch;
+  /**
+   * Skip every cache (preload map + browser HTTP cache) for this call.
+   * Defaults to whether `?testa_refresh=1` is on the current URL — read here,
+   * once, so every caller sharing the preload cache agrees. See refresh-flag.ts.
+   */
+  force?: boolean;
 }
 
 /**
@@ -112,9 +121,10 @@ export function preloadConfig(
   const now = opts.now ?? Date.now;
   const fetchImpl = opts.fetchImpl ?? fetch;
   const ttlMs = source.cacheTtlMs ?? DEFAULT_TTL_MS;
+  const force = opts.force ?? isRefreshRequestedHere();
 
   const existing = preloadCache.get(url);
-  if (existing && (existing.settledAtMs === null || now() - existing.settledAtMs < ttlMs)) {
+  if (!force && existing && (existing.settledAtMs === null || now() - existing.settledAtMs < ttlMs)) {
     // Reuse an in-flight request, or a settled one still within its TTL.
     return existing.promise;
   }
@@ -122,7 +132,7 @@ export function preloadConfig(
   // `fetchConfig` never rejects (it fails open to null), so `settledAtMs` is
   // always stamped — the null result ages out by TTL rather than poisoning.
   const entry: PreloadEntry = { promise: Promise.resolve(null), settledAtMs: null };
-  entry.promise = fetchConfig(url, fetchImpl).then((config) => {
+  entry.promise = fetchConfig(url, fetchImpl, force).then((config) => {
     entry.settledAtMs = now();
     return config;
   });
@@ -145,13 +155,39 @@ export function resolveConfigUrl(source: ClientConfigSource): string | null {
   return null;
 }
 
-async function fetchConfig(url: string, fetchImpl: typeof fetch): Promise<ProjectConfig | null> {
+async function fetchConfig(
+  url: string,
+  fetchImpl: typeof fetch,
+  force = false,
+): Promise<ProjectConfig | null> {
   try {
-    const res = await fetchImpl(url, { headers: { accept: 'application/json' } });
+    const res = await fetchImpl(force ? bustCache(url) : url, {
+      headers: { accept: 'application/json' },
+      // `no-cache` does NOT skip the cache — it forces REVALIDATION: the
+      // browser always asks, sending `If-None-Match` with the stored ETag, and
+      // the CDN answers 304 (empty body, edge-served) when nothing changed.
+      // Without this the default mode lets the browser serve its stored copy
+      // for the whole `max-age` window without asking, which is what hid a
+      // just-published config behind a stale one.
+      //
+      // Deliberately NOT a random query parameter on every request: that
+      // defeats the CDN edge cache too, so every visitor's pageview becomes an
+      // origin request to the collector — no rate limiting stands in front of
+      // it, and the geo worker's own subrequest stops hitting the edge cache.
+      // Revalidation gets the same freshness for ~200 bytes. The absolute
+      // bypass is reserved for `?testa_refresh=1` (see refresh-flag.ts).
+      cache: force ? 'reload' : 'no-cache',
+    });
     if (!res.ok) return null;
     return (await res.json()) as ProjectConfig;
   } catch {
     // Never let a config-fetch failure break the app — fail open (no experiment).
     return null;
   }
+}
+
+/** Append a one-shot cache-buster — QA only, via `?testa_refresh=1`. */
+function bustCache(url: string): string {
+  const separator = url.includes('?') ? '&' : '?';
+  return `${url}${separator}_testa_t=${Date.now().toString(36)}`;
 }
