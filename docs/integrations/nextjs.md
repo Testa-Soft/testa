@@ -333,7 +333,47 @@ cookie contract — assignments made server-side are reused, never re-rolled):
 | --- | --- | --- |
 | Hard loads (ads, search, direct, reloads) | `createTestaProxy` | Server-side 307 — the variant is the first thing painted. |
 | Soft navs (`next/link` inside the app) | the built-in router guard | These never reach the server; the guard reads the sticky `_testa_exp` cookie and re-points the navigation at the router-event level, before the control page renders. |
-| DOM changes, goals, exposure events, anti-flicker shield | the built-in client engine (`@testa-soft/react`) | Client-side, on mount and on every navigation. |
+| DOM changes, goals, exposure events | the built-in client engine (`@testa-soft/react`) | Client-side, on mount and on every navigation. |
+| Anti-flicker | the built-in head shield | **On by default, no wiring.** The provider server-renders a JS-free `<style>` into `<head>` (via `next/head`) that hides the content, and unrenders it the moment the variant is applied. |
+
+### Anti-flicker on the Pages Router
+
+The Pages Router ships complete server-rendered HTML, so the browser paints the
+**control** content long before React hydrates. That makes a client-side shield
+useless — an effect can only run after that paint, so raising one there turns
+one flash into two (content → blank → variant). The shield therefore has to
+exist in the server's markup, which is what `<TestaProvider/>` does for you.
+
+Nothing to add, and nothing to configure. Two knobs if you want them:
+
+```tsx
+<TestaProvider projectId="3fa85f64e1c2b" shield={{ selector: '#__next', timeoutMs: 2000 }} />
+<TestaProvider projectId="3fa85f64e1c2b" shield={false} />  {/* you own anti-flicker */}
+```
+
+The reveal is not JavaScript-dependent: the hide lives in a CSS animation that
+flips to visible at `timeoutMs` (default 4s), so a bundle that 404s or a
+hydration crash can't leave a site hidden.
+
+**Optional, and worth it:** add `<TestaGuard/>` to `pages/_document.tsx`. It
+doesn't change the shield — it starts the **config fetch** during HTML parse
+instead of after hydration, which is what shortens the window the page spends
+hidden (the shield stays up until the config lands):
+
+```tsx
+// pages/_document.tsx
+import { Head, Html, Main, NextScript } from 'next/document'
+import { TestaGuard } from '@testa-soft/next/pages'
+
+export default function Document() {
+  return (
+    <Html lang="en">
+      <Head><TestaGuard projectId="3fa85f64e1c2b" /></Head>
+      <body><Main /><NextScript /></body>
+    </Html>
+  )
+}
+```
 
 Want the pieces individually (e.g. split-URL-only, no DOM engine)?
 `<TestaRouterGuard/>` is exported standalone from `@testa-soft/next/pages`
@@ -663,10 +703,16 @@ Fail-open: resolves `null` on any network/HTTP/shape failure.
 The Pages Router twin of `/server`'s provider — add once in `_app.tsx`. Takes
 the `@testa-soft/react` provider props (`projectId` is the only one a normal
 integration passes; `config`, `host`, `tracking`, `shield`, cookie options as
-documented in [react.md](./react.md)) and self-wires the client engine plus
-the soft-nav router guard on one shared config fetch. Mounted in the App
-Router by mistake it degrades safely (guard no-ops with a dev warning) — but
-use `/server` there.
+documented in [react.md](./react.md)) and self-wires the client engine, the
+soft-nav router guard, and the server-rendered anti-flicker shield on one
+shared config fetch. Mounted in the App Router by mistake it degrades safely
+(guard no-ops with a dev warning, shield doesn't render) — but use `/server`
+there.
+
+`shield` here controls the **head** shield: `false` opts out, an object passes
+`selector` / `timeoutMs` / `mode` through. An inline `config` with nothing to
+hide skips the shield entirely — with only a `projectId` the config hasn't
+arrived at first paint, which is when the decision must be made, so it shields.
 
 ### `<TestaRouterGuard>` — `@testa-soft/next/router-guard`
 
@@ -681,9 +727,24 @@ dev-time warning — the proxy already sees App-Router soft navs.
 
 ## Troubleshooting
 
-**A DOM change flashes control before the variant.** Make sure `<TestaGuard/>` is
-in `<head>` (not the body), so it runs before first paint. On App-Router *soft*
-navigations there is no shield by design; the re-apply is near-instant.
+**Nothing happens at all on a self-hosted stack** — no assignment, no redirect,
+no DOM changes, with a config you know is right. Set `TESTA_DEBUG=1` and read the
+`x-testa-debug` response header: `url` is what the proxy actually matched against
+and `urlSource` says which mechanism produced the host. An internal hostname
+there needs `publicHost` / `x-testa-host`. (An internal *port* no longer breaks
+matching — `X-Forwarded-Port` is ignored and portless rules match any port.)
+
+**A DOM change flashes control before the variant.** App Router: make sure
+`<TestaGuard/>` is in `<head>` (not the body), so it runs before first paint.
+Pages Router: the shield is server-rendered by `<TestaProvider/>` and needs no
+wiring — check you haven't passed `shield={false}`, and that the provider really
+wraps the app in `_app.tsx`. On *soft* navigations there is no shield by design;
+the re-apply lands in the same frame as the new page's render.
+
+**Content → blank → variant (two flashes).** That's a client-side shield raised
+after the server HTML already painted. On the Pages Router, upgrade to a version
+whose `<TestaProvider/>` server-renders the shield (`@testa-soft/next` ≥ 1.3.3);
+elsewhere move the shield into `<head>` markup.
 
 **A change is applied then reverted.** React owns the DOM it renders. Prefer `css`
 changes (injected into `<head>`, which React never reconciles) for anything

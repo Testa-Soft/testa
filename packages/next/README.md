@@ -287,12 +287,44 @@ the same crobot-native `VariationChange` shapes as real variations, so a draft
 renders identically to how it will ship. A failed or malformed response applies
 nothing and reveals the shield (fail-safe).
 
-## Pages Router soft navigation
+## Pages Router
+
+The whole client half is one component — `<TestaProvider/>` from
+`@testa-soft/next/pages`, once in `_app.tsx`:
+
+```tsx
+// pages/_app.tsx
+import { TestaProvider } from '@testa-soft/next/pages'
+
+export default function App({ Component, pageProps }) {
+  return (
+    <TestaProvider projectId="3fa85f64e1c2b">
+      <Component {...pageProps} />
+    </TestaProvider>
+  )
+}
+```
+
+It self-wires the client engine, the soft-nav router guard below, and
+**anti-flicker on by default** — a JS-free `<style>` server-rendered into
+`<head>` through `next/head`, unrendered the moment the variant is applied. That
+has to come from the server here: the Pages Router paints its server-rendered
+control HTML before React hydrates, so a shield raised from an effect arrives
+too late and produces *two* flashes (content → blank → variant) instead of
+none. `shield={false}` opts out; an object passes `selector` / `timeoutMs` /
+`mode` through. The reveal has a CSS-only fallback at `timeoutMs`, so a broken
+bundle can't leave a site hidden.
+
+Optionally add `<TestaGuard/>` to `pages/_document.tsx`. It doesn't change the
+shield — it starts the config fetch during HTML parse rather than after
+hydration, shortening the window the page spends hidden.
+
+### Soft navigation
 
 Client-side navigations in the **Pages Router** (static `next/link` navs) never
-hit the server, so the middleware can't see them. `<TestaRouterGuard/>` is an
-optional catch-all that closes that gap. Add it once in your Pages-Router layout
-(e.g. `_app`):
+hit the server, so the middleware can't see them. `<TestaRouterGuard/>` closes
+that gap; the `/pages` provider above already wires it up, so reach for it
+directly only if you want the pieces individually:
 
 ```tsx
 // pages/_app.tsx
@@ -338,8 +370,12 @@ host and scheme resolve independently, and malformed values fall through):
 4. **`X-Forwarded-Host`** / **`X-Forwarded-Proto`** (first value of each list).
 5. The `Host` header, then the request URL as-is.
 
-`X-Forwarded-Port` (first value, 1–65535) fills in the port whenever the
-winning host doesn't carry one of its own; default ports normalize away.
+**Ports** come from the winning host only. `X-Forwarded-Port` is ignored —
+meshes set it to the port they forward *to* (istio sends the app's `:3000`), and
+`https://www.acme.com:3000/pricing` matches nothing a dashboard can author. State
+a real non-default public port via `publicHost: 'acme.com:8443'`. Matching is
+forgiving the same way: a rule authored without a port matches any port; one that
+names a port stays strict (`localhost:3200` never matches `localhost:5002`).
 
 Most reverse proxies (nginx ingress, traefik, Cloudflare) already send
 `X-Forwarded-Host`/`-Proto`, so usually **it just works with no config**. If
