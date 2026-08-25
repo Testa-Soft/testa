@@ -40,12 +40,37 @@ describe('TestaProvider (server component)', () => {
     expect((el as { props: { config: ProjectConfig } }).props.config).toEqual(CONFIG);
   });
 
-  it('returns null when the projectId fetch fails (fail open)', async () => {
+  it('still renders the client when the server-side fetch fails, so it can fetch itself', async () => {
+    // Rendering nothing here used to mean NO experiments on the page for as long
+    // as the server-side failure lasted (unreachable from the server, a null
+    // baked into a static prerender, the fetch budget) — the client had no way
+    // to recover. It gets the projectId instead and owns the pageview.
     const fetchSpy = vi.fn(
       async () => ({ ok: false, json: async () => ({}) }) as unknown as Response,
     );
     vi.stubGlobal('fetch', fetchSpy);
-    expect(await TestaProvider({ projectId: 'abc', host: 'https://cfg.example' })).toBeNull();
+    const el = await TestaProvider({ projectId: 'abc', host: 'https://cfg.example' });
+    expect((el as { type: unknown }).type).toBe(TestaProviderClient);
+    const props = (el as { props: { config?: ProjectConfig; projectId?: string; host?: string } })
+      .props;
+    expect(props.config).toBeUndefined();
+    expect(props.projectId).toBe('abc');
+    expect(props.host).toBe('https://cfg.example');
+  });
+
+  it('strips a SERVER-fetched config’s geo — it is the datacenter’s, not the visitor’s', async () => {
+    const fetchSpy = vi.fn(
+      async () =>
+        ({
+          ok: true,
+          json: async () => ({ ...CONFIG, geo: { country: 'US' } }),
+        }) as unknown as Response,
+    );
+    vi.stubGlobal('fetch', fetchSpy);
+    const el = await TestaProvider({ projectId: 'abc' });
+    const config = (el as { props: { config: ProjectConfig } }).props.config;
+    expect(config.geo).toBeUndefined();
+    expect(config.config_hash).toBe(CONFIG.config_hash);
   });
 
   it('passes previewApiUrl through to the client component', async () => {

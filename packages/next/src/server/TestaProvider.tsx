@@ -32,6 +32,20 @@ interface CommonProps {
   trackingHost?: string;
   /** Next data-cache revalidate window (seconds). Ignored when `config` is inline. */
   revalidateSec?: number;
+  /**
+   * Emit the exposure when the CLIENT assigns (the cold fallback below). Mirror
+   * the proxy's own `tracking` so a project with tracking off doesn't start
+   * reporting from the browser. Default true.
+   */
+  tracking?: boolean;
+  /** `Secure` on client-written cookies. Default true; false for local http dev. */
+  secureCookies?: boolean;
+  /**
+   * Cookie `Domain` for client-written cookies — pass the SAME value the proxy
+   * uses (`cookieDomain` / `discoverRootDomain`), or the fallback's cookie lands
+   * at a different scope than the proxy's.
+   */
+  cookieDomain?: string;
 }
 
 /**
@@ -43,17 +57,45 @@ export type TestaProviderProps = CommonProps &
 
 export async function TestaProvider(props: TestaProviderProps): Promise<JSX.Element | null> {
   const resolved = await resolveConfig(props);
-  // Fail open: mirrors marketing-web's `{config && <TestaProvider/>}` — no
-  // config means nothing to apply, so render nothing.
-  if (!resolved) return null;
 
+  // Neither a config nor a projectId: there is nothing for either side to work
+  // with, so render nothing (a caller can still violate the prop union at
+  // runtime). Every other case renders the client — see below.
+  if (!resolved && !props.projectId) return null;
+
+  // The client is rendered EVEN WITHOUT a config. A server-side fetch failure
+  // (unreachable from the server, a null baked into a static prerender, a
+  // 2s-budget timeout) used to render nothing at all — which meant no
+  // experiments on that page for as long as the failure lasted, since the
+  // client had no way to recover. With `projectId` it fetches its own config
+  // and owns the pageview instead.
   return (
     <TestaProviderClient
-      config={resolved}
+      {...(resolved ? { config: stripServerGeo(resolved) } : {})}
+      {...(props.projectId ? { projectId: props.projectId } : {})}
+      {...(props.host ? { host: props.host } : {})}
       {...(props.previewApiUrl ? { previewApiUrl: props.previewApiUrl } : {})}
+      {...(props.tracking !== undefined ? { tracking: props.tracking } : {})}
       {...(props.trackingHost ? { trackingHost: props.trackingHost } : {})}
+      {...(props.secureCookies !== undefined ? { secureCookies: props.secureCookies } : {})}
+      {...(props.cookieDomain ? { cookieDomain: props.cookieDomain } : {})}
     />
   );
+}
+
+/**
+ * Drop `geo` from a SERVER-fetched config before handing it to the client.
+ *
+ * The geo worker splices the geo of whoever fetched the config — for this fetch
+ * that's the datacenter, not the visitor. Passing it on would let a
+ * country-gated rule be judged by the region the app happens to run in. A
+ * config the CLIENT fetches keeps its geo, because there the requester IS the
+ * visitor.
+ */
+function stripServerGeo(config: ProjectConfig): ProjectConfig {
+  if (!config.geo) return config;
+  const { geo: _geo, ...rest } = config;
+  return rest;
 }
 
 /** Inline config wins; otherwise fetch by projectId. Null when neither is usable. */

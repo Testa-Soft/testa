@@ -55,10 +55,20 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             `previewApiUrl` enables `?testa_preview=true&testa_preview_token=…` to fetch + apply
             draft changes from the backend (crobot). Here it points at the demo origin so the
             preview endpoint can be stubbed; in production it's the crobot app URL. */}
+        {/* `tracking`/`secureCookies` mirror the proxy's own options: the client
+            engine only runs when the proxy deferred (cold isolate / no config),
+            and when it does it writes the cookie and emits the exposure itself —
+            so it must be configured the same way, or the demo would report
+            enrollments into the real project over http-rejected cookies. */}
         {useProdConfig ? (
-          <TestaProvider projectId={PROD_PROJECT_ID} />
+          <TestaProvider projectId={PROD_PROJECT_ID} tracking={false} secureCookies={false} />
         ) : (
-          <TestaProvider config={demoConfig} previewApiUrl="http://localhost:3200" />
+          <TestaProvider
+            config={demoConfig}
+            previewApiUrl="http://localhost:3200"
+            tracking={false}
+            secureCookies={false}
+          />
         )}
         <TestaDebug />
         <ReloadSentinel />

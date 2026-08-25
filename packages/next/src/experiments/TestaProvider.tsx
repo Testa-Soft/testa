@@ -5,19 +5,31 @@
  * Add it once in the layout (client component); it re-applies on each App-Router
  * navigation.
  *
- * Two modes:
- *   - Normal (cookie-first): the middleware already bucketed the visitor
- *     server-side and wrote `_testa_exp`; this reads that cookie and applies the
- *     variant's DOM changes via the shared apply engine — no re-bucket.
+ * Three modes:
+ *   - Normal (cookie-first): the proxy already bucketed the visitor server-side
+ *     and wrote `_testa_exp`; this reads that cookie and applies the variant's
+ *     DOM changes via the shared apply engine — no re-bucket.
+ *   - COLD FALLBACK: the proxy had no config in memory (`decisions: 'hybrid'` on
+ *     a cold isolate), never ran, or never warms — so nothing decided this
+ *     pageview. Detected as a cookie gap (see `cold-decision.ts`); this then
+ *     runs the FULL client engine from `@testa-soft/react`: bucket, write the
+ *     assignment, issue the split-URL redirect, apply the DOM, emit the
+ *     exposure. Without it a cold pageview is silently unexperimented, and
+ *     because the normal path is cookie-first it stays that way on every later
+ *     visit too, until an isolate happens to be warm.
  *   - Preview (`?testa_preview=true&testa_preview_token=<t>`): skips assignment,
  *     fetches the draft changes for that session from `previewApiUrl` and applies
  *     them, so an editor can see un-published changes live.
  *
- * Either way it reveals the anti-flicker shield (raised by `<TestaGuard/>`) once
- * applied, so control content is never shown before the variant.
+ * All three reveal the anti-flicker shield (raised by `<TestaGuard/>`) once
+ * done, so control content is never shown before the variant.
  *
- * Framework-agnostic logic lives in `apply-assignments.ts` + `preview.ts` (unit
- * tested); this file is the React + App-Router glue.
+ * The config comes from the server (`/server`'s RSC fetches it), and when that
+ * fetch failed the client fetches its own — otherwise an unreachable-from-the-
+ * server config host means no experiments at all, forever.
+ *
+ * Framework-agnostic logic lives in `apply-assignments.ts`, `preview.ts` and
+ * `cold-decision.ts` (unit tested); this file is the React + App-Router glue.
  */
 
 import type { ProjectConfig } from '@testa-platform/shared-types';
@@ -28,11 +40,13 @@ import {
   installTestaGlobal,
 } from '@testa-soft/dom';
 import { ASSIGNMENT_COOKIE, UUID_COOKIE, resolveExposures } from '@testa-soft/experiment-core';
+import { DocumentCookieStore, initTesta, preloadConfig } from '@testa-soft/react';
 import { usePathname } from 'next/navigation.js';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { readClientCookie } from '../client-cookie.ts';
 import { DEFAULT_TRACKING_HOST } from '../constants.ts';
 import { applyAssignedExperiments, revealShield } from './apply-assignments.ts';
+import { clientOwnsDecision } from './cold-decision.ts';
 import { startGoalTracking } from './goal-tracking.ts';
 import {
   PREVIEW_VARIATION_ID,
@@ -49,33 +63,64 @@ import {
  * this component with the resolved `config`.
  */
 export interface TestaProviderProps {
-  /** The same ProjectConfig the middleware uses (local fixture or fetched once). */
-  config: ProjectConfig;
+  /**
+   * The same ProjectConfig the middleware uses (local fixture, or fetched
+   * server-side by `/server`'s RSC). Optional: when the server couldn't resolve
+   * one, the client fetches it itself from `projectId` — a config host the
+   * SERVER can't reach must not mean no experiments at all.
+   */
+  config?: ProjectConfig;
+  /** Project id for the client's own config fetch, when `config` is absent. */
+  projectId?: string;
+  /** Config host for that fetch. Defaults to the SDK's config host. */
+  host?: string;
   /**
    * Backend base URL for preview mode (crobot) — where `/api/preview/{token}`
    * lives. Required for `?testa_preview` to fetch drafts; ignored otherwise.
    */
   previewApiUrl?: string;
   /**
+   * Emit the exposure when the CLIENT makes the assignment (cold fallback).
+   * Mirror whatever the proxy is configured with, so a project with tracking
+   * off server-side doesn't start reporting from the client. Default true.
+   */
+  tracking?: boolean;
+  /**
    * crobot base URL for goal conversions (`/api/leads/convert`) — same host the
    * middleware posts exposures to. Defaults to the SDK's tracking host.
    */
   trackingHost?: string;
+  /** `Secure` on client-written cookies. Default true; false for local http dev. */
+  secureCookies?: boolean;
+  /**
+   * Cookie `Domain` for client-written cookies. Pass the SAME value the proxy
+   * uses (`cookieDomain` / `discoverRootDomain`) — a mismatch writes a
+   * host-only cookie beside the proxy's domain-wide one, and the visitor can
+   * end up with two assignments.
+   */
+  cookieDomain?: string;
 }
 
-export function TestaProvider({
-  config,
-  previewApiUrl,
-  trackingHost,
-}: TestaProviderProps): null {
+export function TestaProvider(props: TestaProviderProps): null {
+  const { config: serverConfig, projectId, host, previewApiUrl, trackingHost } = props;
   const pathname = usePathname();
+
+  // CONFIG, kicked off during FIRST RENDER (before effects) when the server
+  // didn't resolve one. `preloadConfig` adopts the request `<TestaGuard
+  // projectId>`'s head snippet already started and dedupes across mounts, so
+  // this is never a second fetch.
+  const [configPromise] = useState<Promise<ProjectConfig | null>>(() => {
+    if (serverConfig) return Promise.resolve(serverConfig);
+    if (!projectId) return Promise.resolve(null);
+    return preloadConfig({ projectId, ...(host ? { host } : {}) });
+  });
 
   // `pathname` is intentionally a dependency: it's the re-apply trigger on
   // App-Router soft navigation, even though it isn't read in the effect body.
   // biome-ignore lint/correctness/useExhaustiveDependencies: pathname is the re-run trigger
   useEffect(() => {
     let cancelled = false;
-    const teardowns: Teardown[] = [];
+    let teardowns: Teardown[] = [];
     const dispose = () => {
       cancelled = true;
       for (const teardown of teardowns) {
@@ -105,63 +150,129 @@ export function TestaProvider({
       return dispose;
     }
 
-    // Normal: apply the assigned variant, cookie-first — but only on pages that
-    // match the experiment's page rule (keyed on `pathname` so a soft nav to a
-    // non-matching route tears the change down instead of leaking it everywhere)
-    // AND only when no exclusion rule matches this pageview (3.3.3
-    // `handleExclusions` parity — mutual `experiment` exclusions included).
-    // NOTE: no `country` here — a server-fetched config's geo is the
-    // datacenter's; geo exclusions are the middleware's job per request.
-    const currentUrl = typeof window !== 'undefined' ? window.location.href : '';
-    const assignmentCookie = readClientCookie(ASSIGNMENT_COOKIE);
-    teardowns.push(
-      ...applyAssignedExperiments(config, assignmentCookie, currentUrl, {
-        url: currentUrl,
-        getCookie: readClientCookie,
-        ...(typeof navigator !== 'undefined' ? { userAgent: navigator.userAgent } : {}),
-      }),
-    );
-    revealShield();
-
-    // Fire `variation_applied` for every experiment the visitor is exposed to on
-    // this page (split-URL, DOM, and control alike) — once per load, deduped in
-    // the bus. This is the client event surface + the GTM dataLayer push.
-    installTestaGlobal();
-    const uuid = readClientCookie(UUID_COOKIE) ?? '';
-    const nowSec = Math.floor(Date.now() / 1000);
-    for (const e of resolveExposures(config, assignmentCookie, currentUrl, nowSec)) {
-      if (config.project_id != null) {
-        emitVariationApplied({
-          project_id: config.project_id,
-          experiment: e.experimentId,
-          variation: e.variationId,
-          uuid,
-          ...(e.title ? { title: e.title } : {}),
-          url: currentUrl,
-        });
+    // Fail open on ANY throw in here (bad config shape, a DOM apply blowing up):
+    // an experiment must never be able to leave the page shielded or crash the
+    // host app's tree.
+    void (async () => {
+      const config = await configPromise;
+      // No config anywhere (server couldn't fetch it, and neither could we):
+      // fail open — reveal, so a config outage never leaves a page hidden.
+      if (!config) {
+        revealShield();
+        return;
       }
-    }
+      if (cancelled) return;
 
-    // Arm goal tracking (page_view / click / custom) for every assigned,
-    // session-live experiment — NOT page-gated: a goal usually completes on a
-    // different page than the experiment runs on. Conversions POST the legacy
-    // `/api/leads/convert` payload; teardown re-arms cleanly on soft nav.
-    teardowns.push(
-      startGoalTracking(
-        config,
-        assignmentCookie,
-        currentUrl,
-        uuid,
-        trackingHost ?? DEFAULT_TRACKING_HOST,
-        nowSec,
-      ),
-    );
+      const currentUrl = typeof window !== 'undefined' ? window.location.href : '';
+      const assignmentCookie = readClientCookie(ASSIGNMENT_COOKIE);
+
+      // COLD FALLBACK — nothing decided this pageview, so we do: bucket, write
+      // the assignment, redirect if the variant is a split-URL one, apply the
+      // DOM, emit the exposure. Delegated whole to the client engine rather
+      // than reimplemented here.
+      if (
+        clientOwnsDecision({
+          config,
+          cookieValue: assignmentCookie,
+          currentUrl,
+          hasServerConfig: !!serverConfig,
+        })
+      ) {
+        const result = await runClientCycle(config, props, currentUrl);
+        if (cancelled) {
+          for (const teardown of result.teardowns) teardown();
+          return;
+        }
+        // A redirect is in flight: leave the shield UP, the page is leaving.
+        if (result.redirected) return;
+        teardowns = result.teardowns;
+        revealShield();
+        return;
+      }
+
+      // Normal: apply the assigned variant, cookie-first — but only on pages that
+      // match the experiment's page rule (keyed on `pathname` so a soft nav to a
+      // non-matching route tears the change down instead of leaking it everywhere)
+      // AND only when no exclusion rule matches this pageview (3.3.3
+      // `handleExclusions` parity — mutual `experiment` exclusions included).
+      // NOTE: no `country` here — a server-fetched config's geo is the
+      // datacenter's; geo exclusions are the middleware's job per request.
+      teardowns.push(
+        ...applyAssignedExperiments(config, assignmentCookie, currentUrl, {
+          url: currentUrl,
+          getCookie: readClientCookie,
+          ...(typeof navigator !== 'undefined' ? { userAgent: navigator.userAgent } : {}),
+        }),
+      );
+      revealShield();
+
+      // Fire `variation_applied` for every experiment the visitor is exposed to on
+      // this page (split-URL, DOM, and control alike) — once per load, deduped in
+      // the bus. This is the client event surface + the GTM dataLayer push.
+      installTestaGlobal();
+      const uuid = readClientCookie(UUID_COOKIE) ?? '';
+      const nowSec = Math.floor(Date.now() / 1000);
+      for (const e of resolveExposures(config, assignmentCookie, currentUrl, nowSec)) {
+        if (config.project_id != null) {
+          emitVariationApplied({
+            project_id: config.project_id,
+            experiment: e.experimentId,
+            variation: e.variationId,
+            uuid,
+            ...(e.title ? { title: e.title } : {}),
+            url: currentUrl,
+          });
+        }
+      }
+
+      // Arm goal tracking (page_view / click / custom) for every assigned,
+      // session-live experiment — NOT page-gated: a goal usually completes on a
+      // different page than the experiment runs on. Conversions POST the legacy
+      // `/api/leads/convert` payload; teardown re-arms cleanly on soft nav.
+      teardowns.push(
+        startGoalTracking(
+          config,
+          assignmentCookie,
+          currentUrl,
+          uuid,
+          trackingHost ?? DEFAULT_TRACKING_HOST,
+          nowSec,
+        ),
+      );
+    })().catch(() => {
+      revealShield();
+    });
+
     return dispose;
     // Keyed on `config.config_hash` (a stable string), NOT the `config` object —
     // so a caller passing an inline config, a dev Fast Refresh, or a parent
     // re-render doesn't re-run the effect and stack duplicate inserts. Re-runs
     // only on a real config change or route change (pathname).
-  }, [config.config_hash, pathname, previewApiUrl, trackingHost]);
+  }, [serverConfig?.config_hash, projectId, pathname, previewApiUrl, trackingHost]);
 
   return null;
+}
+
+/**
+ * The cold-fallback cycle: the same client engine the Pages Router and pure-SPA
+ * surfaces run, so a pageview the server didn't decide behaves identically to
+ * one it did — same deterministic bucketing, same cookie, same events.
+ */
+function runClientCycle(
+  config: ProjectConfig,
+  props: TestaProviderProps,
+  currentUrl: string,
+): Promise<{ teardowns: Teardown[]; redirected: boolean }> {
+  const store = new DocumentCookieStore({
+    secure: props.secureCookies ?? true,
+    ...(props.cookieDomain ? { domain: props.cookieDomain } : {}),
+  });
+  return initTesta({
+    config,
+    currentUrl,
+    store,
+    ...(props.previewApiUrl ? { previewApiUrl: props.previewApiUrl } : {}),
+    ...(props.tracking !== undefined ? { tracking: props.tracking } : {}),
+    ...(props.trackingHost ? { trackingHost: props.trackingHost } : {}),
+  }).then((result) => ({ teardowns: result.teardowns, redirected: result.redirected }));
 }
