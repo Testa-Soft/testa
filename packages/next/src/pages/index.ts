@@ -6,6 +6,10 @@
 
 export { TestaProvider } from './TestaProvider.tsx';
 export type { TestaProviderProps } from './TestaProvider.tsx';
+// Anti-flicker shield for `_document.tsx` — the provider's own shield cannot
+// run before hydration paints server HTML. See TestaGuard.tsx.
+export { TestaGuard } from './TestaGuard.tsx';
+export type { TestaGuardProps } from './TestaGuard.tsx';
 // Escape hatches for apps that want the pieces individually.
 export { TestaRouterGuard } from '../router-guard/TestaRouterGuard.tsx';
 export type { TestaRouterGuardProps } from '../router-guard/TestaRouterGuard.tsx';
