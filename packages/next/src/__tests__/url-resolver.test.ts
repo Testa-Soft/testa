@@ -62,9 +62,7 @@ describe('resolvePublicUrl', () => {
     });
 
     it('ignores a non-http(s) forwarded proto', () => {
-      const url = resolvePublicUrl(
-        req('https://acme.com/', { 'x-forwarded-proto': 'javascript' }),
-      );
+      const url = resolvePublicUrl(req('https://acme.com/', { 'x-forwarded-proto': 'javascript' }));
       expect(url.protocol).toBe('https:');
     });
   });
@@ -150,18 +148,22 @@ describe('resolvePublicUrl', () => {
   });
 
   describe('X-Forwarded-Port', () => {
-    it('applies the forwarded port when the winning host has none', () => {
+    it('is never spliced into the public URL', () => {
+      // The regression this guards: a mesh forwarding to the app's own port
+      // sends `x-forwarded-port: 3000`, and splicing it produced
+      // `https://staging.acme.com:3000/pricing` — matching no rule an editor
+      // could author, so the whole project went quiet with a correct config.
       const url = resolvePublicUrl(
         req('http://10.0.3.17:3000/pricing', {
           'x-forwarded-host': 'staging.acme.com',
           'x-forwarded-proto': 'https',
-          'x-forwarded-port': '8443',
+          'x-forwarded-port': '3000',
         }),
       );
-      expect(url.href).toBe('https://staging.acme.com:8443/pricing');
+      expect(url.href).toBe('https://staging.acme.com/pricing');
     });
 
-    it('never overrides an explicit port on the forwarded host', () => {
+    it('keeps a port the forwarded HOST itself carries — that is a deliberate statement', () => {
       const url = resolvePublicUrl(
         req('http://10.0.3.17:3000/', {
           'x-forwarded-host': 'staging.acme.com:9443',
@@ -171,38 +173,17 @@ describe('resolvePublicUrl', () => {
       expect(url.host).toBe('staging.acme.com:9443');
     });
 
-    it('normalizes the default port away (443 + https)', () => {
+    it('keeps an explicit publicHost port — the integrator owns that', () => {
       const url = resolvePublicUrl(
-        req('http://10.0.3.17:3000/', {
-          'x-forwarded-host': 'www.acme.com',
-          'x-forwarded-proto': 'https',
-          'x-forwarded-port': '443',
-        }),
+        req('http://10.0.3.17:3000/', { 'x-forwarded-port': '3000' }),
+        'https://acme.com:8443',
       );
-      expect(url.port).toBe('');
-      expect(url.href).toBe('https://www.acme.com/');
+      expect(url.href).toBe('https://acme.com:8443/');
     });
 
-    it('uses the FIRST value of a comma-separated port list', () => {
-      const url = resolvePublicUrl(
-        req('http://10.0.3.17:3000/', {
-          'x-forwarded-host': 'www.acme.com',
-          'x-forwarded-port': '8443, 443',
-        }),
-      );
-      expect(url.host).toBe('www.acme.com:8443');
-    });
-
-    it('ignores an out-of-range or malformed forwarded port', () => {
-      for (const port of ['99999', '0', 'abc']) {
-        const url = resolvePublicUrl(
-          req('http://10.0.3.17:3000/', {
-            'x-forwarded-host': 'www.acme.com',
-            'x-forwarded-port': port,
-          }),
-        );
-        expect(url.host, `port=${port}`).toBe('www.acme.com');
-      }
+    it('keeps the local dev port from the Host header', () => {
+      const url = resolvePublicUrl(req('http://localhost:3210/pricing', {}));
+      expect(url.href).toBe('http://localhost:3210/pricing');
     });
 
     it('rejects a HOST candidate with an out-of-range port instead of discarding the whole resolution', () => {
@@ -230,9 +211,8 @@ describe('resolvePublicUrl', () => {
           .source,
       ).toBe('forwarded');
       expect(
-        resolvePublicUrlDetailed(
-          req('http://10.0.3.17:3000/', { 'x-forwarded-host': 'acme.com' }),
-        ).source,
+        resolvePublicUrlDetailed(req('http://10.0.3.17:3000/', { 'x-forwarded-host': 'acme.com' }))
+          .source,
       ).toBe('x-forwarded-host');
       expect(
         resolvePublicUrlDetailed(req('http://10.0.3.17:3000/', { host: 'acme.com' })).source,

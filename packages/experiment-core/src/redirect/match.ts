@@ -14,7 +14,7 @@ const TESTA_PARAM_RE = /^_testa_/;
 /**
  * Mode-aware match gate, mirroring the pixel's `urlMatches`. `url_match_type` selects
  * how `from_url` is matched against the current URL:
- *   - `contains` → substring test on the raw href.
+ *   - `contains` → substring test on the raw href (literal, ports included).
  *   - `regex`    → `from_url` compiled as a RegExp, tested against the href.
  *   - `exact` / `query` → canonical exact/glob/regex matching via `matchesUrl`.
  */
@@ -57,16 +57,21 @@ export function matchesUrl(currentUrl: string, pattern: string): boolean {
  * `/pricing?utm_source=fb`. Current query params still flow to the redirect
  * destination via `merge-params.ts`; they just don't gate the match.
  *
- * HOST (not hostname) — the port counts: `localhost:3200` and `localhost:5002`
- * are different sites and must never cross-match. Protocol stays ignored
- * (http/https unification); default ports normalize away inside `URL`.
+ * PORTS count only when the PATTERN names one: `localhost:3200` and
+ * `localhost:5002` are different sites, but a portless pattern (what a dashboard
+ * editor authors) means the site on any port — self-hosted stacks leak internal
+ * ports into the URL the app sees, and the dashboard cannot express "3000 in the
+ * cluster, none in public". Protocol stays ignored (http/https unification).
  */
 function exactMatch(currentUrl: string, pattern: string): boolean {
   const cur = safeUrl(currentUrl);
   const pat = safeUrl(pattern);
   if (!cur || !pat) return false;
 
-  if (cur.host.toLowerCase() !== pat.host.toLowerCase()) return false;
+  const hostsMatch = pat.port
+    ? cur.host.toLowerCase() === pat.host.toLowerCase()
+    : cur.hostname.toLowerCase() === pat.hostname.toLowerCase();
+  if (!hostsMatch) return false;
   return normalizePath(cur.pathname) === normalizePath(pat.pathname);
 }
 

@@ -16,8 +16,9 @@
  *   3. RFC 7239 `Forwarded` (`host=` / `proto=` of the first element).
  *   4. `X-Forwarded-Host` / `X-Forwarded-Proto` (first value of each list).
  *   5. The `Host` header, then the request URL as-is.
- * `X-Forwarded-Port` (first value, 1–65535) fills in the port whenever the
- * winning host doesn't carry one of its own.
+ *
+ * PORTS come only from the winning host itself; `X-Forwarded-Port` is not
+ * trusted to add one (see the note below).
  *
  * Host and proto resolve independently through the same chain, so a bare
  * `publicHost: 'www.acme.com'` still picks up `https` from the forwarded
@@ -145,14 +146,6 @@ export function resolvePublicUrlDetailed<R extends PublicUrlRequest>(
   const bareHost = winner?.[0] ?? url.host;
   const source: PublicUrlSource = winner?.[1] ?? 'request-url';
 
-  // `X-Forwarded-Port` (nginx et al. send it alongside a portless
-  // X-Forwarded-Host) — only when the winning host carries no port of its
-  // own. Default ports (443+https / 80+http) normalize away in the URL.
-  const forwardedPort = /:\d{1,5}$/.test(bareHost)
-    ? undefined
-    : validPort(firstValue(req.headers.get('x-forwarded-port')));
-  const host = forwardedPort ? `${bareHost}:${forwardedPort}` : bareHost;
-
   const proto =
     explicit.proto ??
     validProto(req.headers.get(PUBLIC_PROTO_HEADER)) ??
@@ -160,9 +153,15 @@ export function resolvePublicUrlDetailed<R extends PublicUrlRequest>(
     validProto(firstValue(req.headers.get('x-forwarded-proto'))) ??
     url.protocol.replace(/:$/, '');
 
-  if (host === url.host && `${proto}:` === url.protocol) return { url, source };
+  // `X-Forwarded-Port` is deliberately NOT read: meshes and ingress controllers
+  // routinely set it to the port they forward TO (istio sends the app's own
+  // `:3000`), and splicing that in yields `https://www.acme.com:3000/pricing` —
+  // matching no rule an editor can author. A non-default PUBLIC port is stated
+  // via `publicHost` / `x-testa-host` instead.
+
+  if (bareHost === url.host && `${proto}:` === url.protocol) return { url, source };
   try {
-    return { url: new URL(`${proto}://${host}${url.pathname}${url.search}`), source };
+    return { url: new URL(`${proto}://${bareHost}${url.pathname}${url.search}`), source };
   } catch {
     return { url, source: 'request-url' };
   }
