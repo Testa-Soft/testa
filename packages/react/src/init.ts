@@ -98,9 +98,12 @@ export async function initTesta(opts: InitOptions): Promise<InitResult> {
     if (token) {
       const changes = await fetchPreviewChanges(previewApiUrl, token, opts.fetchImpl ?? fetch);
       if (changes.length > 0) teardowns.push(...applyVariation(PREVIEW_VARIATION_ID, changes));
-    } else if (process.env.NODE_ENV !== 'production') {
+    } else {
       // Preview mode suppresses the normal cycle, so an unusable preview would
-      // otherwise render a page with NOTHING applied and no explanation.
+      // otherwise render a page with NOTHING applied and no explanation. Warned
+      // in every environment, not just dev: preview links are opened against
+      // production, which is exactly where the explanation is needed. It can
+      // never reach a normal visitor — it requires `?testa_preview` in the URL.
       console.warn(
         `[testa] ?${PREVIEW_FLAG} is set but ?${PREVIEW_TOKEN} is missing — no ` +
           'draft changes can be fetched, and normal experiments are skipped in ' +
