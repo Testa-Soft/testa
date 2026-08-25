@@ -13,7 +13,12 @@ export {
 } from './middleware.ts';
 export { hasPendingDomChange, resolveExposures } from '@testa-soft/experiment-core';
 export type { Exposure } from '@testa-soft/experiment-core';
-export type { TestaProxy, TestaProxyOptions, VariationHookContext } from './middleware.ts';
+export type {
+  ProxyDecisionMode,
+  TestaProxy,
+  TestaProxyOptions,
+  VariationHookContext,
+} from './middleware.ts';
 export { isDocumentMethod, shouldBypassRequest } from './request-filter.ts';
 export { isCrawlerUserAgent } from './bot.ts';
 export type { SkipPath } from './request-filter.ts';

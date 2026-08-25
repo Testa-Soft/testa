@@ -37,6 +37,9 @@ import { ensureVisitorId } from './uuid.ts';
 
 export type { VariationAppliedEvent };
 
+/** Where the bucketing/redirect decision happens. See `decisions`. */
+export type ProxyDecisionMode = 'hybrid' | 'server' | 'client';
+
 // Re-exported from `./constants.ts` so the server entry can share them without
 // importing this (edge-only) module, while existing imports keep working.
 export { DEFAULT_CONFIG_HOST, DEFAULT_TRACKING_HOST, SHIELD_HEADER } from './constants.ts';
@@ -90,6 +93,35 @@ export interface TestaProxyOptions extends ConfigSource {
    * production; the header exposes experiment internals.
    */
   debug?: boolean;
+  /**
+   * WHERE the bucketing/redirect decision is made, and what happens when this
+   * server instance has no config in memory yet (a cold start).
+   *
+   * - `'hybrid'` (default) — decide server-side whenever the config is already
+   *   in memory; on a cold instance pass the request through and let the
+   *   CLIENT engine decide for that one pageview (it fetches its own config,
+   *   and `<TestaGuard/>` hides the page meanwhile). No request ever waits on
+   *   the network. Best on serverless, where an isolate that paid a blocking
+   *   fetch is often torn down before it can reuse the result.
+   * - `'server'` — always decide server-side, awaiting the config on a cold
+   *   instance (capped by `fetchTimeoutMs`, default 400ms; on expiry the
+   *   request proceeds without experiments). Every visitor gets the
+   *   flicker-free redirect, at the cost of latency on cold requests. Best on
+   *   long-lived servers, where that cost is paid once and amortised.
+   * - `'client'` — never fetch or decide server-side; always pass through with
+   *   the shield raised and let the client own everything. Skips the
+   *   background refreshes that a sparse-traffic serverless deployment would
+   *   otherwise discard unused.
+   *
+   * Assignment is cookie-pinned in every mode, so switching does not re-bucket
+   * anyone — only where and when the decision happens changes.
+   */
+  decisions?: ProxyDecisionMode;
+  /**
+   * Latency budget (ms) for the cold fetch under `decisions: 'server'`.
+   * Default 400. Other modes never block, so it does not apply.
+   */
+  fetchTimeoutMs?: number;
   /**
    * Skip experiments for crawlers, scripts, and monitors (user-agent based —
    * Googlebot, curl, HeadlessChrome, UptimeRobot, …). Default true: bots get
@@ -217,13 +249,18 @@ export function createTestaProxy(options: TestaProxyOptions): TestaProxy {
       secure,
       ...(cookieDomain ? { domain: cookieDomain } : {}),
     });
-    const config = await configClient.get(
-      projectId,
-      Date.now(),
-      event?.waitUntil ? event.waitUntil.bind(event) : undefined,
-      // Document load vs RSC soft-nav/prefetch — drives 'per-pageload' caching.
-      req.headers.get('rsc') !== '1',
-    );
+    // `decisions: 'client'` — never resolve a config here at all, so no fetch
+    // (and no background refresh) is ever issued from the request path.
+    const config =
+      options.decisions === 'client'
+        ? null
+        : await configClient.get(
+            projectId,
+            Date.now(),
+            event?.waitUntil ? event.waitUntil.bind(event) : undefined,
+            // Document load vs RSC soft-nav/prefetch — drives 'per-pageload' caching.
+            req.headers.get('rsc') !== '1',
+          );
 
     // No config in memory (cold instance, or refreshes failing past the stale
     // bound) → pass through — THROUGH the composed handler, so the customer's
@@ -455,10 +492,12 @@ function geoCountry(req: NextRequest): string | undefined {
  * built from the resolved host + projectId, so the caller only needs projectId.
  */
 function resolveConfigSource(options: TestaProxyOptions, projectId: string): ConfigSource {
-  if (options.config || options.loadConfig || options.configUrl) return options;
+  // `decisions: 'server'` is the only mode that lets a request wait on a fetch.
+  const blockOnCold = options.decisions === 'server';
+  if (options.config || options.loadConfig || options.configUrl) return { ...options, blockOnCold };
   const host = (options.host ?? readEnv('TESTA_CONFIG_HOST') ?? DEFAULT_CONFIG_HOST).replace(
     /\/+$/,
     '',
   );
-  return { ...options, configUrl: `${host}/api/v1/config/${projectId}` };
+  return { ...options, blockOnCold, configUrl: `${host}/api/v1/config/${projectId}` };
 }

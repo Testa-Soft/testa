@@ -38,6 +38,23 @@ export interface ConfigSource {
   cache?: true | 'per-pageload';
   /** Fresh window override (ms) when caching is on. Default 60s. */
   cacheTtlMs?: number;
+  /**
+   * Cold-instance policy — set by `decisions: 'server'` on the proxy.
+   * When true, a cold instance AWAITS the config (capped by `fetchTimeoutMs`)
+   * so the decision is made server-side even on the first request. When false
+   * (default) a cold instance resolves null and the caller defers to the
+   * client. See `ProxyDecisionMode`.
+   */
+  blockOnCold?: boolean;
+  /**
+   * Latency budget (ms) for the one fetch that can sit on the request path —
+   * the cold fetch under `decisions: 'server'`. On expiry the request proceeds
+   * without a config (fail open) rather than stalling. Default 400ms: the
+   * CDN-cached config answers in ~50-100ms, and a request that would take
+   * longer forfeits its server-side decision instead of making the visitor
+   * wait. Ignored in the other modes, which never block.
+   */
+  fetchTimeoutMs?: number;
 }
 
 interface CacheEntry {
@@ -60,6 +77,8 @@ const DEFAULT_TTL_MS = 60_000;
 // failing, at which point deferring to the client (which fetches for itself)
 // is the right call.
 const MAX_STALE_MS = 900_000;
+/** Default budget for the one fetch that can block a request (`decisions: 'server'`). */
+const FETCH_TIMEOUT_MS = 400;
 
 export type ConfigCacheMode = 'swr' | 'per-pageload';
 
@@ -67,6 +86,8 @@ export class ConfigClient {
   private readonly source: ConfigSource;
   private readonly mode: ConfigCacheMode;
   private readonly ttlMs: number;
+  private readonly blockOnCold: boolean;
+  private readonly fetchTimeoutMs: number;
   private cache = new Map<string, CacheEntry>();
   private inflight = new Map<string, Promise<void>>();
 
@@ -80,6 +101,8 @@ export class ConfigClient {
           "`cache: 'per-pageload'` for always-fresh document loads.",
       );
     }
+    this.blockOnCold = source.blockOnCold ?? false;
+    this.fetchTimeoutMs = source.fetchTimeoutMs ?? FETCH_TIMEOUT_MS;
     this.mode = cache === true ? 'swr' : 'per-pageload';
     this.ttlMs = source.cacheTtlMs ?? DEFAULT_TTL_MS;
   }
@@ -132,6 +155,25 @@ export class ConfigClient {
 
     if (cached && age < this.ttlMs) return cached.config;
 
+    // `decisions: 'server'` — the caller wants the decision made server-side
+    // even on a cold instance, and accepts the latency. Bounded by
+    // `fetchTimeoutMs` so a slow config origin can never stall a request
+    // indefinitely; on expiry `resolve` yields null and we fail open below.
+    if (!cached && this.blockOnCold) {
+      const inflight = this.inflight.get(slug);
+      if (inflight) {
+        await inflight;
+        return this.cache.get(slug)?.config ?? null;
+      }
+      // The budget is applied HERE, not only inside the fetch, so it also caps
+      // a custom `loadConfig` (Edge Config, KV, a customer's own resolver) —
+      // any of which can hang. A late result still populates the cache for the
+      // next request; this request just stops waiting for it.
+      const config = await withBudget(this.resolve(slug), this.fetchTimeoutMs);
+      if (config) this.cache.set(slug, { config, fetchedAtMs: nowMs });
+      return config;
+    }
+
     // Anything not fresh triggers a deduped background refresh, kept alive past
     // the response by `waitUntil` where the host provides one.
     const refresh = this.refresh(slug, nowMs);
@@ -168,19 +210,46 @@ export class ConfigClient {
       return (await this.source.loadConfig(slug)) ?? null;
     }
     if (this.source.configUrl) {
-      return fetchConfig(this.source.configUrl);
+      return fetchConfig(this.source.configUrl, this.source.fetchTimeoutMs ?? FETCH_TIMEOUT_MS);
     }
     return null;
   }
 }
 
-async function fetchConfig(url: string): Promise<ProjectConfig | null> {
+/**
+ * Resolve `task`, or null once `timeoutMs` elapses — whichever lands first.
+ * The task is never cancelled, only stopped being waited on: its result still
+ * reaches the cache via `resolve`'s caller, so the wait is not wasted.
+ */
+function withBudget<T>(task: Promise<T | null>, timeoutMs: number): Promise<T | null> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(null), timeoutMs);
+    void task
+      .then((value) => {
+        clearTimeout(timer);
+        resolve(value);
+      })
+      .catch(() => {
+        clearTimeout(timer);
+        resolve(null);
+      });
+  });
+}
+
+async function fetchConfig(url: string, timeoutMs: number): Promise<ProjectConfig | null> {
   try {
-    const res = await fetch(url, { headers: { accept: 'application/json' } });
+    const res = await fetch(url, {
+      headers: { accept: 'application/json' },
+      // A slow origin (not a dead one — dead fails fast) would otherwise stall
+      // whatever awaited this for as long as the platform allows.
+      ...(typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function'
+        ? { signal: AbortSignal.timeout(timeoutMs) }
+        : {}),
+    });
     if (!res.ok) return null;
     return (await res.json()) as ProjectConfig;
   } catch {
-    // Never let a config-fetch failure break the request — fail open (no experiment).
+    // Timeout, network failure, malformed JSON — fail open (no experiment).
     return null;
   }
 }
