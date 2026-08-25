@@ -18,13 +18,22 @@
 
 import type { ProjectConfig } from '@testa-platform/shared-types';
 import { ASSIGNMENT_COOKIE } from '@testa-soft/experiment-core';
-import { useRouter } from 'next/router.js';
+// compat/router returns null instead of THROWING when no Pages Router is
+// mounted, so accidentally shipping this component inside the App Router
+// degrades to a no-op (correct there — the proxy already covers App-Router
+// soft navs) instead of a crash. A dev-time warning still points at /server.
+import { useRouter } from 'next/compat/router.js';
 import { useEffect } from 'react';
 import { readClientCookie } from '../client-cookie.ts';
 import { installRouterGuard } from './use-cookie-assignment.ts';
 
 export interface TestaRouterGuardProps {
-  /** The same ProjectConfig the middleware uses (local fixture or fetched once). */
+  /**
+   * The resolved `ProjectConfig`. The guard NEVER fetches: `<TestaProvider/>`
+   * (`@testa-soft/next/pages`) resolves the config once per page load and
+   * passes it down, so the page makes exactly one config request no matter how
+   * many testa components are mounted.
+   */
   config: ProjectConfig;
 }
 
@@ -32,14 +41,25 @@ export function TestaRouterGuard({ config }: TestaRouterGuardProps): null {
   const router = useRouter();
 
   useEffect(() => {
+    if (!router) {
+      // App Router (or no router mounted): the guard is unnecessary there —
+      // the proxy sees App-Router soft navs. No-op, with a dev-time pointer.
+      if (process.env.NODE_ENV !== 'production') {
+        console.warn(
+          '[testa] <TestaRouterGuard/> found no Pages Router — it is a no-op here. ' +
+            'In the App Router use <TestaProvider/> from @testa-soft/next/server instead.',
+        );
+      }
+      return;
+    }
     return installRouterGuard(router, {
       config,
       getCookieValue: () => readClientCookie(ASSIGNMENT_COOKIE),
       toAbsoluteUrl: (path) =>
         typeof window !== 'undefined' ? new URL(path, window.location.origin).href : path,
     });
-    // router.events identity is stable for the app lifetime; re-subscribe only if
-    // the config object changes.
+    // router.events identity is stable for the app lifetime; re-subscribe only
+    // if the config changes.
   }, [router, config]);
 
   return null;

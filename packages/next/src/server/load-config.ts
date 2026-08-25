@@ -1,19 +1,21 @@
 /**
- * `loadTestaConfig` — server-side config fetch for the RSC surface.
+ * `loadTestaConfig` — server-side config resolution for the RSC surface.
  *
  * The React Server Components (`<TestaProvider projectId=.../>`) resolve the
  * same `ProjectConfig` the middleware uses, so the app never needs its own
- * config-fetch code. Fetching happens on the first server-side request and is
- * cached by Next's data cache (stale-while-revalidate) via the `next.revalidate`
- * option — downloaded once, refreshed in the background thereafter.
+ * config-fetch code. The fetch rides Next's data cache
+ * (stale-while-revalidate) via the `next.revalidate` option — downloaded
+ * once, refreshed in the background thereafter — with a hard latency budget
+ * so a slow config origin can never stall a render beyond it.
  *
- * It fails OPEN: any failure (unreachable host, non-2xx, malformed/invalid body)
- * returns null so the caller renders nothing rather than a shield nothing will
- * reveal. This mirrors the middleware's own fail-open behaviour.
+ * It fails OPEN: any failure (unreachable host, timeout, non-2xx,
+ * malformed/invalid body) returns null so the caller renders nothing rather
+ * than a shield nothing will reveal. This mirrors the middleware's own
+ * fail-open behaviour.
  */
 
 import type { ProjectConfig } from '@testa-platform/shared-types';
-import { DEFAULT_CONFIG_HOST, readEnv } from '../constants.ts';
+import { buildConfigUrl, fetchProjectConfig } from '../config-fetch.ts';
 
 /** Default Next data-cache revalidate window (seconds). Matches the middleware's TTL. */
 const DEFAULT_REVALIDATE_SEC = 60;
@@ -27,8 +29,10 @@ export interface LoadTestaConfigOptions {
    * slashes are trimmed.
    */
   host?: string;
-  /** Next data-cache revalidate window in seconds. Default 30. */
+  /** Next data-cache revalidate window in seconds. Default 60. */
   revalidateSec?: number;
+  /** Latency budget per fetch (ms). Default `DEFAULT_FETCH_TIMEOUT_MS` (2s). */
+  fetchTimeoutMs?: number;
   /** Injectable fetch (tests). Defaults to the global `fetch`. */
   fetchImpl?: typeof fetch;
 }
@@ -40,38 +44,11 @@ export interface LoadTestaConfigOptions {
 type NextRequestInit = RequestInit & { next?: { revalidate?: number } };
 
 export async function loadTestaConfig(opts: LoadTestaConfigOptions): Promise<ProjectConfig | null> {
-  const host = (opts.host || readEnv('TESTA_CONFIG_HOST') || DEFAULT_CONFIG_HOST).replace(
-    /\/+$/,
-    '',
-  );
   const revalidate = opts.revalidateSec ?? DEFAULT_REVALIDATE_SEC;
-  const doFetch = opts.fetchImpl ?? fetch;
-  const url = `${host}/api/v1/config/${encodeURIComponent(opts.projectId)}`;
-  const init: NextRequestInit = {
-    headers: { accept: 'application/json' },
-    next: { revalidate },
-  };
-
-  try {
-    const res = await doFetch(url, init as RequestInit);
-    if (!res.ok) return null;
-    const body = (await res.json()) as unknown;
-    return isProjectConfig(body) ? body : null;
-  } catch {
-    // Never let a config-fetch failure break the render — fail open (no experiment).
-    return null;
-  }
-}
-
-/**
- * Light boundary validation: enough to reject an unrelated / error-shaped body
- * without pulling in a full schema. A valid config is a non-null object with an
- * `experiments` array.
- */
-function isProjectConfig(value: unknown): value is ProjectConfig {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    Array.isArray((value as { experiments?: unknown }).experiments)
-  );
+  const init: NextRequestInit = { next: { revalidate } };
+  return fetchProjectConfig(buildConfigUrl(opts.host ?? '', opts.projectId), {
+    ...(opts.fetchTimeoutMs !== undefined ? { timeoutMs: opts.fetchTimeoutMs } : {}),
+    ...(opts.fetchImpl ? { fetchImpl: opts.fetchImpl } : {}),
+    init,
+  });
 }

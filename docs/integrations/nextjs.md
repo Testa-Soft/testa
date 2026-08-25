@@ -295,34 +295,55 @@ will ship. A failed or malformed response applies nothing (fail-safe).
 
 ---
 
-## Pages Router soft navigation
+## Pages Router integration
 
-Client-side navigations in the **Pages Router** (static `next/link` navs) never
-reach the server, so the proxy can't see them. `<TestaRouterGuard/>` is an
-optional catch-all — add it once in your Pages-Router layout (`_app`):
+The proxy is router-agnostic — split-URL redirects work identically on the
+Pages Router. The client half comes from `@testa-soft/next/pages`: the same
+`<TestaProvider/>` name as the App Router's `@testa-soft/next/server`, one
+entry per router (a given app can only ever use one). The complete
+integration is one id in two files:
+
+```ts
+// middleware.ts — server-side, flicker-free split-URL redirects on every hard load
+import { createTestaProxy } from '@testa-soft/next'
+
+export const middleware = createTestaProxy({ projectId: '3fa85f64e1c2b' })
+export const config = { matcher: ['/((?!_next/|api/|favicon.ico|sitemap.xml|robots.txt).*)'] }
+```
 
 ```tsx
 // pages/_app.tsx
-import { TestaRouterGuard } from '@testa-soft/next/router-guard'
-import projectConfig from '../testa.config.json'
+import { TestaProvider } from '@testa-soft/next/pages'
 
 export default function App({ Component, pageProps }) {
   return (
-    <>
-      <TestaRouterGuard config={projectConfig} />
+    <TestaProvider projectId="3fa85f64e1c2b">
       <Component {...pageProps} />
-    </>
+    </TestaProvider>
   )
 }
 ```
 
-It reads the same sticky `_testa_exp` cookie and, on a navigation to a control URL
-for a split-URL experiment the visitor is bucketed to a variant of, redirects to
-the variant before the control page renders.
+Who does what:
 
-> **App Router users don't need this.** `<TestaProvider/>` re-applies DOM
-> experiments on soft navigation, and the proxy handles split-URL redirects
-> (including a prefetch-safe path for `<Link>` prefetches).
+What the provider wires up (all sharing ONE config fetch and the proxy's
+cookie contract — assignments made server-side are reused, never re-rolled):
+
+| Traffic | Handled by | How |
+| --- | --- | --- |
+| Hard loads (ads, search, direct, reloads) | `createTestaProxy` | Server-side 307 — the variant is the first thing painted. |
+| Soft navs (`next/link` inside the app) | the built-in router guard | These never reach the server; the guard reads the sticky `_testa_exp` cookie and re-points the navigation at the router-event level, before the control page renders. |
+| DOM changes, goals, exposure events, anti-flicker shield | the built-in client engine (`@testa-soft/react`) | Client-side, on mount and on every navigation. |
+
+Want the pieces individually (e.g. split-URL-only, no DOM engine)?
+`<TestaRouterGuard/>` is exported standalone from `@testa-soft/next/pages`
+(and `/router-guard`) — it takes a resolved `config` object and never fetches,
+so you stay in control of when (and whether) the config is loaded.
+
+> **App Router users don't need this section.** `<TestaProvider/>` /
+> `<TestaGuard/>` from `@testa-soft/next/server` cover the client half, and the
+> proxy sees App-Router soft navs too (they fetch RSC payloads over HTTP,
+> including a prefetch-safe path for `<Link>` prefetches).
 
 ---
 
@@ -637,11 +658,24 @@ The config loader the server components use, exported for custom server code:
 `loadTestaConfig({ projectId, host?, revalidateSec? })` → `Promise<ProjectConfig | null>`.
 Fail-open: resolves `null` on any network/HTTP/shape failure.
 
+### `<TestaProvider>` — `@testa-soft/next/pages` (Pages Router)
+
+The Pages Router twin of `/server`'s provider — add once in `_app.tsx`. Takes
+the `@testa-soft/react` provider props (`projectId` is the only one a normal
+integration passes; `config`, `host`, `tracking`, `shield`, cookie options as
+documented in [react.md](./react.md)) and self-wires the client engine plus
+the soft-nav router guard on one shared config fetch. Mounted in the App
+Router by mistake it degrades safely (guard no-ops with a dev warning) — but
+use `/server` there.
+
 ### `<TestaRouterGuard>` — `@testa-soft/next/router-guard`
 
-| Prop     | Type            | Default | Description                          |
-| -------- | --------------- | ------- | ------------------------------------ |
-| `config` | `ProjectConfig` | —       | **Required.** Same config as above.  |
+| Prop     | Type            | Default | Description                                                                 |
+| -------- | --------------- | ------- | --------------------------------------------------------------------------- |
+| `config` | `ProjectConfig` | —       | **Required.** The resolved config. The guard never fetches — `<TestaProvider/>` from `/pages` resolves it once per page load and passes it down. |
+
+Mounted without a Pages Router (i.e. in the App Router) it is a no-op with a
+dev-time warning — the proxy already sees App-Router soft navs.
 
 ---
 
