@@ -9,12 +9,14 @@ export default function Home() {
         re-applies on every navigation.
       </p>
       <p>
-        Experiment 101 is a 50/50 split-URL test on the pricing page. Your bucket is sticky
-        (cookie <code>_testa_exp</code>):
+        Experiment 101 is a 50/50 split-URL test on the pricing page. Your bucket is sticky (cookie{' '}
+        <code>_testa_exp</code>):
       </p>
       <ul>
         <li>
-          <Link href="/pricing">Pricing (soft nav — router guard re-points variants pre-render)</Link>
+          <Link href="/pricing">
+            Pricing (soft nav — router guard re-points variants pre-render)
+          </Link>
         </li>
         <li>
           <a href="/pricing">Pricing (hard load — the proxy 307s variants server-side)</a>

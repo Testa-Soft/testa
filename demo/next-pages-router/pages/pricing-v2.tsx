@@ -16,8 +16,8 @@ export default function PricingV2() {
       <h1 id="hero">Pricing — VARIANT 🎉</h1>
       <p>
         You are in the variant bucket of experiment 101. Hard loads of <code>/pricing</code> got a
-        server-side 307 here; soft navs were re-pointed by the router guard before the control
-        page could render.
+        server-side 307 here; soft navs were re-pointed by the router guard before the control page
+        could render.
       </p>
       <p>
         <Link href="/">← Home (soft nav)</Link>
