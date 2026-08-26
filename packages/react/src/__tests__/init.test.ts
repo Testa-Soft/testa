@@ -338,3 +338,54 @@ describe('initTesta — variation_assigned', () => {
     expect(seen).toEqual([1]);
   });
 });
+
+describe('initTesta — crawlers', () => {
+  it('does not bucket a crawler that runs JavaScript', async () => {
+    // AdsBot-Google renders pages. The proxy bypasses it; before this gate the
+    // client engine bucketed it anyway — cookie, assignment and exposure.
+    const store = memoryStore();
+    setWindowUrl(AT_PAGE);
+    const result = await initTesta({
+      config: splitUrlConfig(),
+      currentUrl: AT_PAGE,
+      store,
+      tracking: false,
+      navigate: () => undefined,
+      userAgent: 'AdsBot-Google (+http://www.google.com/adsbot.html)',
+    });
+    expect(result.applied).toEqual([]);
+    expect(result.redirected).toBe(false);
+    expect(store.get(UUID_COOKIE)).toBeNull();
+    expect(store.get(ASSIGNMENT_COOKIE)).toBeNull();
+  });
+
+  it('still buckets a real browser', async () => {
+    const store = memoryStore();
+    setWindowUrl(AT_PAGE);
+    const result = await initTesta({
+      config: splitUrlConfig(),
+      currentUrl: AT_PAGE,
+      store,
+      tracking: false,
+      navigate: () => undefined,
+      userAgent: 'Mozilla/5.0 (Macintosh) AppleWebKit/537.36 Chrome/130 Safari/537.36',
+    });
+    expect(store.get(UUID_COOKIE)).not.toBeNull();
+    expect(result.applied.length).toBeGreaterThan(0);
+  });
+
+  it('can be opted out of with includeBots', async () => {
+    const store = memoryStore();
+    setWindowUrl(AT_PAGE);
+    await initTesta({
+      config: splitUrlConfig(),
+      currentUrl: AT_PAGE,
+      store,
+      tracking: false,
+      navigate: () => undefined,
+      userAgent: 'Googlebot/2.1',
+      includeBots: true,
+    });
+    expect(store.get(UUID_COOKIE)).not.toBeNull();
+  });
+});

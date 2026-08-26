@@ -77,3 +77,6 @@ export type {
   DecisionTrace,
   DecisionReason,
 } from './engine.ts';
+
+// Crawler detection — shared by the proxy and the client engine (see bot.ts).
+export { isCrawlerUserAgent } from './bot.ts';

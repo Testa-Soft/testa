@@ -31,6 +31,7 @@ import {
   type CookieStore,
   UUID_COOKIE,
   UUID_TTL_SEC,
+  isCrawlerUserAgent,
   resolveExposures,
 } from '@testa-soft/experiment-core';
 import { type VariationAppliedEvent, runExperiments } from '@testa-soft/experiment-core';
@@ -68,6 +69,17 @@ export interface InitOptions {
   navigate?: (url: string) => void;
   /** Fetch impl for preview, injectable for tests. Default global `fetch`. */
   fetchImpl?: typeof fetch;
+  /**
+   * Run experiments for crawlers too. Default false — the same policy the proxy
+   * applies with `skipBots`, and it has to be applied here as well: a crawler
+   * that executes JavaScript (AdsBot-Google renders pages) is bypassed
+   * server-side and would otherwise be bucketed by this engine — minting a
+   * visitor id, writing an assignment and firing an exposure that skews the
+   * results it was excluded from.
+   */
+  includeBots?: boolean;
+  /** UA to judge. Defaults to `navigator.userAgent`. */
+  userAgent?: string | null;
 }
 
 export interface InitResult {
@@ -86,6 +98,15 @@ export async function initTesta(opts: InitOptions): Promise<InitResult> {
   const now = opts.now ?? Date.now();
   const navigate = opts.navigate ?? defaultNavigate;
   const search = searchOf(currentUrl);
+
+  // Crawlers: no visitor id, no assignment, no exposure — mirrors the proxy's
+  // `skipBots`. Returns cleanly so the caller still reveals the shield: a
+  // crawler must see the control page, never a hidden one.
+  const userAgent =
+    opts.userAgent ?? (typeof navigator === 'undefined' ? null : navigator.userAgent);
+  if (!(opts.includeBots ?? false) && isCrawlerUserAgent(userAgent)) {
+    return { applied: [], teardowns: [], redirected: false };
+  }
 
   ensureVisitorId(store);
 

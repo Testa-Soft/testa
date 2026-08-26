@@ -41,5 +41,9 @@ export function isRscRequest(req: RequestLike): boolean {
 export function isPrefetchRequest(req: RequestLike): boolean {
   const h = req.headers;
   if (h.get('next-router-prefetch') === '1' || h.get('purpose') === 'prefetch') return true;
+  // Next marks the data prefetch it makes for a Pages Router `<Link>` — without
+  // this the warm-up for a page the visitor may never open looks like a
+  // pageview, and gets a cookie and an exposure.
+  if (h.get('x-middleware-prefetch') === '1') return true;
   return (h.get('sec-purpose') ?? '').toLowerCase().includes('prefetch');
 }
