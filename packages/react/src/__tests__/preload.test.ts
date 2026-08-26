@@ -99,8 +99,8 @@ describe('preloadConfig', () => {
   it('busts the browser cache: the fetched URL carries a per-load token', async () => {
     const fetchImpl = okFetch();
     await preloadConfig({ projectId: 'acme', host: 'https://cfg.example' }, { fetchImpl });
-    const called = (fetchImpl as unknown as { mock: { calls: [string][] } }).mock.calls[0][0];
-    expect(called).toMatch(/_testa_t=/);
+    const calls = (fetchImpl as unknown as { mock: { calls: [string][] } }).mock.calls;
+    expect(calls[0]?.[0] ?? '').toMatch(/_testa_t=/);
   });
 
   it('keeps the token stable so concurrent callers still share ONE request', async () => {
