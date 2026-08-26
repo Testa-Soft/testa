@@ -23,6 +23,7 @@ import {
   type Teardown,
   applyVariation,
   emitVariationApplied,
+  emitVariationAssigned,
   installTestaGlobal,
 } from '@testa-soft/dom';
 import {
@@ -34,6 +35,7 @@ import {
 } from '@testa-soft/experiment-core';
 import { type VariationAppliedEvent, runExperiments } from '@testa-soft/experiment-core';
 import { applyAssignedExperiments } from './apply-assignments.ts';
+import { startGoalTracking } from './goal-tracking.ts';
 import {
   PREVIEW_FLAG,
   PREVIEW_TOKEN,
@@ -42,7 +44,6 @@ import {
   getPreviewToken,
   isPreviewRequested,
 } from './preview.ts';
-import { startGoalTracking } from './goal-tracking.ts';
 import { DEFAULT_TRACKING_HOST, emitExposure } from './tracking.ts';
 
 export interface InitOptions {
@@ -129,6 +130,26 @@ export async function initTesta(opts: InitOptions): Promise<InitResult> {
     store,
   );
 
+  // `variation_assigned` at DECISION time — BEFORE any redirect, while the page
+  // is still alive. This is the hook a listener needs to send its own tracking
+  // (3.3.3 `script.js` parity): `variation_applied` fires only after the DOM
+  // apply, which a split-URL visitor never reaches — they are already
+  // navigating. The bus replays history, so a handler registered later still
+  // receives it.
+  installTestaGlobal();
+  if (config.project_id != null) {
+    for (const applied of result.applied) {
+      emitVariationAssigned({
+        project_id: config.project_id,
+        experiment: applied.experimentId,
+        variation: applied.variationId,
+        uuid: applied.visitorId,
+        ...(applied.title ? { title: applied.title } : {}),
+        url: applied.url,
+      });
+    }
+  }
+
   // Emit an exposure once per fresh enrollment (deduped server-side anyway).
   if (trackingEnabled) {
     for (const applied of result.applied) {
@@ -168,7 +189,6 @@ export async function initTesta(opts: InitOptions): Promise<InitResult> {
 
   // Fire `variation_applied` for each exposed experiment on this page (client
   // event surface + GTM dataLayer). Deduped per load inside the bus.
-  installTestaGlobal();
   const uuid = store.get(UUID_COOKIE) ?? '';
   const nowSec = Math.floor(now / 1000);
   for (const e of resolveExposures(config, assignmentCookie, currentUrl, nowSec)) {
@@ -188,7 +208,9 @@ export async function initTesta(opts: InitOptions): Promise<InitResult> {
   // session-live experiment — NOT page-gated: a goal usually completes on a
   // different page than the experiment runs on. Conversions POST the legacy
   // `/api/leads/convert` payload; the teardown re-arms cleanly on SPA nav.
-  teardowns.push(startGoalTracking(config, assignmentCookie, currentUrl, uuid, trackingHost, nowSec));
+  teardowns.push(
+    startGoalTracking(config, assignmentCookie, currentUrl, uuid, trackingHost, nowSec),
+  );
 
   return { applied: result.applied, teardowns, redirected: false };
 }

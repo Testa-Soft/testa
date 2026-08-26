@@ -1,3 +1,4 @@
+import { onVariationAssigned } from '@testa-soft/dom';
 import { ASSIGNMENT_COOKIE, UUID_COOKIE, markRedirected } from '@testa-soft/experiment-core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { initTesta } from '../init.ts';
@@ -74,7 +75,13 @@ describe('initTesta — client redirect', () => {
     const store = memoryStore({ [UUID_COOKIE]: 'v', [ASSIGNMENT_COOKIE]: '101.2.0.0' });
     markRedirected(store, 101); // stale marker (legacy builds / pixel) must not block
     const navigate = vi.fn();
-    const opts = { config: splitUrlConfig(), currentUrl: AT_PAGE, store, tracking: false, navigate };
+    const opts = {
+      config: splitUrlConfig(),
+      currentUrl: AT_PAGE,
+      store,
+      tracking: false,
+      navigate,
+    };
     const first = await initTesta(opts);
     const second = await initTesta(opts); // e.g. soft-nav back to the control URL
     expect(first.redirected).toBe(true);
@@ -285,5 +292,49 @@ describe('initTesta — geo gates apply to ALL experiment types, both directions
       navigate: () => undefined,
     });
     expect(document.querySelector('#hero')?.innerHTML).toBe('VARIANT');
+  });
+});
+
+describe('initTesta — variation_assigned', () => {
+  it('fires BEFORE the redirect, while the page is still alive', async () => {
+    // The event a listener uses to send its own tracking. `variation_applied`
+    // is no use here: a split-URL visitor is already navigating away by then.
+    const order: string[] = [];
+    const off = onVariationAssigned((event) => {
+      order.push(`assigned:${event.experiment}:${event.variation}`);
+    });
+    setWindowUrl(AT_PAGE);
+
+    await initTesta({
+      config: splitUrlConfig(),
+      currentUrl: AT_PAGE,
+      store: memoryStore({ [UUID_COOKIE]: 'v1', [ASSIGNMENT_COOKIE]: '101.2.0.0' }),
+      tracking: false,
+      navigate: () => order.push('navigate'),
+    });
+
+    off();
+    expect(order).toEqual(['assigned:101:2', 'navigate']);
+  });
+
+  it('fires for a control visitor too (no redirect)', async () => {
+    // Filtered by visitor: the bus replays its history to every new handler, so
+    // events from earlier tests in this file arrive here too.
+    const seen: number[] = [];
+    const off = onVariationAssigned((event) => {
+      if (event.uuid === 'v2') seen.push(event.variation);
+    });
+    setWindowUrl(AT_PAGE);
+
+    await initTesta({
+      config: splitUrlConfig(),
+      currentUrl: AT_PAGE,
+      store: memoryStore({ [UUID_COOKIE]: 'v2', [ASSIGNMENT_COOKIE]: '101.1.0.0' }),
+      tracking: false,
+      navigate: () => undefined,
+    });
+
+    off();
+    expect(seen).toEqual([1]);
   });
 });
