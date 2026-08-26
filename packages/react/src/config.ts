@@ -116,6 +116,14 @@ export function preloadConfig(
   // Inline config short-circuits — always fresh, never fetched or cached.
   if (source.config) return Promise.resolve(source.config);
 
+  // No browser, no fetch. This is called from a `useState` initializer, i.e.
+  // during RENDER — which happens on the server too, on every SSR pass in the
+  // Pages Router and every client component in the App Router. Nothing can ever
+  // consume the result there (effects don't run), so fetching would be a config
+  // request the server pays for and discards. Hydration re-runs the initializer
+  // in the browser, which is where the real fetch belongs.
+  if (typeof document === 'undefined') return Promise.resolve(null);
+
   const url = resolveConfigUrl(source);
   if (!url) return Promise.resolve(null);
 

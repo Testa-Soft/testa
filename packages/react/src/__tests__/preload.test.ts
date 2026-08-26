@@ -78,4 +78,21 @@ describe('preloadConfig', () => {
   it('resolves null when no source is resolvable', async () => {
     expect(await preloadConfig({})).toBeNull();
   });
+
+  it('never fetches without a document — a render pass on the server must not', () => {
+    // `preloadConfig` is called from a useState initializer, so it runs during
+    // SSR too. Nothing can consume the result there, and the fetch would be a
+    // config request the server pays for and throws away.
+    const fetchImpl = vi.fn();
+    const doc = globalThis.document;
+    // @ts-expect-error — simulating a server render
+    globalThis.document = undefined;
+    try {
+      const promise = preloadConfig({ projectId: 'acme' }, { fetchImpl: fetchImpl as never });
+      expect(fetchImpl).not.toHaveBeenCalled();
+      return expect(promise).resolves.toBeNull();
+    } finally {
+      globalThis.document = doc;
+    }
+  });
 });
