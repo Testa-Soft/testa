@@ -6,7 +6,7 @@
 
 import { ASSIGNMENT_COOKIE } from '@testa-soft/experiment-core';
 import { NextRequest, NextResponse } from 'next/server.js';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createTestaProxy } from '../middleware.ts';
 import { splitUrlConfig } from './helpers.ts';
 
@@ -643,6 +643,41 @@ describe('createTestaProxy', () => {
         }),
       );
       expect(res.status).toBe(307);
+    });
+  });
+
+  describe('an unexpected failure never takes the site down', () => {
+    it('passes the request through when the proxy throws', async () => {
+      const proxy = createTestaProxy({
+        projectSlug: 'acme',
+        // A resolver that explodes stands in for any unforeseen internal fault.
+        loadConfig: () => {
+          throw new Error('boom');
+        },
+        decisions: 'server',
+      });
+      const spy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      const res = await proxy(request('https://acme.com/pricing'));
+      expect(res.status).toBe(200);
+      expect(res.headers.get('location')).toBeNull();
+      spy.mockRestore();
+    });
+
+    it('still runs the customer handler on that path', async () => {
+      const handler = vi.fn(() => NextResponse.next({ headers: { 'x-mine': '1' } }));
+      const proxy = createTestaProxy({
+        projectSlug: 'acme',
+        loadConfig: () => {
+          throw new Error('boom');
+        },
+        decisions: 'server',
+        handler,
+      });
+      const spy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      const res = await proxy(request('https://acme.com/pricing'));
+      expect(handler).toHaveBeenCalled();
+      expect(res.headers.get('x-mine')).toBe('1');
+      spy.mockRestore();
     });
   });
 });

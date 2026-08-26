@@ -204,10 +204,12 @@ export function createTestaProxy(options: TestaProxyOptions): TestaProxy {
   const emitDebug = createDebugEmitter(options.debug ?? envDebugEnabled(readEnv('TESTA_DEBUG')));
   const skipBots = options.skipBots ?? true;
 
-  return async function testaMiddleware(
-    req: NextRequest,
-    event?: NextFetchEvent,
-  ): Promise<NextResponse> {
+  /**
+   * The proxy proper. Wrapped by `testaMiddleware` below, which guarantees a
+   * response even if this throws — an experiment tool must never be able to
+   * take a customer's site down.
+   */
+  const decide = async (req: NextRequest, event?: NextFetchEvent): Promise<NextResponse> => {
     // Blackbox safety net, BEFORE any config fetch or cookie work: never treat
     // assets / framework internals / API routes — or non-GET/HEAD requests
     // (Server Actions / form posts hit the page URL with POST) — as pages, so
@@ -395,6 +397,27 @@ export function createTestaProxy(options: TestaProxyOptions): TestaProxy {
       shield,
     });
     return res;
+  };
+
+  return async function testaMiddleware(
+    req: NextRequest,
+    event?: NextFetchEvent,
+  ): Promise<NextResponse> {
+    try {
+      return await decide(req, event);
+    } catch (error) {
+      // Fail open, loudly. Individual steps already fail open on their own (a
+      // config fetch, a hook, an exposure); this covers the ones nobody
+      // predicted. The request continues to the customer's own middleware and
+      // then to the app, with its request headers intact — the visitor gets an
+      // unexperimented pageview instead of a 500.
+      console.error('[testa] proxy failed, passing the request through:', error);
+      try {
+        return await delegate(options.handler, req, event);
+      } catch {
+        return NextResponse.next({ request: { headers: req.headers } });
+      }
+    }
   };
 }
 
