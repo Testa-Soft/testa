@@ -580,8 +580,8 @@ describe('createTestaProxy', () => {
     });
   });
 
-  describe('Pages Router soft navigations (`_next/data` requests)', () => {
-    it('decides them — a soft nav is the only signal a Pages Router site sends', async () => {
+  describe("framework params never touch the visitor's query", () => {
+    it('decides a soft nav — it is the only signal a Pages Router site sends', async () => {
       const res = await mw()(
         request('https://acme.com/pricing', {
           cookie: `${ASSIGNMENT_COOKIE}=101.2.0.0`,
@@ -592,9 +592,9 @@ describe('createTestaProxy', () => {
       expect(res.headers.get('location')).toContain('/pricing-v2');
     });
 
-    it("keeps the visitor's query params out of Next's interpolated ones", async () => {
-      // Next sends /_next/data/<id>/pricing.json?utm_source=fb&slug=pricing —
-      // `slug` is its own interpolation and must never reach the address bar.
+    it("keeps everything the visitor has, even when it looks like Next's own", async () => {
+      // `slug=pricing` equals a path segment, so a value-based rule would drop
+      // it. It might be the visitor's — so it stays.
       const res = await mw()(
         request('https://acme.com/pricing?utm_source=fb&slug=pricing', {
           cookie: `${ASSIGNMENT_COOKIE}=101.2.0.0`,
@@ -603,18 +603,46 @@ describe('createTestaProxy', () => {
       );
       const location = res.headers.get('location') ?? '';
       expect(location).toContain('utm_source=fb');
-      expect(location).not.toContain('slug=pricing');
+      expect(location).toContain('slug=pricing');
     });
 
-    it('leaves the query alone on a normal document request', async () => {
+    it('drops `_rsc` from the redirect it builds', async () => {
       const res = await mw()(
-        request('https://acme.com/pricing?utm_source=fb&slug=pricing', {
+        request('https://acme.com/pricing?_rsc=8f2a1&utm_source=fb', {
           cookie: `${ASSIGNMENT_COOKIE}=101.2.0.0`,
         }),
       );
       const location = res.headers.get('location') ?? '';
       expect(location).toContain('utm_source=fb');
-      expect(location).toContain('slug=pricing');
+      expect(location).not.toContain('_rsc');
+    });
+
+    it('still matches an end-anchored regex rule on a soft nav', async () => {
+      // `/pricing$` against `…/pricing?_rsc=8f2a1` is false while the param is
+      // there, so the experiment worked on hard loads and nowhere else.
+      const config = splitUrlConfig();
+      const regexConfig = {
+        ...config,
+        experiments: config.experiments.map((experiment) => ({
+          ...experiment,
+          rules: [{ match_type: 'regex' as const, url_pattern: '/pricing$' }],
+          variations: experiment.variations.map((variation) => ({
+            ...variation,
+            changes: variation.changes.map((change) =>
+              change.type === 'redirect'
+                ? { ...change, from_url: '/pricing$', url_match_type: 'regex' as const }
+                : change,
+            ),
+          })),
+        })),
+      };
+      const proxy = createTestaProxy({ projectSlug: 'acme', config: regexConfig });
+      const res = await proxy(
+        request('https://acme.com/pricing?_rsc=8f2a1', {
+          cookie: `${ASSIGNMENT_COOKIE}=101.2.0.0`,
+        }),
+      );
+      expect(res.status).toBe(307);
     });
   });
 });

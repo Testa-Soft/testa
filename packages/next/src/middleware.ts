@@ -29,7 +29,7 @@ import { NextCookieStore } from './cookie-store.ts';
 import { createDebugEmitter, envDebugEnabled } from './debug.ts';
 import { resolveCookieDomain } from './domain.ts';
 import { type SkipPath, isDocumentMethod, shouldBypassRequest } from './request-filter.ts';
-import { isPagesDataRequest, stripInterpolatedParams } from './soft-nav/data-request.ts';
+import { stripFrameworkParams } from './soft-nav/framework-params.ts';
 import { computePrefetchRedirect } from './soft-nav/prefetch-guard.ts';
 import { isPrefetchRequest } from './soft-nav/rsc-redirect.ts';
 import { emitExposure } from './tracking.ts';
@@ -239,12 +239,11 @@ export function createTestaProxy(options: TestaProxyOptions): TestaProxy {
     // self-hosted container/ingress stacks (istio et al. rewrite `Host`), which
     // would break split-URL targeting, cookie discovery, and redirect bases.
     const { url: resolvedUrl, source: urlSource } = resolvePublicUrlDetailed(req, publicHost);
-    // A Pages Router data request (a soft navigation) arrives with the route's
-    // interpolated params bolted onto the query. Decide — and build the redirect
-    // Location — from the URL the VISITOR is actually on. See data-request.ts.
-    const publicUrl = isPagesDataRequest(req.headers)
-      ? stripInterpolatedParams(resolvedUrl)
-      : resolvedUrl;
+    // Drop Next's OWN query params (`_rsc` on an App Router soft nav, `__next*`
+    // plumbing) before anything matches against this URL or builds a redirect
+    // from it. By name only — nothing the visitor typed is ever removed. See
+    // framework-params.ts.
+    const publicUrl = stripFrameworkParams(resolvedUrl);
 
     const cookieDomain = resolveCookieDomain(publicUrl.hostname, {
       ...(options.cookieDomain ? { cookieDomain: options.cookieDomain } : {}),
