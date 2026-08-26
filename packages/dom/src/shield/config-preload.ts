@@ -36,5 +36,11 @@ export interface ConfigPreloadOptions {
 export function buildConfigPreloadSnippet(opts: ConfigPreloadOptions): string {
   const url = JSON.stringify(opts.url);
   const key = JSON.stringify(CONFIG_PROMISE_KEY);
-  return `(function(){try{if(window[${key}])return;window[${key}]=fetch(${url},{headers:{accept:'application/json'},cache:'no-cache'}).then(function(r){return r.ok?r.json():null;}).catch(function(){return null;});}catch(e){}})();`;
+  // The `_testa_t` token is built HERE, in the browser, at page-load time — not
+  // baked into the string: `_document.tsx` renders at BUILD time for statically
+  // optimized pages, so anything computed while generating this snippet would
+  // be frozen into every future page load. A per-load URL is what stops the
+  // browser answering from its own cache with a config that has since been
+  // republished. Matches the token shape the SDK's own fetch appends.
+  return `(function(){try{if(window[${key}])return;var u=${url};u+=(u.indexOf('?')<0?'?':'&')+'_testa_t='+Date.now().toString(36);window[${key}]=fetch(u,{headers:{accept:'application/json'},cache:'no-cache'}).then(function(r){return r.ok?r.json():null;}).catch(function(){return null;});}catch(e){}})();`;
 }

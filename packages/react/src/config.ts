@@ -203,21 +203,8 @@ async function fetchConfig(
   force = false,
 ): Promise<ProjectConfig | null> {
   try {
-    const res = await fetchImpl(force ? bustCache(url) : url, {
+    const res = await fetchImpl(bustCache(url), {
       headers: { accept: 'application/json' },
-      // `no-cache` does NOT skip the cache — it forces REVALIDATION: the
-      // browser always asks, sending `If-None-Match` with the stored ETag, and
-      // the CDN answers 304 (empty body, edge-served) when nothing changed.
-      // Without this the default mode lets the browser serve its stored copy
-      // for the whole `max-age` window without asking, which is what hid a
-      // just-published config behind a stale one.
-      //
-      // Deliberately NOT a random query parameter on every request: that
-      // defeats the CDN edge cache too, so every visitor's pageview becomes an
-      // origin request to the collector — no rate limiting stands in front of
-      // it, and the geo worker's own subrequest stops hitting the edge cache.
-      // Revalidation gets the same freshness for ~200 bytes. The absolute
-      // bypass is reserved for `?testa_refresh=1` (see refresh-flag.ts).
       cache: force ? 'reload' : 'no-cache',
     });
     if (!res.ok) return null;
@@ -228,8 +215,23 @@ async function fetchConfig(
   }
 }
 
-/** Append a one-shot cache-buster — QA only, via `?testa_refresh=1`. */
+/**
+ * One token per page load, appended to the config URL so the browser cannot
+ * serve a stored body — the URL it has cached is never the URL we ask for.
+ *
+ * Revalidation (`cache: 'no-cache'`) was not enough in practice: any layer
+ * answering 304 hands the browser back whatever body it already had, and a
+ * config that has been republished since then stays invisible. A unique URL
+ * removes that possibility entirely.
+ *
+ * The token is fixed for the document's lifetime, NOT per call: the preload
+ * cache is keyed by the clean URL, so StrictMode's double-invoke, a remount and
+ * the head-snippet head start still collapse onto one request.
+ */
+const LOAD_TOKEN = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+
+/** Append this load's cache-buster to a config URL. */
 function bustCache(url: string): string {
   const separator = url.includes('?') ? '&' : '?';
-  return `${url}${separator}_testa_t=${Date.now().toString(36)}`;
+  return `${url}${separator}_testa_t=${LOAD_TOKEN}`;
 }

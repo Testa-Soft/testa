@@ -95,4 +95,23 @@ describe('preloadConfig', () => {
       globalThis.document = doc;
     }
   });
+
+  it('busts the browser cache: the fetched URL carries a per-load token', async () => {
+    const fetchImpl = okFetch();
+    await preloadConfig({ projectId: 'acme', host: 'https://cfg.example' }, { fetchImpl });
+    const called = (fetchImpl as unknown as { mock: { calls: [string][] } }).mock.calls[0][0];
+    expect(called).toMatch(/_testa_t=/);
+  });
+
+  it('keeps the token stable so concurrent callers still share ONE request', async () => {
+    // The preload cache is keyed by the CLEAN url; a per-call token would make
+    // StrictMode's double-invoke and a remount each issue their own request.
+    const fetchImpl = okFetch();
+    const source = { projectId: 'acme', host: 'https://cfg.example' };
+    await Promise.all([
+      preloadConfig(source, { fetchImpl }),
+      preloadConfig(source, { fetchImpl }),
+    ]);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
 });
