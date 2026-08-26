@@ -8,7 +8,7 @@
  * double-invoke and remounts collapse onto one request.
  *
  * SMART SHIELD: it manages the anti-flicker overlay automatically. On mount
- * (`useLayoutEffect`, after DOM commit but before first paint) it raises the
+ * (pre-paint, after DOM commit) it raises the
  * shield when the persisted hint says the project has something to hide — see
  * `shield-hint.ts`. The app no longer needs a manual `<TestaShield/>` (though an
  * even-earlier `index.html` snippet still composes: `raiseShield` is idempotent
@@ -33,6 +33,19 @@ import {
 } from '@testa-soft/dom';
 import { ASSIGNMENT_COOKIE } from '@testa-soft/experiment-core';
 import { type ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+
+/**
+ * `useLayoutEffect` on the client, `useEffect` on the server.
+ *
+ * Both effects below run pre-paint on purpose — that is the whole point of a
+ * shield. But React logs a warning when a component that renders on the SERVER
+ * uses `useLayoutEffect`, and this provider does render there: the Pages Router
+ * SSRs it from `_app.tsx`. The warning is right in general and wrong here —
+ * there is no paint to get ahead of on the server, and the effect deliberately
+ * does nothing until hydration. Swapping the hook keeps the browser timing
+ * identical and stops the noise in every SSR app's logs.
+ */
+const useBeforePaint = typeof document === 'undefined' ? useEffect : useLayoutEffect;
 import { revealShield } from './apply-assignments.ts';
 import { preloadConfig } from './config.ts';
 import { TestaContext, type TestaContextValue } from './context.ts';
@@ -92,9 +105,9 @@ export function TestaProvider(props: TestaProviderProps): JSX.Element {
   // AUTO-SHIELD: raise as early as a client package can (after DOM commit, before
   // first paint) when enabled and the hint isn't an explicit "nothing to hide".
   // `raiseShield` is idempotent by styleId, so it composes with an index.html
-  // snippet instead of double-shielding.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: raise once on mount
-  useLayoutEffect(() => {
+  // snippet instead of double-shielding. Runs once on mount — the empty dep
+  // array is deliberate, props are captured on first render.
+  useBeforePaint(() => {
     const shieldOpt = props.shield ?? true;
     if (shieldOpt === false) return; // app manages its own shield
     // A server-rendered shield is already hiding the content — and it went up
@@ -156,7 +169,7 @@ export function TestaProvider(props: TestaProviderProps): JSX.Element {
       }
       teardowns = result.teardowns;
       setValue({ config, assignments: buildAssignmentMap(store.get(ASSIGNMENT_COOKIE)) });
-      setSettled(true); // shield revealed post-commit (useLayoutEffect below), after the variant paints
+      setSettled(true); // shield revealed post-commit (pre-paint effect below), after the variant paints
     };
 
     void (async () => {
@@ -195,7 +208,7 @@ export function TestaProvider(props: TestaProviderProps): JSX.Element {
   // painted (a synchronous reveal races the code-based useTestaVariant render).
   // Reveal both the auto-raised handle (covers a custom styleId) and any
   // snippet-raised shield via `window.__testa_shield` — both are idempotent.
-  useLayoutEffect(() => {
+  useBeforePaint(() => {
     if (!settled) return;
     shieldHandleRef.current?.reveal();
     revealShield();
