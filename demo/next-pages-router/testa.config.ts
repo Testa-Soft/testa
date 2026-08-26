@@ -28,6 +28,33 @@ export const demoConfig: ProjectConfig = {
   config_hash: 'pages-demo-1',
   experiments: [
     {
+      // Dynamic-route split URL with query params — the shape a quiz funnel has.
+      // `to_url` is ABSOLUTE on purpose: that is how crobot authors it, and it
+      // is the case that decides whether the soft-nav guard stays a soft nav.
+      experiment_id: 404,
+      title: 'Question funnel — male → female',
+      status: 'active',
+      traffic_allocation: 100,
+      rules: [{ match_type: 'contains', url_pattern: '/question/male' }],
+      goals: [],
+      variations: [
+        { variation_id: 1, name: 'Control', weight: 0, changes: [] },
+        {
+          variation_id: 2,
+          name: 'Variant (female)',
+          weight: 100,
+          changes: [
+            {
+              type: 'redirect',
+              from_url: 'http://localhost:3300/question/male/1',
+              to_url: 'http://localhost:3300/question/female/1',
+              url_match_type: 'exact',
+            },
+          ],
+        },
+      ],
+    },
+    {
       experiment_id: 101,
       title: 'Pricing page split-URL test',
       status: 'active',

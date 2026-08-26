@@ -21,6 +21,17 @@ export default function Home() {
         <li>
           <a href="/pricing">Pricing (hard load — the proxy 307s variants server-side)</a>
         </li>
+        <li>
+          <Link
+            href="/question/male/1?flow=7247&utm_source=fb"
+            onClick={() => {
+              // Survives a client-side transition, wiped by a document load.
+              (window as unknown as { __navMarker?: string }).__navMarker = 'set';
+            }}
+          >
+            Question funnel (soft nav — experiment 404 re-points male → female)
+          </Link>
+        </li>
       </ul>
       <p style={{ color: '#666' }}>
         Bucketed to control? Clear the <code>_testa_exp</code> cookie (or use a private window) to

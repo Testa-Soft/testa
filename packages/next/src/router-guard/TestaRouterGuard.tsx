@@ -57,6 +57,10 @@ export function TestaRouterGuard({ config }: TestaRouterGuardProps): null {
       getCookieValue: () => readClientCookie(ASSIGNMENT_COOKIE),
       toAbsoluteUrl: (path) =>
         typeof window !== 'undefined' ? new URL(path, window.location.origin).href : path,
+      // Only reached for a variant on another domain — the router can't go there.
+      navigate: (url) => {
+        if (typeof window !== 'undefined') window.location.replace(url);
+      },
     });
     // router.events identity is stable for the app lifetime; re-subscribe only
     // if the config changes.
