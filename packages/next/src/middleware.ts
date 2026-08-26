@@ -350,14 +350,19 @@ export function createTestaProxy(options: TestaProxyOptions): TestaProxy {
       fireVariationAssigned(options.onVariationAssigned, applied, event);
       // Emit an exposure once per fresh enrollment (deduped server-side anyway).
       if (trackingEnabled && applied.firstAssignment && config.project_id != null) {
-        const pending = emitExposure(trackingHost, {
-          project_id: config.project_id,
-          experiment: applied.experimentId,
-          variation: applied.variationId,
-          uuid: applied.visitorId,
-          ...(applied.title ? { title: applied.title } : {}),
-          url: applied.url,
-        });
+        const pending = emitExposure(
+          trackingHost,
+          {
+            project_id: config.project_id,
+            experiment: applied.experimentId,
+            variation: applied.variationId,
+            uuid: applied.visitorId,
+            ...(applied.title ? { title: applied.title } : {}),
+            url: applied.url,
+          },
+          // The VISITOR's context, not ours — this POST is made by the server.
+          { userAgent: req.headers.get('user-agent'), clientIp: clientIpOf(req) },
+        );
         if (event?.waitUntil) event.waitUntil(pending);
         else void pending;
       }
@@ -419,6 +424,20 @@ export function createTestaProxy(options: TestaProxyOptions): TestaProxy {
       }
     }
   };
+}
+
+/**
+ * The visitor's IP as the proxy sees it: the client-nearest entry of
+ * `X-Forwarded-For`, else `X-Real-IP`. Null on runtimes that expose neither, in
+ * which case nothing is forwarded.
+ */
+function clientIpOf(req: NextRequest): string | null {
+  const forwarded = req.headers.get('x-forwarded-for');
+  if (forwarded) {
+    const first = forwarded.split(',')[0]?.trim();
+    if (first) return first;
+  }
+  return req.headers.get('x-real-ip');
 }
 
 /** Compact per-assignment summary for the debug trace. */

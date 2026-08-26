@@ -680,4 +680,69 @@ describe('createTestaProxy', () => {
       spy.mockRestore();
     });
   });
+
+  describe('server-side exposures carry the VISITOR, not the server', () => {
+    const visitorUa = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0) AppleWebKit/605.1.15 Safari/604.1';
+
+    function requestWith(headers: Record<string, string>): NextRequest {
+      return new NextRequest(new URL('https://acme.com/pricing'), {
+        headers: new Headers(headers),
+      });
+    }
+
+    it('forwards the visitor user agent and IP on the exposure POST', async () => {
+      const calls: Array<{ url: string; init: RequestInit }> = [];
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async (url: string, init: RequestInit) => {
+          calls.push({ url: String(url), init });
+          return new Response('{}', { status: 200 });
+        }),
+      );
+
+      const proxy = createTestaProxy({
+        projectSlug: 'acme',
+        config: splitUrlConfig(),
+        trackingHost: 'https://crobot.example',
+      });
+      await proxy(
+        requestWith({
+          'user-agent': visitorUa,
+          'x-forwarded-for': '203.0.113.7, 100.28.41.43',
+        }),
+      );
+
+      const lead = calls.find((c) => c.url.includes('/api/leads'));
+      expect(lead).toBeDefined();
+      const sent = new Headers(lead?.init.headers);
+      // Without these, every server-decided row is logged against the edge
+      // runtime's own UA and the deployment's egress IP.
+      expect(sent.get('user-agent')).toBe(visitorUa);
+      expect(sent.get('x-forwarded-for')).toBe('203.0.113.7');
+      vi.unstubAllGlobals();
+    });
+
+    it('sends no visitor headers when the runtime exposes none', async () => {
+      const calls: Array<{ init: RequestInit }> = [];
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async (url: string, init: RequestInit) => {
+          if (String(url).includes('/api/leads')) calls.push({ init });
+          return new Response('{}', { status: 200 });
+        }),
+      );
+
+      const proxy = createTestaProxy({
+        projectSlug: 'acme',
+        config: splitUrlConfig(),
+        trackingHost: 'https://crobot.example',
+      });
+      await proxy(requestWith({}));
+
+      const sent = new Headers(calls[0]?.init.headers);
+      expect(sent.has('user-agent')).toBe(false);
+      expect(sent.has('x-forwarded-for')).toBe(false);
+      vi.unstubAllGlobals();
+    });
+  });
 });
