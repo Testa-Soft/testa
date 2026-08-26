@@ -251,6 +251,7 @@ export function createTestaProxy(options: TestaProxyOptions): TestaProxy {
       ...(options.cookieDomain ? { cookieDomain: options.cookieDomain } : {}),
       ...(options.discoverRootDomain ? { discoverRootDomain: true } : {}),
     });
+    const cookieState = readCookieState(req, publicUrl);
     const store = new NextCookieStore(req.cookies, {
       secure,
       ...(cookieDomain ? { domain: cookieDomain } : {}),
@@ -347,7 +348,7 @@ export function createTestaProxy(options: TestaProxyOptions): TestaProxy {
     );
 
     for (const applied of result.applied) {
-      fireVariationAssigned(options.onVariationAssigned, applied, event);
+      fireVariationAssigned(options.onVariationAssigned, applied, event, cookieState);
       // Emit an exposure once per fresh enrollment (deduped server-side anyway).
       if (trackingEnabled && applied.firstAssignment && config.project_id != null) {
         const pending = emitExposure(
@@ -378,6 +379,7 @@ export function createTestaProxy(options: TestaProxyOptions): TestaProxy {
         configHash: config.config_hash,
         applied: summarizeApplied(result.applied),
         redirect: result.redirectTo,
+        ...orphanNote(cookieState),
       });
       return res;
     }
@@ -400,6 +402,7 @@ export function createTestaProxy(options: TestaProxyOptions): TestaProxy {
       configHash: config.config_hash,
       applied: summarizeApplied(result.applied),
       shield,
+      ...orphanNote(cookieState),
     });
     return res;
   };
@@ -438,6 +441,16 @@ function clientIpOf(req: NextRequest): string | null {
     if (first) return first;
   }
   return req.headers.get('x-real-ip');
+}
+
+/**
+ * Flag the one combination worth chasing: no visitor id of ours, but the request
+ * carries other cookies — so cookies work for this client and ours went missing.
+ * That visitor is about to be re-bucketed from scratch.
+ */
+function orphanNote(state: VisitorCookieState): { cookieLoss?: number } {
+  if (state.hadVisitorId || state.otherCookies === 0) return {};
+  return { cookieLoss: state.otherCookies };
 }
 
 /** Compact per-assignment summary for the debug trace. */
@@ -503,6 +516,56 @@ async function resolveDownstream(
 export interface VariationHookContext {
   /** Run `promise` to completion after the response is sent (never delays it). */
   waitUntil: (promise: Promise<unknown>) => void;
+  /** What the request said about this visitor's cookies. See {@link VisitorCookieState}. */
+  cookies: VisitorCookieState;
+}
+
+/**
+ * The cookie situation as the request arrived — read BEFORE anything is minted.
+ *
+ * This exists to make cookie loss measurable on live traffic. A visitor whose
+ * `_testa_uuid` goes missing is re-bucketed from scratch, so they can appear
+ * twice with different ids and even land in the other group; it is intermittent
+ * per visitor (a CDN serving a cached response without our `Set-Cookie`, a
+ * consent tool removing it, a composed middleware returning a response that
+ * dropped it), so it cannot be reproduced by hand — it has to be counted.
+ *
+ * `otherCookies` is what makes that possible: it separates "cookies do not work
+ * for this client at all" (a script, a crawler — expect 0) from "cookies work
+ * fine and OURS is the one missing" (a real browser mid-session carrying a cart,
+ * a session, a consent record). The second is the population to worry about.
+ */
+export interface VisitorCookieState {
+  /** Did the request carry `_testa_uuid`? False means this pageview mints one. */
+  hadVisitorId: boolean;
+  /** Did it carry `_testa_exp`? */
+  hadAssignment: boolean;
+  /** How many OTHER cookies came with it. */
+  otherCookies: number;
+  /** Did it come from this same site (`Referer` on the same host)? */
+  sameSiteReferer: boolean;
+}
+
+/** Read the cookie situation off the request, before the engine touches it. */
+function readCookieState(req: NextRequest, publicUrl: URL): VisitorCookieState {
+  let otherCookies = 0;
+  let hadVisitorId = false;
+  let hadAssignment = false;
+  for (const cookie of req.cookies.getAll()) {
+    if (cookie.name === UUID_COOKIE) hadVisitorId = true;
+    else if (cookie.name === ASSIGNMENT_COOKIE) hadAssignment = true;
+    else otherCookies++;
+  }
+  let sameSiteReferer = false;
+  const referer = req.headers.get('referer');
+  if (referer) {
+    try {
+      sameSiteReferer = new URL(referer).host === publicUrl.host;
+    } catch {
+      sameSiteReferer = false;
+    }
+  }
+  return { hadVisitorId, hadAssignment, otherCookies, sameSiteReferer };
 }
 
 /** Invoke the hook without ever letting it break the request; keep async work alive. */
@@ -510,6 +573,7 @@ function fireVariationAssigned(
   listener: TestaProxyOptions['onVariationAssigned'],
   event: VariationAppliedEvent,
   fetchEvent: NextFetchEvent | undefined,
+  cookies: VisitorCookieState,
 ): void {
   if (!listener) return;
   const waitUntil = (promise: Promise<unknown>): void => {
@@ -517,7 +581,7 @@ function fireVariationAssigned(
     else void promise.catch(() => undefined);
   };
   try {
-    const r = listener(event, { waitUntil });
+    const r = listener(event, { waitUntil, cookies });
     // If the hook itself returned a promise, keep the worker alive for it too.
     if (r && typeof (r as Promise<void>).then === 'function') waitUntil(r as Promise<void>);
   } catch {

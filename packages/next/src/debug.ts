@@ -34,6 +34,13 @@ export interface DebugTrace {
    */
   speculative?: 'prefetch' | 'head';
   visitor?: string;
+  /**
+   * Present when the request had NO `_testa_uuid` but did carry other cookies —
+   * i.e. cookies work for this client and ours went missing, so this visitor is
+   * being re-bucketed and may land in the other group. The number is how many
+   * other cookies came with the request. See `VisitorCookieState`.
+   */
+  cookieLoss?: number;
   configHash?: string;
   applied?: ReadonlyArray<{ experiment: number; variation: number; first: boolean }>;
   redirect?: string;

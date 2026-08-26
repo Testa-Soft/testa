@@ -4,7 +4,7 @@
  * through, prefetch is a no-op.
  */
 
-import { ASSIGNMENT_COOKIE } from '@testa-soft/experiment-core';
+import { ASSIGNMENT_COOKIE, UUID_COOKIE } from '@testa-soft/experiment-core';
 import { NextRequest, NextResponse } from 'next/server.js';
 import { describe, expect, it, vi } from 'vitest';
 import { createTestaProxy } from '../middleware.ts';
@@ -743,6 +743,81 @@ describe('createTestaProxy', () => {
       expect(sent.has('user-agent')).toBe(false);
       expect(sent.has('x-forwarded-for')).toBe(false);
       vi.unstubAllGlobals();
+    });
+  });
+
+  describe('cookie-loss instrumentation', () => {
+    function requestWith(cookie: string, referer?: string): NextRequest {
+      const headers = new Headers();
+      if (cookie) headers.set('cookie', cookie);
+      if (referer) headers.set('referer', referer);
+      return new NextRequest(new URL('https://acme.com/pricing'), { headers });
+    }
+
+    /** Capture what the server hook was told about the request's cookies. */
+    async function stateFor(cookie: string, referer?: string) {
+      let seen: unknown;
+      const proxy = createTestaProxy({
+        projectSlug: 'acme',
+        config: splitUrlConfig(),
+        tracking: false,
+        onVariationAssigned: (_event, ctx) => {
+          seen = ctx.cookies;
+        },
+      });
+      await proxy(requestWith(cookie, referer));
+      return seen as {
+        hadVisitorId: boolean;
+        hadAssignment: boolean;
+        otherCookies: number;
+        sameSiteReferer: boolean;
+      };
+    }
+
+    it('separates "cookies do not work here" from "ours went missing"', async () => {
+      // A browser mid-session: cart, session, consent — but no id of ours. This
+      // visitor is about to be re-bucketed and may land in the other group.
+      const lost = await stateFor('cart=abc; sid=9; consent=1', 'https://acme.com/cart');
+      expect(lost.hadVisitorId).toBe(false);
+      expect(lost.otherCookies).toBe(3);
+      expect(lost.sameSiteReferer).toBe(true);
+
+      // A client that stores nothing at all — every request mints a visitor.
+      const cookieless = await stateFor('');
+      expect(cookieless.hadVisitorId).toBe(false);
+      expect(cookieless.otherCookies).toBe(0);
+    });
+
+    it('reports a returning visitor as intact', async () => {
+      const state = await stateFor(`${UUID_COOKIE}=v1; ${ASSIGNMENT_COOKIE}=101.2.0.0; cart=abc`);
+      expect(state.hadVisitorId).toBe(true);
+      expect(state.hadAssignment).toBe(true);
+      expect(state.otherCookies).toBe(1);
+    });
+
+    it('does not count a cross-site referer as same-site', async () => {
+      const state = await stateFor('cart=abc', 'https://google.com/search');
+      expect(state.sameSiteReferer).toBe(false);
+    });
+
+    it('flags the anomaly in the debug trace, and only then', async () => {
+      const proxy = createTestaProxy({
+        projectSlug: 'acme',
+        config: splitUrlConfig(),
+        tracking: false,
+        debug: true,
+      });
+      const spy = vi.spyOn(console, 'debug').mockImplementation(() => undefined);
+
+      const lost = await proxy(requestWith('cart=abc; sid=9'));
+      expect(JSON.parse(lost.headers.get('x-testa-debug') ?? '{}').cookieLoss).toBe(2);
+
+      const intact = await proxy(requestWith(`${UUID_COOKIE}=v1; cart=abc`));
+      expect(JSON.parse(intact.headers.get('x-testa-debug') ?? '{}').cookieLoss).toBeUndefined();
+
+      const noCookies = await proxy(requestWith(''));
+      expect(JSON.parse(noCookies.headers.get('x-testa-debug') ?? '{}').cookieLoss).toBeUndefined();
+      spy.mockRestore();
     });
   });
 });
