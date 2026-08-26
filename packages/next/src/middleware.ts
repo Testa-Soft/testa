@@ -29,6 +29,7 @@ import { NextCookieStore } from './cookie-store.ts';
 import { createDebugEmitter, envDebugEnabled } from './debug.ts';
 import { resolveCookieDomain } from './domain.ts';
 import { type SkipPath, isDocumentMethod, shouldBypassRequest } from './request-filter.ts';
+import { isPagesDataRequest, stripInterpolatedParams } from './soft-nav/data-request.ts';
 import { computePrefetchRedirect } from './soft-nav/prefetch-guard.ts';
 import { isPrefetchRequest } from './soft-nav/rsc-redirect.ts';
 import { emitExposure } from './tracking.ts';
@@ -200,9 +201,7 @@ export function createTestaProxy(options: TestaProxyOptions): TestaProxy {
   ).replace(/\/+$/, '');
   const publicHost: PublicHostOption<NextRequest> | undefined =
     options.publicHost ?? readEnv('TESTA_PUBLIC_HOST');
-  const emitDebug = createDebugEmitter(
-    options.debug ?? envDebugEnabled(readEnv('TESTA_DEBUG')),
-  );
+  const emitDebug = createDebugEmitter(options.debug ?? envDebugEnabled(readEnv('TESTA_DEBUG')));
   const skipBots = options.skipBots ?? true;
 
   return async function testaMiddleware(
@@ -239,7 +238,13 @@ export function createTestaProxy(options: TestaProxyOptions): TestaProxy {
     // The URL the VISITOR requested — `req.url` can carry an internal host on
     // self-hosted container/ingress stacks (istio et al. rewrite `Host`), which
     // would break split-URL targeting, cookie discovery, and redirect bases.
-    const { url: publicUrl, source: urlSource } = resolvePublicUrlDetailed(req, publicHost);
+    const { url: resolvedUrl, source: urlSource } = resolvePublicUrlDetailed(req, publicHost);
+    // A Pages Router data request (a soft navigation) arrives with the route's
+    // interpolated params bolted onto the query. Decide — and build the redirect
+    // Location — from the URL the VISITOR is actually on. See data-request.ts.
+    const publicUrl = isPagesDataRequest(req.headers)
+      ? stripInterpolatedParams(resolvedUrl)
+      : resolvedUrl;
 
     const cookieDomain = resolveCookieDomain(publicUrl.hostname, {
       ...(options.cookieDomain ? { cookieDomain: options.cookieDomain } : {}),

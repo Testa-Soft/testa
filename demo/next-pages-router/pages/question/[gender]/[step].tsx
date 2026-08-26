@@ -9,10 +9,19 @@
  * document load.
  */
 
+import type { GetServerSideProps } from 'next';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 
-export default function QuestionStep() {
+/**
+ * Present so a client-side navigation issues a real `_next/data` request — the
+ * hop the proxy currently never sees on the Pages Router.
+ */
+export const getServerSideProps: GetServerSideProps<{ renderedAt: string }> = async () => ({
+  props: { renderedAt: new Date().toISOString() },
+});
+
+export default function QuestionStep(_props: { renderedAt: string }) {
   const router = useRouter();
   const { gender, step } = router.query;
   const query = Object.entries(router.query)

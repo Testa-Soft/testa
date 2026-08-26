@@ -10,10 +10,16 @@ import { describe, expect, it } from 'vitest';
 import { createTestaProxy } from '../middleware.ts';
 import { splitUrlConfig } from './helpers.ts';
 
-function request(url: string, opts: { cookie?: string; prefetch?: boolean } = {}): NextRequest {
+function request(
+  url: string,
+  opts: { cookie?: string; prefetch?: boolean; data?: boolean } = {},
+): NextRequest {
   const headers = new Headers();
   if (opts.cookie) headers.set('cookie', opts.cookie);
   if (opts.prefetch) headers.set('next-router-prefetch', '1');
+  // Next normalizes a data request's URL to the page path before middleware
+  // sees it, and marks it with this header.
+  if (opts.data) headers.set('x-nextjs-data', '1');
   return new NextRequest(new URL(url), { headers });
 }
 
@@ -363,8 +369,7 @@ describe('createTestaProxy', () => {
       expect(res.headers.get('set-cookie')).toBeNull();
     });
 
-    const crawlerUa =
-      'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)';
+    const crawlerUa = 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)';
 
     it('bypasses a crawler entirely: no redirect, no cookies, no config fetch', async () => {
       let configFetched = false;
@@ -572,6 +577,44 @@ describe('createTestaProxy', () => {
         internal({ 'x-forwarded-host': 'www.acme.com', 'x-forwarded-proto': 'https' }),
       );
       expect(res.headers.get('set-cookie') ?? '').toContain('Domain=acme.com');
+    });
+  });
+
+  describe('Pages Router soft navigations (`_next/data` requests)', () => {
+    it('decides them — a soft nav is the only signal a Pages Router site sends', async () => {
+      const res = await mw()(
+        request('https://acme.com/pricing', {
+          cookie: `${ASSIGNMENT_COOKIE}=101.2.0.0`,
+          data: true,
+        }),
+      );
+      expect(res.status).toBe(307);
+      expect(res.headers.get('location')).toContain('/pricing-v2');
+    });
+
+    it("keeps the visitor's query params out of Next's interpolated ones", async () => {
+      // Next sends /_next/data/<id>/pricing.json?utm_source=fb&slug=pricing —
+      // `slug` is its own interpolation and must never reach the address bar.
+      const res = await mw()(
+        request('https://acme.com/pricing?utm_source=fb&slug=pricing', {
+          cookie: `${ASSIGNMENT_COOKIE}=101.2.0.0`,
+          data: true,
+        }),
+      );
+      const location = res.headers.get('location') ?? '';
+      expect(location).toContain('utm_source=fb');
+      expect(location).not.toContain('slug=pricing');
+    });
+
+    it('leaves the query alone on a normal document request', async () => {
+      const res = await mw()(
+        request('https://acme.com/pricing?utm_source=fb&slug=pricing', {
+          cookie: `${ASSIGNMENT_COOKIE}=101.2.0.0`,
+        }),
+      );
+      const location = res.headers.get('location') ?? '';
+      expect(location).toContain('utm_source=fb');
+      expect(location).toContain('slug=pricing');
     });
   });
 });
