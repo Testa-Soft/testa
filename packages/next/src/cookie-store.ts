@@ -26,6 +26,8 @@ export interface WritableCookies {
 interface PendingWrite {
   value: string;
   maxAgeSec: number;
+  /** Only the server-owned visitor-id copy sets this — see UUID_BACKUP_COOKIE. */
+  httpOnly?: boolean;
 }
 
 export interface NextCookieStoreOptions {
@@ -54,7 +56,11 @@ export class NextCookieStore implements CookieStore {
   }
 
   set(name: string, value: string, opts: CookieSetOptions): void {
-    this.pending.set(name, { value, maxAgeSec: opts.maxAgeSec });
+    this.pending.set(name, {
+      value,
+      maxAgeSec: opts.maxAgeSec,
+      ...(opts.httpOnly ? { httpOnly: true } : {}),
+    });
   }
 
   /** True when any cookie is queued to be written. */
@@ -70,11 +76,11 @@ export class NextCookieStore implements CookieStore {
         path: '/',
         sameSite: 'lax',
         secure: this.secure,
-        // No cookie is HttpOnly: `_testa_uuid` must be readable by the (future)
-        // client guard/pixel for client-side bucketing, and `_testa_exp` /
-        // `_testa_redirected` likewise. Durability comes from being set via the
-        // server Set-Cookie header (first-party), not from HttpOnly.
-        httpOnly: false,
+        // Readable by default: `_testa_uuid` and `_testa_exp` are what the
+        // client guard, the client engine and the pixel bucket from. The one
+        // exception is the server-owned id copy (`_testa_uuid_s`), which asks
+        // for HttpOnly precisely so scripts cannot clear it.
+        httpOnly: write.httpOnly === true,
         ...(this.domain ? { domain: this.domain } : {}),
       });
     }

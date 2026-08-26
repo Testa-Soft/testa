@@ -4,7 +4,7 @@
  * through, prefetch is a no-op.
  */
 
-import { ASSIGNMENT_COOKIE, UUID_COOKIE } from '@testa-soft/experiment-core';
+import { ASSIGNMENT_COOKIE, UUID_BACKUP_COOKIE, UUID_COOKIE } from '@testa-soft/experiment-core';
 import { NextRequest, NextResponse } from 'next/server.js';
 import { describe, expect, it, vi } from 'vitest';
 import { createTestaProxy } from '../middleware.ts';
@@ -818,6 +818,64 @@ describe('createTestaProxy', () => {
       const noCookies = await proxy(requestWith(''));
       expect(JSON.parse(noCookies.headers.get('x-testa-debug') ?? '{}').cookieLoss).toBeUndefined();
       spy.mockRestore();
+    });
+  });
+
+  describe('the visitor id survives a cookie being cleared', () => {
+    /** All Set-Cookie values on the response, as a single string. */
+    const setCookies = (res: NextResponse): string =>
+      [...res.headers.entries()]
+        .filter(([name]) => name.toLowerCase() === 'set-cookie')
+        .map(([, value]) => value)
+        .join('\n');
+
+    function req(cookie: string): NextRequest {
+      const headers = new Headers();
+      if (cookie) headers.set('cookie', cookie);
+      return new NextRequest(new URL('https://acme.com/pricing'), { headers });
+    }
+
+    it('writes an HttpOnly copy alongside a freshly minted id', async () => {
+      const res = await mw()(req(''));
+      const cookies = setCookies(res);
+      const id = /_testa_uuid=([^;]+)/.exec(cookies)?.[1];
+      expect(id).toBeTruthy();
+      // Same value, and only the copy is hidden from scripts.
+      expect(cookies).toContain(`${UUID_BACKUP_COOKIE}=${id}`);
+      expect(/_testa_uuid_s=[^;]+;[^\n]*HttpOnly/i.test(cookies)).toBe(true);
+      expect(/_testa_uuid=[^;]+;[^\n]*HttpOnly/i.test(cookies)).toBe(false);
+    });
+
+    it('restores the readable id from the copy instead of minting a second visitor', async () => {
+      // What a consent tool leaves behind: the readable cookie gone, the
+      // HttpOnly copy untouched because scripts cannot see it.
+      const res = await mw()(req(`${UUID_BACKUP_COOKIE}=v-original; cart=abc`));
+      expect(setCookies(res)).toContain(`${UUID_COOKIE}=v-original`);
+    });
+
+    it('puts the restored visitor back in the SAME variation', async () => {
+      // The assignment cookie is gone too, so the engine re-buckets — and lands
+      // on the same variation, because the bucket is a hash of the id.
+      const withCookies = await mw()(req(`${UUID_COOKIE}=v-original`));
+      const restored = await mw()(req(`${UUID_BACKUP_COOKIE}=v-original`));
+      const variationOf = (res: NextResponse): string | undefined =>
+        /_testa_exp=101\.(\d+)/.exec(setCookies(res))?.[1];
+      expect(variationOf(restored)).toBe(variationOf(withCookies));
+    });
+
+    it('keeps the readable cookie authoritative when the two disagree', async () => {
+      // The client engine minted its own id on a pageview the proxy never saw.
+      // Adopting the older server copy would move an active visitor between
+      // variations mid-session.
+      const res = await mw()(req(`${UUID_COOKIE}=v-client; ${UUID_BACKUP_COOKIE}=v-stale`));
+      const cookies = setCookies(res);
+      expect(cookies).toContain(`${UUID_BACKUP_COOKIE}=v-client`);
+      expect(cookies).not.toContain('v-stale');
+    });
+
+    it('leaves both alone when they already agree', async () => {
+      const res = await mw()(req(`${UUID_COOKIE}=v1; ${UUID_BACKUP_COOKIE}=v1`));
+      expect(setCookies(res)).not.toContain(`${UUID_COOKIE}=v1`);
     });
   });
 });

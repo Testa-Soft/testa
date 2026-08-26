@@ -13,6 +13,12 @@
 export interface CookieSetOptions {
   /** Cookie lifetime in seconds. */
   maxAgeSec: number;
+  /**
+   * Hide this cookie from JavaScript. Only the server-owned visitor-id copy
+   * uses it — see {@link UUID_BACKUP_COOKIE}. Ignored by stores that write
+   * through `document.cookie`, which cannot express it.
+   */
+  httpOnly?: boolean;
 }
 
 export interface CookieStore {
@@ -25,6 +31,23 @@ export interface CookieStore {
 // ─── shared cookie names + TTLs (kept in parity with the pixel's cookies.ts) ──
 
 export const UUID_COOKIE = '_testa_uuid';
+/**
+ * Server-owned copy of the visitor id, written `HttpOnly` so JavaScript cannot
+ * touch it — the readable `_testa_uuid` is restored from this whenever it goes
+ * missing.
+ *
+ * The visitor id is the only thing that has to survive: bucketing is
+ * `hash(visitorId:experimentId)`, so a visitor whose assignment cookie is gone
+ * but whose id is intact is re-assigned to the SAME variation. Lose the id and
+ * they become a new visitor — counted twice, and free to land in the other
+ * group, on the other group's URL.
+ *
+ * `HttpOnly` is what makes the copy durable: consent tools, extensions and any
+ * third-party script clear cookies through `document.cookie`, which cannot see
+ * this one. Safari also treats non-HttpOnly cookies as script-writable storage
+ * and caps their lifetime well below our 400 days.
+ */
+export const UUID_BACKUP_COOKIE = '_testa_uuid_s';
 /**
  * Consolidated packed experiment-state cookie (task 3.16). This is the v2 data
  * format shared by the middleware AND the v2 pixel (both consume experiment-core),

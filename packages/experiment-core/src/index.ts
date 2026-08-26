@@ -8,6 +8,7 @@
 
 export type { CookieStore, CookieSetOptions } from './cookie-store.ts';
 export {
+  UUID_BACKUP_COOKIE,
   UUID_COOKIE,
   ASSIGNMENT_COOKIE,
   REDIRECTED_COOKIE,
