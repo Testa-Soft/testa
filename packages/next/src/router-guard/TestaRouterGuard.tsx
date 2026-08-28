@@ -55,6 +55,9 @@ export function TestaRouterGuard({ config }: TestaRouterGuardProps): null {
     return installRouterGuard(router, {
       config,
       getCookieValue: () => readClientCookie(ASSIGNMENT_COOKIE),
+      // Exclusions are re-evaluated per navigation and can name any cookie or
+      // the device, so the guard needs the same inputs the engine gets.
+      getCookie: readClientCookie,
       toAbsoluteUrl: (path) =>
         typeof window !== 'undefined' ? new URL(path, window.location.origin).href : path,
       // Only reached for a variant on another domain — the router can't go there.

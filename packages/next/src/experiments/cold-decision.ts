@@ -37,7 +37,14 @@
  */
 
 import type { ProjectConfig } from '@testa-platform/shared-types';
-import { isAssigned, matchesPageRule, parsePacked } from '@testa-soft/experiment-core';
+import {
+  ASSIGNMENT_COOKIE,
+  type TargetingContext,
+  isAssigned,
+  isExcludedByRules,
+  matchesPageRule,
+  parsePacked,
+} from '@testa-soft/experiment-core';
 import { resolveGuardRedirect } from '../router-guard/use-cookie-assignment.ts';
 
 export interface ClientDecisionInput {
@@ -51,6 +58,10 @@ export interface ClientDecisionInput {
    * itself, which is proof the server had none to decide with.
    */
   hasServerConfig: boolean;
+  /** Read ANY cookie — for `cookie`-dimension exclusions. */
+  getCookie?: (name: string) => string | null;
+  /** UA for `device`-dimension exclusions. */
+  userAgent?: string;
 }
 
 export function clientOwnsDecision(input: ClientDecisionInput): boolean {
@@ -59,17 +70,32 @@ export function clientOwnsDecision(input: ClientDecisionInput): boolean {
   // 1. The server had no config: it cannot have decided anything.
   if (!input.hasServerConfig) return true;
 
+  const exclusionCtx: TargetingContext = {
+    url: currentUrl,
+    getCookie: input.getCookie ?? ((name) => (name === ASSIGNMENT_COOKIE ? cookieValue : null)),
+    ...(input.userAgent !== undefined ? { userAgent: input.userAgent } : {}),
+  };
+
   // 2. An active, page-matching experiment with no ASSIGNMENT — the engine's own
   // notion (`isAssigned`), not merely "has a cookie entry". The parked
   // eligible-pending sentinel is an entry but explicitly not a decision: the
   // engine buckets it the moment the visitor reaches the experiment's page, so
   // treating it as decided would strand those visitors on the control forever.
+  //
+  // An EXCLUDED visitor is not a gap. The engine skips them before `assign()`
+  // and persists nothing, so their cookie is byte-identical to a merely-eligible
+  // visitor's (`<id>.-2.0.<exp>` — `cacheEligible` already ran). Without this
+  // check the client reads that as "nobody decided this pageview" and re-runs
+  // the full engine for exactly the population the server just excluded — which
+  // only stays harmless while the client's URL still carries whatever the
+  // exclusion matches on.
   const decided = parsePacked(cookieValue);
   const gap = config.experiments.some(
     (experiment) =>
       experiment.status === 'active' &&
       matchesPageRule(currentUrl, experiment.rules) &&
-      !isAssigned(decided.get(Number(experiment.experiment_id))),
+      !isAssigned(decided.get(Number(experiment.experiment_id))) &&
+      !isExcludedByRules(experiment.exclusions, exclusionCtx),
   );
   if (gap) return true;
 

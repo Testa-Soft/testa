@@ -214,3 +214,76 @@ describe('the abort rejection', () => {
     expect(rejectWith(new Error(ROUTE_ABORT))).toBe(false);
   });
 });
+
+/**
+ * Exclusion gate (MO438 regression). The guard is the ONLY decider that runs on
+ * a Pages-Router soft nav — `routeChangeStart` fires before Next fetches route
+ * data, so a redirect here pre-empts the middleware. It therefore has to apply
+ * exclusions itself; before this it redirected already-assigned variant visitors
+ * past every rule, while the same visitor on a hard load was correctly held back.
+ */
+describe('resolveGuardRedirect — exclusions', () => {
+  const excluded = (over: Partial<Parameters<typeof resolveGuardRedirect>[0]> = {}) => {
+    const cfg = splitUrlConfig();
+    // biome-ignore lint/style/noNonNullAssertion: fixture always has one experiment
+    cfg.experiments[0]!.exclusions = [
+      { dimension: 'url', operator: 'contains', value: 'flow=checkout11' },
+    ];
+    return resolveGuardRedirect({
+      config: cfg,
+      currentUrl: `${CONTROL}?flow=checkout11&fbclid=abc`,
+      cookieValue: '101.2.0.0',
+      ...over,
+    });
+  };
+
+  it('does NOT redirect when a url exclusion matches the navigation target', () => {
+    expect(excluded()).toBeNull();
+  });
+
+  it('still redirects the same visitor when the exclusion does not match', () => {
+    const cfg = splitUrlConfig();
+    // biome-ignore lint/style/noNonNullAssertion: fixture always has one experiment
+    cfg.experiments[0]!.exclusions = [
+      { dimension: 'url', operator: 'contains', value: 'flow=checkout11' },
+    ];
+    const to = resolveGuardRedirect({
+      config: cfg,
+      currentUrl: `${CONTROL}?fbclid=abc`,
+      cookieValue: '101.2.0.0',
+    });
+    expect(to).toContain('/pricing-v2');
+    expect(to).toContain('fbclid=abc');
+  });
+
+  it('honours a cookie-dimension exclusion through the injected reader', () => {
+    const cfg = splitUrlConfig();
+    // biome-ignore lint/style/noNonNullAssertion: fixture always has one experiment
+    cfg.experiments[0]!.exclusions = [
+      { dimension: 'cookie', operator: 'equals', value: 'optout=1' },
+    ];
+    const to = resolveGuardRedirect({
+      config: cfg,
+      currentUrl: CONTROL,
+      cookieValue: '101.2.0.0',
+      getCookie: (name) => (name === 'optout' ? '1' : null),
+    });
+    expect(to).toBeNull();
+  });
+
+  it('honours mutual exclusion (dimension: experiment) from the packed cookie', () => {
+    const cfg = splitUrlConfig();
+    // biome-ignore lint/style/noNonNullAssertion: fixture always has one experiment
+    cfg.experiments[0]!.exclusions = [
+      { dimension: 'experiment', operator: 'equals', value: '406' },
+    ];
+    // Assigned to 101 (redirect variant) AND to 406 → 101 must stay suppressed.
+    expect(
+      resolveGuardRedirect({
+        config: cfg,
+        currentUrl: CONTROL,
+        cookieValue: '101.2.0.0~406.1.0.0',
+      }),
+    ).toBeNull();
+  });
+});

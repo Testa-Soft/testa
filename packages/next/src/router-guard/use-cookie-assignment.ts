@@ -16,9 +16,12 @@
 
 import type { ProjectConfig } from '@testa-platform/shared-types';
 import {
+  ASSIGNMENT_COOKIE,
   EXCLUDED_VARIATION_ID,
   type RedirectChange,
+  type TargetingContext,
   canonicalize,
+  isExcludedByRules,
   matchesPageRule,
   parsePacked,
   resolveRedirectDestination,
@@ -30,6 +33,14 @@ export interface GuardResolveInput {
   currentUrl: string;
   /** Raw `_testa_exp` cookie value, or null. */
   cookieValue: string | null;
+  /**
+   * Read ANY request cookie — needed by `cookie`-dimension exclusions. Defaults
+   * to serving only `_testa_exp` out of `cookieValue`, which is enough for the
+   * `experiment` dimension (mutual exclusion) but not for arbitrary cookies.
+   */
+  getCookie?: (name: string) => string | null;
+  /** UA for `device`-dimension exclusions. Omitted → that dimension can't match. */
+  userAgent?: string;
 }
 
 /**
@@ -40,6 +51,16 @@ export interface GuardResolveInput {
 export function resolveGuardRedirect(input: GuardResolveInput): string | null {
   const assignments = parsePacked(input.cookieValue);
   if (assignments.size === 0) return null;
+
+  // Exclusions are evaluated against the URL being navigated TO, per pageview,
+  // for assigned visitors too — the same contract the engine (engine.ts) and the
+  // DOM apply layer (react/apply-assignments.ts) already honour.
+  const exclusionCtx: TargetingContext = {
+    url: input.currentUrl,
+    getCookie:
+      input.getCookie ?? ((name) => (name === ASSIGNMENT_COOKIE ? input.cookieValue : null)),
+    ...(input.userAgent !== undefined ? { userAgent: input.userAgent } : {}),
+  };
 
   for (const experiment of input.config.experiments) {
     if (experiment.status !== 'active') continue;
@@ -52,6 +73,13 @@ export function resolveGuardRedirect(input: GuardResolveInput): string | null {
     // leaves a non-matching URL unchanged, which the already-at-destination
     // check then swallows.)
     if (!matchesPageRule(input.currentUrl, experiment.rules)) continue;
+    // EXCLUSION GATE — the guard is the last decider that was missing it, and it
+    // is the ONLY one that runs on a Pages-Router soft nav: `routeChangeStart`
+    // fires before Next fetches route data, so a redirect here pre-empts the
+    // middleware entirely. Without this, an already-assigned variant visitor was
+    // redirected past every exclusion rule on every soft nav, while the same
+    // visitor on a hard load was correctly held back by the proxy.
+    if (isExcludedByRules(experiment.exclusions, exclusionCtx)) continue;
     const state = assignments.get(Number(experiment.experiment_id));
     if (!state || state.excluded || state.variation === EXCLUDED_VARIATION_ID) continue;
 
@@ -78,6 +106,10 @@ export interface GuardDeps {
   config: ProjectConfig;
   /** Read the raw `_testa_exp` cookie (e.g. from `document.cookie`). */
   getCookieValue: () => string | null;
+  /** Read ANY cookie — for `cookie`-dimension exclusions. See `GuardResolveInput`. */
+  getCookie?: (name: string) => string | null;
+  /** UA for `device`-dimension exclusions. Defaults to `navigator.userAgent`. */
+  userAgent?: string;
   /** Resolve a router path (`/pricing`) to an absolute URL for matching. */
   toAbsoluteUrl: (path: string) => string;
   /**
@@ -147,10 +179,14 @@ export function installRouterGuard(router: GuardRouter, deps: GuardDeps): () => 
     } catch {
       return;
     }
+    const userAgent =
+      deps.userAgent ?? (typeof navigator === 'undefined' ? undefined : navigator.userAgent);
     const redirectTo = resolveGuardRedirect({
       config: deps.config,
       currentUrl: target,
       cookieValue: deps.getCookieValue(),
+      ...(deps.getCookie ? { getCookie: deps.getCookie } : {}),
+      ...(userAgent !== undefined ? { userAgent } : {}),
     });
     if (!redirectTo || canonicalize(redirectTo) === canonicalize(target)) return;
 

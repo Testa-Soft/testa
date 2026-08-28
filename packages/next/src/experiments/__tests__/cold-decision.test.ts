@@ -104,3 +104,65 @@ describe('clientOwnsDecision', () => {
     });
   });
 });
+
+/**
+ * An EXCLUDED visitor is not an undecided one. The engine skips them before
+ * `assign()` and persists nothing, so their cookie is byte-identical to a
+ * merely-eligible visitor's (`cacheEligible` already wrote the `-2` sentinel).
+ * Reading that as a gap handed the client engine exactly the population the
+ * server had just excluded.
+ */
+describe('exclusions are not a cookie gap', () => {
+  const withExclusion = (): ProjectConfig => {
+    const cfg = splitUrlConfig();
+    // biome-ignore lint/style/noNonNullAssertion: fixture always has one experiment
+    cfg.experiments[0]!.exclusions = [
+      { dimension: 'url', operator: 'contains', value: 'flow=checkout11' },
+    ];
+    return cfg;
+  };
+
+  it('does not claim the pageview when an exclusion matches (sentinel cookie)', () => {
+    expect(
+      clientOwnsDecision({
+        config: withExclusion(),
+        cookieValue: '101.-2.0.9999999999',
+        currentUrl: `${CONTROL_URL}?flow=checkout11`,
+        hasServerConfig: true,
+      }),
+    ).toBe(false);
+  });
+
+  it('does not claim it with no cookie at all', () => {
+    expect(
+      clientOwnsDecision({
+        config: withExclusion(),
+        cookieValue: null,
+        currentUrl: `${CONTROL_URL}?flow=checkout11`,
+        hasServerConfig: true,
+      }),
+    ).toBe(false);
+  });
+
+  it('still claims a genuine gap on the same page when nothing excludes', () => {
+    expect(
+      clientOwnsDecision({
+        config: withExclusion(),
+        cookieValue: '101.-2.0.9999999999',
+        currentUrl: CONTROL_URL,
+        hasServerConfig: true,
+      }),
+    ).toBe(true);
+  });
+
+  it('a missing server config still wins over any exclusion (nothing decided at all)', () => {
+    expect(
+      clientOwnsDecision({
+        config: withExclusion(),
+        cookieValue: null,
+        currentUrl: `${CONTROL_URL}?flow=checkout11`,
+        hasServerConfig: false,
+      }),
+    ).toBe(true);
+  });
+});
