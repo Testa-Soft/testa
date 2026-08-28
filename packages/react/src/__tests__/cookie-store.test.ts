@@ -1,12 +1,17 @@
 import { ASSIGNMENT_COOKIE, UUID_COOKIE } from '@testa-soft/experiment-core';
 import { afterEach, describe, expect, it } from 'vitest';
-import { DocumentCookieStore } from '../cookie-store.ts';
+import { DocumentCookieStore, __resetMemoryTier } from '../cookie-store.ts';
 
 function clearCookies(): void {
   for (const c of document.cookie.split(';')) {
     const name = c.split('=')[0]?.trim();
     if (name) document.cookie = `${name}=; path=/; max-age=0`;
   }
+  // The store mirrors writes into Web Storage (3.3.3 parity), which outlives a
+  // cookie by design — so clearing cookies alone leaks values between tests.
+  __resetMemoryTier();
+  localStorage.clear();
+  sessionStorage.clear();
 }
 
 describe('DocumentCookieStore', () => {
