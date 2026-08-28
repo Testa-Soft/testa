@@ -141,13 +141,24 @@ export function TestaProvider(props: TestaProviderProps): JSX.Element {
       }
     };
 
+    // Only the FIRST cycle may redirect. That one runs against the URL the
+    // browser was served; every later cycle runs against a URL the application
+    // built during a soft navigation, and a redirect is irreversible — commit to
+    // a URL that is still being assembled and the visitor lands somewhere they
+    // were never sent, with whatever query the app had managed to compute so far.
+    let firstCycle = true;
+
     const cycle = async (config: ProjectConfig): Promise<void> => {
       disposeTeardowns(teardowns);
       teardowns = [];
+      const allowRedirect = firstCycle;
+      firstCycle = false;
       const result = await initTesta({
         config,
         currentUrl: typeof window !== 'undefined' ? window.location.href : '',
         store,
+        allowRedirect,
+        allowAssign: allowRedirect,
         ...(props.previewApiUrl ? { previewApiUrl: props.previewApiUrl } : {}),
         ...(props.tracking !== undefined ? { tracking: props.tracking } : {}),
         ...(props.trackingHost ? { trackingHost: props.trackingHost } : {}),

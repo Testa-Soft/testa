@@ -40,9 +40,9 @@ import {
   installTestaGlobal,
 } from '@testa-soft/dom';
 import { ASSIGNMENT_COOKIE, UUID_COOKIE, resolveExposures } from '@testa-soft/experiment-core';
-import { DocumentCookieStore, initTesta, preloadConfig } from '@testa-soft/react';
+import { DocumentCookieStore, emitExposure, initTesta, preloadConfig } from '@testa-soft/react';
 import { usePathname } from 'next/navigation.js';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { readClientCookie } from '../client-cookie.ts';
 import { DEFAULT_TRACKING_HOST } from '../constants.ts';
 import { applyAssignedExperiments, revealShield } from './apply-assignments.ts';
@@ -80,9 +80,10 @@ export interface TestaProviderProps {
    */
   previewApiUrl?: string;
   /**
-   * Emit the exposure when the CLIENT makes the assignment (cold fallback).
-   * Mirror whatever the proxy is configured with, so a project with tracking
-   * off server-side doesn't start reporting from the client. Default true.
+   * Report exposures from the browser. Default true, and normally left alone:
+   * the proxy counts visitors it can identify from the request and the browser
+   * covers the rest, so between them each exposure is counted once. Set false
+   * only when something else owns tracking entirely.
    */
   tracking?: boolean;
   /**
@@ -104,6 +105,9 @@ export interface TestaProviderProps {
 export function TestaProvider(props: TestaProviderProps): null {
   const { config: serverConfig, projectId, host, previewApiUrl, trackingHost } = props;
   const pathname = usePathname();
+  // Only the FIRST cycle of a page load may redirect — see `allowRedirect`.
+  // The effect re-runs per soft navigation; this ref does not.
+  const firstCycle = useRef(true);
 
   // CONFIG, kicked off during FIRST RENDER (before effects) when the server
   // didn't resolve one. `preloadConfig` adopts the request `<TestaGuard
@@ -176,9 +180,13 @@ export function TestaProvider(props: TestaProviderProps): null {
           cookieValue: assignmentCookie,
           currentUrl,
           hasServerConfig: !!serverConfig,
+          getCookie: readClientCookie,
+          ...(typeof navigator !== 'undefined' ? { userAgent: navigator.userAgent } : {}),
         })
       ) {
-        const result = await runClientCycle(config, props, currentUrl);
+        const allowRedirect = firstCycle.current;
+        firstCycle.current = false;
+        const result = await runClientCycle(config, props, currentUrl, allowRedirect);
         if (cancelled) {
           for (const teardown of result.teardowns) teardown();
           return;
@@ -213,15 +221,25 @@ export function TestaProvider(props: TestaProviderProps): null {
       const uuid = readClientCookie(UUID_COOKIE) ?? '';
       const nowSec = Math.floor(Date.now() / 1000);
       for (const e of resolveExposures(config, assignmentCookie, currentUrl, nowSec)) {
-        if (config.project_id != null) {
-          emitVariationApplied({
-            project_id: config.project_id,
-            experiment: e.experimentId,
-            variation: e.variationId,
-            uuid,
-            ...(e.title ? { title: e.title } : {}),
-            url: currentUrl,
-          });
+        if (config.project_id == null) continue;
+        const payload = {
+          project_id: config.project_id,
+          experiment: e.experimentId,
+          variation: e.variationId,
+          uuid,
+          ...(e.title ? { title: e.title } : {}),
+          url: currentUrl,
+        };
+        emitVariationApplied(payload);
+        // COUNT HERE when the proxy isn't counting. The browser is the only
+        // place the visitor id can be recovered once a cookie stops sticking
+        // (the store falls back to its storage mirror), so on cookie-hostile
+        // traffic this reports ONE visitor where the server would report one
+        // per pageview. Re-posting is harmless: crobot dedups on
+        // `(experiment_id, uuid)`, which is what makes emitting on every load
+        // — the 3.3.3 pixel's model — safe.
+        if (props.tracking !== false) {
+          void emitExposure(trackingHost ?? DEFAULT_TRACKING_HOST, payload);
         }
       }
 
@@ -262,6 +280,7 @@ function runClientCycle(
   config: ProjectConfig,
   props: TestaProviderProps,
   currentUrl: string,
+  allowRedirect: boolean,
 ): Promise<{ teardowns: Teardown[]; redirected: boolean }> {
   const store = new DocumentCookieStore({
     secure: props.secureCookies ?? true,
@@ -271,6 +290,11 @@ function runClientCycle(
     config,
     currentUrl,
     store,
+    // A soft-nav URL is assembled by the app and may still be incomplete; an
+    // initial-load URL came over the wire. Only the second is safe to commit an
+    // irreversible navigation against. Matches the Pages Router policy.
+    allowRedirect,
+    allowAssign: allowRedirect,
     ...(props.previewApiUrl ? { previewApiUrl: props.previewApiUrl } : {}),
     ...(props.tracking !== undefined ? { tracking: props.tracking } : {}),
     ...(props.trackingHost ? { trackingHost: props.trackingHost } : {}),

@@ -70,6 +70,12 @@ export interface InitOptions {
   /** Fetch impl for preview, injectable for tests. Default global `fetch`. */
   fetchImpl?: typeof fetch;
   /**
+   * Provenance stamped on every exposure this cycle reports — see
+   * `ExposurePayload.source`. Defaults to `client:initial` for the first cycle
+   * of a page load and `client:spa` for the ones a soft navigation triggers.
+   */
+  source?: string;
+  /**
    * Run experiments for crawlers too. Default false — the same policy the proxy
    * applies with `skipBots`, and it has to be applied here as well: a crawler
    * that executes JavaScript (AdsBot-Google renders pages) is bypassed
@@ -80,6 +86,37 @@ export interface InitOptions {
   includeBots?: boolean;
   /** UA to judge. Defaults to `navigator.userAgent`. */
   userAgent?: string | null;
+  /**
+   * May this cycle perform the split-URL redirect? Default true.
+   *
+   * A redirect is the one change type that cannot be retried or undone: a DOM
+   * change re-applies harmlessly when the page settles, a navigation commits
+   * once and takes the address bar with it. So it must only ever fire on a URL
+   * that arrived over the wire — the initial document load — and never on a URL
+   * the application assembled during a soft navigation, which may still be
+   * mid-assembly (a query rebuilt from router state that is not ready yet).
+   *
+   * Callers running a cycle per soft navigation pass `false` for every cycle
+   * after the first. Assignment, DOM changes and tracking are unaffected.
+   */
+  allowRedirect?: boolean;
+  /**
+   * May this cycle DECIDE — bucket a visitor, write an assignment? Default true.
+   *
+   * Same reasoning as `allowRedirect`, one step earlier. On a soft navigation
+   * the URL is not something the browser delivered, it is something the
+   * application assembled, and it can be observed part-built: a query rebuilt
+   * from router state that is not ready yet arrives empty. Deciding against it
+   * evaluates every page rule and exclusion on a URL the visitor never actually
+   * had — so a rule that should have kept them out silently misses, and the
+   * assignment it writes is sticky.
+   *
+   * With this false the cycle is strictly COOKIE-FIRST: it applies whatever is
+   * already assigned, reports exposures, arms goals. It never buckets. Deciding
+   * on a soft navigation belongs to the proxy, which only ever sees URLs that
+   * came over the wire.
+   */
+  allowAssign?: boolean;
 }
 
 export interface InitResult {
@@ -97,6 +134,7 @@ export async function initTesta(opts: InitOptions): Promise<InitResult> {
   const trackingHost = opts.trackingHost ?? DEFAULT_TRACKING_HOST;
   const now = opts.now ?? Date.now();
   const navigate = opts.navigate ?? defaultNavigate;
+  const source = opts.source ?? ((opts.allowAssign ?? true) ? 'client:initial' : 'client:spa');
   const search = searchOf(currentUrl);
 
   // Crawlers: no visitor id, no assignment, no exposure — mirrors the proxy's
@@ -108,7 +146,7 @@ export async function initTesta(opts: InitOptions): Promise<InitResult> {
     return { applied: [], teardowns: [], redirected: false };
   }
 
-  ensureVisitorId(store);
+  const visitorId = ensureVisitorId(store);
 
   // ── Preview: skip assignment, fetch + apply drafts ──────────────────────
   if (isPreviewRequested(search)) {
@@ -135,47 +173,51 @@ export async function initTesta(opts: InitOptions): Promise<InitResult> {
     return { applied: [], teardowns, redirected: false };
   }
 
-  // ── Normal: run the engine ──────────────────────────────────────────────
-  const result = runExperiments(
-    {
-      config,
-      currentUrl,
-      visitorId: store.get(UUID_COOKIE) ?? '',
-      now,
-      getCookie: (n) => store.get(n),
-      // Visitor geo spliced into the config by the config-geo edge worker.
-      // Gates targeting AND exclusions for every experiment type. Absent/empty
-      // → dimension unsupported: targeting fails closed, exclusions fail open.
-      ...(config.geo?.country ? { country: config.geo.country } : {}),
-    },
-    store,
-  );
-
-  // `variation_assigned` at DECISION time — BEFORE any redirect, while the page
-  // is still alive. This is the hook a listener needs to send its own tracking
-  // (3.3.3 `script.js` parity): `variation_applied` fires only after the DOM
-  // apply, which a split-URL visitor never reaches — they are already
-  // navigating. The bus replays history, so a handler registered later still
-  // receives it.
-  installTestaGlobal();
-  if (config.project_id != null) {
-    for (const applied of result.applied) {
-      emitVariationAssigned({
-        project_id: config.project_id,
-        experiment: applied.experimentId,
-        variation: applied.variationId,
-        uuid: applied.visitorId,
-        ...(applied.title ? { title: applied.title } : {}),
-        url: applied.url,
-      });
-    }
+  // ── GUARDRAIL: no persisted visitor id → decide NOTHING ─────────────────
+  // Bucketing is `xxhash32(visitorId:experimentId) % 100`, so an empty id is
+  // not "random", it is a CONSTANT: every visitor in this state lands in the
+  // same variation for a given experiment, and lands there again on every
+  // pageview because nothing was stored. That is worse than not running at all
+  // — it manufactures a one-sided, self-repeating population. The visitor sees
+  // the control, which is the correct default for a client we cannot identify.
+  if (!visitorId) {
+    return { applied: [], teardowns: [], redirected: false };
   }
 
-  // Emit an exposure once per fresh enrollment (deduped server-side anyway).
-  if (trackingEnabled) {
-    for (const applied of result.applied) {
-      if (applied.firstAssignment && config.project_id != null) {
-        void emitExposure(trackingHost, {
+  // ── Decide, unless the caller withheld permission ───────────────────────
+  // A cookie-first cycle skips the engine entirely: nothing is bucketed and no
+  // rule is evaluated against a URL the application built. Everything below —
+  // apply, exposures, goals — runs off the packed cookie either way.
+  const decide = opts.allowAssign ?? true;
+  const result = decide
+    ? runExperiments(
+        {
+          config,
+          currentUrl,
+          visitorId,
+          now,
+          getCookie: (n) => store.get(n),
+          // Visitor geo spliced into the config by the config-geo edge worker.
+          // Gates targeting AND exclusions for every experiment type. Absent/empty
+          // → dimension unsupported: targeting fails closed, exclusions fail open.
+          ...(config.geo?.country ? { country: config.geo.country } : {}),
+        },
+        store,
+      )
+    : { applied: [], redirectTo: undefined };
+
+  installTestaGlobal();
+
+  if (decide) {
+    // `variation_assigned` at DECISION time — BEFORE any redirect, while the
+    // page is still alive. This is the hook a listener needs to send its own
+    // tracking (3.3.3 `script.js` parity): `variation_applied` fires only after
+    // the DOM apply, which a split-URL visitor never reaches — they are already
+    // navigating. The bus replays history, so a handler registered later still
+    // receives it.
+    if (config.project_id != null) {
+      for (const applied of result.applied) {
+        emitVariationAssigned({
           project_id: config.project_id,
           experiment: applied.experimentId,
           variation: applied.variationId,
@@ -185,15 +227,29 @@ export async function initTesta(opts: InitOptions): Promise<InitResult> {
         });
       }
     }
-  }
 
-  // ── Split-URL: client-side redirect — ALWAYS, on every visit to the control
-  // URL. Loop safety is the engine's stateless already-at-destination check,
-  // never a marker cookie (a marker would show variant visitors the control
-  // page on later visits). ─────────────────────────────────────────────────
-  if (result.redirectTo) {
-    navigate(result.redirectTo);
-    return { applied: result.applied, teardowns: [], redirected: true };
+    // Report BEFORE any redirect — a split-URL visitor leaves this page before
+    // the apply step below ever runs, so this is their only chance to be
+    // counted. The transport dedups per load.
+    if (trackingEnabled && config.project_id != null) {
+      for (const applied of result.applied) {
+        void emitExposure(trackingHost, {
+          project_id: config.project_id,
+          experiment: applied.experimentId,
+          variation: applied.variationId,
+          uuid: applied.visitorId,
+          ...(applied.title ? { title: applied.title } : {}),
+          url: applied.url,
+          source,
+        });
+      }
+    }
+
+    // ── Split-URL: client-side redirect ──────────────────────────────────
+    if (result.redirectTo && (opts.allowRedirect ?? true)) {
+      navigate(result.redirectTo);
+      return { applied: result.applied, teardowns: [], redirected: true };
+    }
   }
 
   // ── DOM: apply the assigned variant, cookie-first — page-gated AND
@@ -213,16 +269,19 @@ export async function initTesta(opts: InitOptions): Promise<InitResult> {
   const uuid = store.get(UUID_COOKIE) ?? '';
   const nowSec = Math.floor(now / 1000);
   for (const e of resolveExposures(config, assignmentCookie, currentUrl, nowSec)) {
-    if (config.project_id != null) {
-      emitVariationApplied({
-        project_id: config.project_id,
-        experiment: e.experimentId,
-        variation: e.variationId,
-        uuid,
-        ...(e.title ? { title: e.title } : {}),
-        url: currentUrl,
-      });
-    }
+    if (config.project_id == null) continue;
+    const payload = {
+      project_id: config.project_id,
+      experiment: e.experimentId,
+      variation: e.variationId,
+      uuid,
+      ...(e.title ? { title: e.title } : {}),
+      url: currentUrl,
+    };
+    emitVariationApplied(payload);
+    // Count here too: a visitor the server could not identify (no cookie on the
+    // request) is counted by nobody else, and this is the id that will persist.
+    if (trackingEnabled) void emitExposure(trackingHost, { ...payload, source });
   }
 
   // Arm goal tracking (page_view / click / custom) for every assigned,
@@ -236,13 +295,21 @@ export async function initTesta(opts: InitOptions): Promise<InitResult> {
   return { applied: result.applied, teardowns, redirected: false };
 }
 
-/** Return the existing visitor id, or mint + persist a new one. */
+/**
+ * Return the existing visitor id, or mint + persist a new one. Empty string
+ * when the id could NOT be persisted.
+ *
+ * The read-back is the point. A minted id that the browser refused to store is
+ * worthless: the next pageview mints another one, so the visitor is a new
+ * visitor every time and is re-bucketed every time. Reporting that as `''`
+ * lets the caller decline to decide instead of deciding on sand.
+ */
 export function ensureVisitorId(store: CookieStore): string {
   const existing = store.get(UUID_COOKIE);
   if (existing) return existing;
   const uuid = crypto.randomUUID();
   store.set(UUID_COOKIE, uuid, { maxAgeSec: UUID_TTL_SEC });
-  return uuid;
+  return store.get(UUID_COOKIE) ?? '';
 }
 
 function defaultNavigate(url: string): void {

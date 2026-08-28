@@ -76,6 +76,32 @@ export function isDocumentMethod(method: string): boolean {
 }
 
 /**
+ * Is this request a real top-level navigation — a page view — as opposed to a
+ * fetch the framework made on the page's behalf?
+ *
+ * `Sec-Fetch-Mode` is the browser's own answer, set by the user agent and not
+ * forgeable by page script: `navigate` for a document load or a link click,
+ * `cors`/`no-cors`/`same-origin` for `fetch`/XHR — which is what an App-Router
+ * RSC request and a Pages-Router `/_next/data/*.json` request are.
+ *
+ * This matters because ONE page view can produce several middleware
+ * invocations, and each one is a full decision. When the visitor's id cannot be
+ * read back — a storage-restricted webview, a cleared cookie — every one of
+ * those invocations mints a NEW id and reports a NEW visitor, so a single human
+ * arrives in the results two or three times over. Framework-independent, so it
+ * holds for both routers and for whatever ships next.
+ *
+ * Absent header → treated as a navigation. Older clients (and non-browser
+ * callers we have already filtered) must keep today's behaviour; this is a
+ * guard against over-counting, never a reason to stop serving an experiment.
+ */
+export function isNavigationRequest(headers: { get(name: string): string | null }): boolean {
+  const mode = headers.get('sec-fetch-mode');
+  if (!mode) return true;
+  return mode === 'navigate';
+}
+
+/**
  * True when the middleware must pass this request through untouched — it is a
  * framework/API/asset request (or matches a caller-supplied skip rule), not a
  * page a visitor sees.

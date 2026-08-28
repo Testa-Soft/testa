@@ -5,9 +5,25 @@
  * file can only ever use one of them.
  *
  * It composes the client engine from `@testa-soft/react` (DOM changes, goals,
- * exposures) with `<TestaRouterGuard/>` (pre-render split-URL redirects on
- * `next/link` soft navs — hard loads are the proxy's job) and `<HeadShield/>`,
- * so nothing needs to be wired by hand.
+ * exposures) with `<HeadShield/>`, so nothing needs to be wired by hand.
+ *
+ * NO SPLIT-URL REDIRECT HAPPENS FROM HERE. Redirects on this router are the
+ * proxy's job, on the document load, from the URL that arrived over the wire.
+ * The client redirects at most once per page load — the initial cycle — and
+ * never on a soft navigation.
+ *
+ * The reason is that a redirect is the only change that cannot be taken back. A
+ * DOM change applied against a half-settled page re-applies correctly when the
+ * page settles; a navigation commits once and takes the address bar with it. On
+ * a soft nav the URL is not something the browser delivered, it is something the
+ * application assembled — and an app that rebuilds its query from router state
+ * hands over an incomplete one whenever the click beats hydration, which on a
+ * slow in-app webview is often. Redirecting on that URL sends the visitor
+ * somewhere they were never headed, carrying only the params the app had
+ * managed to compute. `<TestaRouterGuard/>` used to do exactly this from
+ * `routeChangeStart` — mid-navigation, on the least trustworthy value available
+ * — and it is deliberately no longer mounted. It remains exported for anyone
+ * who understands the trade and opts in explicitly.
  *
  * ANTI-FLICKER IS ON BY DEFAULT and needs no `_document.tsx`: `<HeadShield/>`
  * renders a JS-free `<style>` into `<head>` via `next/head` — server-rendered,
@@ -16,55 +32,27 @@
  * runs after the control content has painted, which turns one flash into two
  * (content → blank → variant). Pass `shield={false}` to own it yourself.
  *
- * ONE config fetch per page load, total. The guard cannot fetch — it only
- * takes a resolved `config` prop. This component resolves the config through
- * `preloadConfig`, the SAME module-level cache the client provider fetches
- * through, so both calls collapse onto one request (StrictMode's double-mount
- * included) and the settled config is handed to the guard as a prop.
- *
- * Nothing refetches on soft navigation either: the client engine re-runs its
- * apply cycle against the config it already holds, and the guard re-installs
- * only if the config object itself changes.
+ * ONE config fetch per page load, total, through the client provider's shared
+ * `preloadConfig` cache — StrictMode's double-mount included. Nothing refetches
+ * on soft navigation: the client engine re-runs its apply cycle against the
+ * config it already holds.
  *
  * Mounted in the App Router by mistake, everything still behaves: the client
- * engine works anywhere React does, and the guard no-ops without a Pages
- * Router (with a dev-time pointer to `/server`, which is the better surface
- * there — server-fetched config and the header-gated shield).
+ * engine works anywhere React does. `/server` is the better surface there —
+ * server-fetched config and the header-gated shield.
  */
 
-import type { ProjectConfig } from '@testa-platform/shared-types';
 import {
   TestaProvider as TestaClientProvider,
   type TestaProviderProps as TestaClientProviderProps,
-  preloadConfig,
 } from '@testa-soft/react';
-import { type JSX, useEffect, useState } from 'react';
-import { TestaRouterGuard } from '../router-guard/TestaRouterGuard.tsx';
+import type { JSX } from 'react';
 import { HeadShield } from './HeadShield.tsx';
 
 export type TestaProviderProps = TestaClientProviderProps;
 
 export function TestaProvider(props: TestaProviderProps): JSX.Element {
   const { children, ...rest } = props;
-  const [guardConfig, setGuardConfig] = useState<ProjectConfig | null>(props.config ?? null);
-
-  useEffect(() => {
-    if (props.config) {
-      setGuardConfig(props.config);
-      return;
-    }
-    let stale = false;
-    // Rides the client provider's own request via the shared preload cache.
-    void preloadConfig({
-      ...(props.projectId ? { projectId: props.projectId } : {}),
-      ...(props.host ? { host: props.host } : {}),
-    }).then((config) => {
-      if (!stale && config) setGuardConfig(config);
-    });
-    return () => {
-      stale = true;
-    };
-  }, [props.config, props.projectId, props.host]);
 
   return (
     <TestaClientProvider {...rest}>
@@ -74,7 +62,6 @@ export function TestaProvider(props: TestaProviderProps): JSX.Element {
         {...(props.shield !== undefined ? { shield: props.shield } : {})}
         {...(props.config ? { config: props.config } : {})}
       />
-      {guardConfig ? <TestaRouterGuard config={guardConfig} /> : null}
       {children}
     </TestaClientProvider>
   );
