@@ -18,6 +18,7 @@
  * rewrites mid-flight can't corrupt the destination.
  */
 
+import { queryKeysOf, traceUrl } from '../trace.ts';
 import { type SafeUrl, safeUrl } from './url.ts';
 
 const TESTA_PARAM_RE = /^_testa_/;
@@ -27,18 +28,46 @@ export function mergeParams(currentUrl: string, targetUrl: string): string {
   const targetIsAbsolute = ABSOLUTE_URL_RE.test(targetUrl);
 
   const target = safeUrl(targetUrl);
-  if (!target) return targetUrl;
+  // Unparseable destination: the visitor's params are dropped wholesale here.
+  // Traced explicitly because the result looks like a deliberate destination.
+  if (!target) {
+    traceUrl({
+      stage: 'merge-params',
+      in: currentUrl,
+      out: targetUrl,
+      detail: { bail: 'bad-target' },
+    });
+    return targetUrl;
+  }
 
   const current = safeUrl(currentUrl);
-  if (!current) return targetIsAbsolute ? target.toString() : relativeOf(target);
+  if (!current) {
+    const out = targetIsAbsolute ? target.toString() : relativeOf(target);
+    traceUrl({ stage: 'merge-params', in: currentUrl, out, detail: { bail: 'bad-current' } });
+    return out;
+  }
 
+  const carried: string[] = [];
   current.searchParams.forEach((value, key) => {
     if (TESTA_PARAM_RE.test(key)) return;
     if (target.searchParams.has(key)) return;
     target.searchParams.append(key, value);
+    carried.push(key);
   });
 
-  return targetIsAbsolute ? target.toString() : relativeOf(target);
+  const out = targetIsAbsolute ? target.toString() : relativeOf(target);
+  traceUrl({
+    stage: 'merge-params',
+    in: currentUrl,
+    out,
+    detail: {
+      target: targetUrl,
+      carried,
+      inKeys: queryKeysOf(currentUrl),
+      outKeys: queryKeysOf(out),
+    },
+  });
+  return out;
 }
 
 function relativeOf(u: SafeUrl): string {
