@@ -24,8 +24,8 @@ export interface ConfigSource {
   configUrl?: string;
   /**
    * Server-side config caching.
-   * - `true` (default): fresh for 60s, then served stale while revalidating in
-   *   the background, never older than 5 min.
+   * - `true` (default): the cached copy is served on every request and
+   *   revalidated behind the response, up to 30 min old.
    * - `'per-pageload'`: DOCUMENT requests always fetch fresh (no cache between
    *   hard reloads — a publish is live on the very next pageview); soft-nav
    *   RSC/prefetch requests reuse the last fetched copy, so the config stays
@@ -36,7 +36,11 @@ export interface ConfigSource {
    * last-known-good fallback. For fresh-config testing use `'per-pageload'`.
    */
   cache?: true | 'per-pageload';
-  /** Fresh window override (ms) when caching is on. Default 60s. */
+  /**
+   * Minimum gap between background revalidations (ms). Default 0 — revalidate
+   * on every request. Not a freshness window: the cached copy is served either
+   * way. Raise it only to throttle a config origin that cannot take the load.
+   */
   cacheTtlMs?: number;
   /**
    * Cold-instance policy — set by `decisions: 'server'` on the proxy.
@@ -62,21 +66,32 @@ interface CacheEntry {
   fetchedAtMs: number;
 }
 
-// Cache windows (when `cache` is on). The cache is SHARED across all visitors
-// of a server instance (the config is project data, not per-user); a request
-// only BLOCKS on a fetch when the instance is cold or the entry has aged past
-// the max-stale bound. Between the two windows the stale config is served
-// instantly and refreshed in the background, so a crobot publish propagates
-// within ~one fresh window at zero added request latency.
-const DEFAULT_TTL_MS = 60_000;
+// The cache is SHARED across all visitors of a server instance (the config is
+// project data, not per-user). Nothing blocks on the network except a cold
+// instance under `decisions: 'server'`; every other request is answered from
+// memory and revalidated behind the response, so a crobot publish propagates
+// within about one round trip at zero added request latency.
+// MINIMUM gap between background revalidations, not a freshness window — the
+// cached copy is always served, whatever its age (up to `MAX_STALE_MS`).
+// Zero means revalidate on every request; the in-flight dedupe keeps that to
+// one open fetch per project per instance regardless of traffic. Raise it only
+// to deliberately throttle a config origin that cannot take the load.
+const DEFAULT_TTL_MS = 0;
 // How old a cached config may be and still be SERVED (refreshing behind it).
 // Wide on purpose: nothing blocks on the network any more, so this bound is
 // only choosing between "serve last-known-good" and "defer to the client".
-// Serving is better while it is plausibly current, and 15 minutes is far
-// beyond any healthy refresh interval — reaching it means refreshes are
-// failing, at which point deferring to the client (which fetches for itself)
-// is the right call.
-const MAX_STALE_MS = 900_000;
+// Serving is better while it is plausibly current.
+//
+// 30 minutes, sized to a visitor's session rather than to a refresh interval.
+// An instance that has served this project at any point in the last half hour
+// keeps answering from memory, so a visitor mid-session never meets a cold one
+// — only the genuinely first request an instance ever serves can be cold, which
+// is the one case that has to be. Widening it costs nothing in freshness: every
+// request already triggers a background refresh, so a
+// publish still lands within about a round trip. It only changes what an
+// instance does after a long idle — serve the last known good copy and refresh behind
+// it, rather than defer to the client.
+const MAX_STALE_MS = 1_800_000;
 /** Default budget for the one fetch that can block a request (`decisions: 'server'`). */
 const FETCH_TIMEOUT_MS = 400;
 
@@ -153,8 +168,6 @@ export class ConfigClient {
     const cached = this.cache.get(slug);
     const age = cached ? nowMs - cached.fetchedAtMs : Number.POSITIVE_INFINITY;
 
-    if (cached && age < this.ttlMs) return cached.config;
-
     // `decisions: 'server'` — the caller wants the decision made server-side
     // even on a cold instance, and accepts the latency. Bounded by
     // `fetchTimeoutMs` so a slow config origin can never stall a request
@@ -174,10 +187,17 @@ export class ConfigClient {
       return config;
     }
 
-    // Anything not fresh triggers a deduped background refresh, kept alive past
-    // the response by `waitUntil` where the host provides one.
-    const refresh = this.refresh(slug, nowMs);
-    if (refresh && waitUntil) waitUntil(refresh);
+    // EVERY request refreshes, behind the response. `refresh` is deduped on an
+    // in-flight map, so this does not scale with traffic: an instance has at
+    // most one fetch open per project at a time, and the rate is bounded by the
+    // round trip, not by request volume. Under load that means back-to-back
+    // revalidations — which is the point, since the alternative is serving a
+    // config up to `cacheTtlMs` old for no gain. Nearly all of them are 304s
+    // against the CDN. `cacheTtlMs` still throttles when set above 0.
+    if (age >= this.ttlMs) {
+      const refresh = this.refresh(slug, nowMs);
+      if (refresh && waitUntil) waitUntil(refresh);
+    }
 
     // Stale but within the bound: last-known-good beats deferring — the visitor
     // still gets a server-side decision, and assignment is cookie-pinned so a
