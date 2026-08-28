@@ -13,9 +13,12 @@
  *   export const config = { matcher: ['/((?!_next/|api/|favicon.ico|sitemap.xml|robots.txt).*)'] }
  */
 
-import { ASSIGNMENT_COOKIE, UUID_COOKIE } from '@testa-soft/experiment-core';
+import { ASSIGNMENT_COOKIE, UUID_BACKUP_COOKIE, UUID_COOKIE } from '@testa-soft/experiment-core';
 import {
+  type UrlTraceEvent,
   type VariationAppliedEvent,
+  beginUrlTrace,
+  endUrlTrace,
   hasPendingDomChange,
   runExperiments,
 } from '@testa-soft/experiment-core';
@@ -26,13 +29,18 @@ import { applyRequestHeaders, isRedirect, toNextResponse } from './compose.ts';
 import { ConfigClient, type ConfigSource } from './config.ts';
 import { DEFAULT_CONFIG_HOST, DEFAULT_TRACKING_HOST, SHIELD_HEADER, readEnv } from './constants.ts';
 import { NextCookieStore } from './cookie-store.ts';
+import { type DecisionLog, sendDebugLog, sendDecisionLog } from './debug-log.ts';
 import { createDebugEmitter, envDebugEnabled } from './debug.ts';
 import { resolveCookieDomain } from './domain.ts';
-import { type SkipPath, isDocumentMethod, shouldBypassRequest } from './request-filter.ts';
+import {
+  type SkipPath,
+  isDocumentMethod,
+  isNavigationRequest,
+  shouldBypassRequest,
+} from './request-filter.ts';
 import { stripFrameworkParams } from './soft-nav/framework-params.ts';
 import { computePrefetchRedirect } from './soft-nav/prefetch-guard.ts';
 import { isPrefetchRequest } from './soft-nav/rsc-redirect.ts';
-import { emitExposure } from './tracking.ts';
 import { type PublicHostOption, resolvePublicUrlDetailed } from './url-resolver.ts';
 import { ensureVisitorId } from './uuid.ts';
 
@@ -95,6 +103,17 @@ export interface TestaProxyOptions extends ConfigSource {
    */
   debug?: boolean;
   /**
+   * Ship one line per decision to `{trackingHost}/log` — the URL as it arrived,
+   * where we sent the visitor, the uuid, and what was applied.
+   *
+   * Separate from `debug`, and safe to leave on: it adds no response header and
+   * no console output, so it exposes nothing to the visitor. Since the proxy
+   * stopped creating leads, this is the only record of what the SERVER
+   * concluded — without it a lead can only tell you what the browser reported.
+   * Also enabled via `TESTA_LOG_DECISIONS=1`.
+   */
+  logDecisions?: boolean;
+  /**
    * WHERE the bucketing/redirect decision is made, and what happens when this
    * server instance has no config in memory yet (a cold start).
    *
@@ -146,12 +165,21 @@ export interface TestaProxyOptions extends ConfigSource {
     ctx: VariationHookContext,
   ) => void | Promise<void>;
   /**
-   * Emit exposures (impressions) to the legacy `/api/leads` so experiment
-   * results populate. Default true. Set false if you only want redirects, or if
-   * the co-shipped pixel owns tracking on this site.
+   * @deprecated No longer read. The proxy does not report exposures.
+   *
+   * Counting is the browser's, fired alongside `variation_applied` — the same
+   * moment the first-party hooks see. The server cannot do it correctly: it can
+   * only recognise a visitor whose id round-trips in a cookie, so for a client
+   * that will not store one it mints a fresh id and reports a fresh visitor on
+   * every single request, turning one human into many. The browser recovers the
+   * real id from its storage mirror and reports once. Counting where the
+   * visitor can actually be identified is what makes the numbers reconcile with
+   * first-party analytics.
+   *
+   * Configure reporting on `<TestaProvider tracking={…} trackingHost={…} />`.
    */
   tracking?: boolean;
-  /** Host for exposure tracking. Default: `TESTA_TRACKING_HOST` env or built-in. */
+  /** @deprecated No longer read — see `tracking`. Set it on `<TestaProvider/>`. */
   trackingHost?: string;
   /**
    * Extra paths the proxy must pass through untouched, on top of the built-in
@@ -193,15 +221,21 @@ export function createTestaProxy(options: TestaProxyOptions): TestaProxy {
   }
   const configClient = new ConfigClient(resolveConfigSource(options, projectId));
   const secure = options.secureCookies ?? true;
-  const trackingEnabled = options.tracking ?? true;
-  const trackingHost = (
+  // Only the `/log` diagnostic beacon posts from the server now; exposures are
+  // the browser's. `trackingHost` is still honoured so both land on one host.
+  const diagnosticHost = (
     options.trackingHost ??
     readEnv('TESTA_TRACKING_HOST') ??
     DEFAULT_TRACKING_HOST
   ).replace(/\/+$/, '');
   const publicHost: PublicHostOption<NextRequest> | undefined =
     options.publicHost ?? readEnv('TESTA_PUBLIC_HOST');
-  const emitDebug = createDebugEmitter(options.debug ?? envDebugEnabled(readEnv('TESTA_DEBUG')));
+  const debugEnabled = options.debug ?? envDebugEnabled(readEnv('TESTA_DEBUG'));
+  const emitDebug = createDebugEmitter(debugEnabled);
+  // With debug on, the same trace also goes to crobot's `/log` (3.3.3
+  // `sendLog` parity) — the customer's own logs are not ours to read.
+  let beaconSeq = 0;
+  const decisionLogging = options.logDecisions ?? envDebugEnabled(readEnv('TESTA_LOG_DECISIONS'));
   const skipBots = options.skipBots ?? true;
 
   /**
@@ -209,6 +243,24 @@ export function createTestaProxy(options: TestaProxyOptions): TestaProxy {
    * response even if this throws — an experiment tool must never be able to
    * take a customer's site down.
    */
+  /** Mirror a debug trace to crobot `/log`, keeping it alive past the response. */
+  const beacon = (trace: unknown, event?: NextFetchEvent): void => {
+    if (!debugEnabled) return;
+    beaconSeq += 1;
+    const pending = sendDebugLog(diagnosticHost, trace, `${Date.now()}-${beaconSeq}`);
+    if (event?.waitUntil) event.waitUntil(pending);
+    else void pending;
+  };
+
+  /** Ship the decision line, kept alive past the response. Never blocks. */
+  const logDecision = (decision: DecisionLog, event?: NextFetchEvent): void => {
+    if (!decisionLogging) return;
+    beaconSeq += 1;
+    const pending = sendDecisionLog(diagnosticHost, decision, `${Date.now()}-${beaconSeq}`);
+    if (event?.waitUntil) event.waitUntil(pending);
+    else void pending;
+  };
+
   const decide = async (req: NextRequest, event?: NextFetchEvent): Promise<NextResponse> => {
     // Blackbox safety net, BEFORE any config fetch or cookie work: never treat
     // assets / framework internals / API routes — or non-GET/HEAD requests
@@ -328,59 +380,83 @@ export function createTestaProxy(options: TestaProxyOptions): TestaProxy {
       return res;
     }
 
+    // GUARDRAIL — never mint an identity for a request that is not a page view.
+    // A soft nav's data/RSC fetch is a real decision point (the visitor IS going
+    // there, and a cookie-pinned redirect must still fire), but it must not
+    // CREATE a visitor: when the id can't be read back, each such fetch would
+    // mint another one and report another visitor for the same human. With no
+    // id we decide nothing here and leave the pageview to the client, which can
+    // recover the real id from its storage mirror — see react/cookie-store.ts.
+    const navigation = isNavigationRequest(req.headers);
+    if (!navigation && !store.get(UUID_COOKIE)) {
+      const requestHeaders = new Headers(req.headers);
+      requestHeaders.set(SHIELD_HEADER, '0');
+      const res = await resolveDownstream(options.handler, req, requestHeaders, event);
+      emitDebug?.(res, { url: publicUrl.href, urlSource, bypass: 'not-a-pageview' });
+      return res;
+    }
+
     const visitorId = ensureVisitorId(store);
-    const result = runExperiments(
-      {
-        config,
-        currentUrl: publicUrl.href,
-        visitorId,
-        now: Date.now(),
-        getCookie: (name) => store.get(name),
-        ...(req.headers.get('user-agent')
-          ? { userAgent: req.headers.get('user-agent') as string }
-          : {}),
-        ...(geoCountry(req) ? { country: geoCountry(req) as string } : {}),
-        ...(options.sessionLengthSec !== undefined
-          ? { sessionLengthSec: options.sessionLengthSec }
-          : {}),
-      },
-      store,
-    );
+    // Trace every URL rewrite inside the decision (see experiment-core/trace.ts).
+    // Bracketing is safe because `runExperiments` is fully synchronous; the
+    // `finally` guarantees the buffer is released even if the engine throws.
+    let urlTrace: UrlTraceEvent[] = [];
+    if (emitDebug) beginUrlTrace();
+    let result: ReturnType<typeof runExperiments>;
+    try {
+      result = runExperiments(
+        {
+          config,
+          currentUrl: publicUrl.href,
+          visitorId,
+          now: Date.now(),
+          getCookie: (name) => store.get(name),
+          ...(req.headers.get('user-agent')
+            ? { userAgent: req.headers.get('user-agent') as string }
+            : {}),
+          ...(geoCountry(req) ? { country: geoCountry(req) as string } : {}),
+          ...(options.sessionLengthSec !== undefined
+            ? { sessionLengthSec: options.sessionLengthSec }
+            : {}),
+        },
+        store,
+      );
+    } finally {
+      if (emitDebug) urlTrace = endUrlTrace();
+    }
 
     for (const applied of result.applied) {
       fireVariationAssigned(options.onVariationAssigned, applied, event, cookieState);
-      // Emit an exposure once per fresh enrollment (deduped server-side anyway).
-      if (trackingEnabled && applied.firstAssignment && config.project_id != null) {
-        const pending = emitExposure(
-          trackingHost,
-          {
-            project_id: config.project_id,
-            experiment: applied.experimentId,
-            variation: applied.variationId,
-            uuid: applied.visitorId,
-            ...(applied.title ? { title: applied.title } : {}),
-            url: applied.url,
-          },
-          // The VISITOR's context, not ours — this POST is made by the server.
-          { userAgent: req.headers.get('user-agent'), clientIp: clientIpOf(req) },
-        );
-        if (event?.waitUntil) event.waitUntil(pending);
-        else void pending;
-      }
     }
 
     if (result.redirectTo) {
       const res = NextResponse.redirect(new URL(result.redirectTo, publicUrl), 307);
       store.applyTo(res.cookies);
-      emitDebug?.(res, {
+      const trace = {
         url: publicUrl.href,
         urlSource,
         visitor: visitorId,
         configHash: config.config_hash,
         applied: summarizeApplied(result.applied),
         redirect: result.redirectTo,
+        rawUrl: req.url,
+        urlTrace,
+        ...refererParamGap(req, publicUrl),
         ...orphanNote(cookieState),
-      });
+      };
+      emitDebug?.(res, trace);
+      beacon(trace, event);
+      logDecision(
+        {
+          urlIn: req.url,
+          urlOut: result.redirectTo,
+          uuid: visitorId,
+          applied: summarizeApplied(result.applied),
+          nav: navigation ? 'document' : 'data',
+          ...pick(refererParamGap(req, publicUrl), 'droppedFromReferer', 'dropped'),
+        },
+        event,
+      );
       return res;
     }
 
@@ -395,15 +471,31 @@ export function createTestaProxy(options: TestaProxyOptions): TestaProxy {
 
     const res = await resolveDownstream(options.handler, req, requestHeaders, event);
     store.applyTo(res.cookies);
-    emitDebug?.(res, {
+    const trace = {
       url: publicUrl.href,
       urlSource,
       visitor: visitorId,
       configHash: config.config_hash,
       applied: summarizeApplied(result.applied),
       shield,
+      rawUrl: req.url,
+      urlTrace,
+      ...refererParamGap(req, publicUrl),
       ...orphanNote(cookieState),
-    });
+    };
+    emitDebug?.(res, trace);
+    beacon(trace, event);
+    logDecision(
+      {
+        urlIn: req.url,
+        urlOut: null,
+        uuid: visitorId,
+        applied: summarizeApplied(result.applied),
+        nav: navigation ? 'document' : 'data',
+        ...pick(refererParamGap(req, publicUrl), 'droppedFromReferer', 'dropped'),
+      },
+      event,
+    );
     return res;
   };
 
@@ -430,17 +522,41 @@ export function createTestaProxy(options: TestaProxyOptions): TestaProxy {
 }
 
 /**
- * The visitor's IP as the proxy sees it: the client-nearest entry of
- * `X-Forwarded-For`, else `X-Real-IP`. Null on runtimes that expose neither, in
- * which case nothing is forwarded.
+ * What the BROWSER says the visitor was looking at, versus what this request
+ * carries — the only server-side view of a URL the app rewrote on its way here.
+ *
+ * A same-site `Referer` is the previous page as the user agent saw it, not as
+ * application code reconstructed it. So when a navigation arrives with fewer
+ * query params than the page it came from, the difference is exactly what the
+ * navigation dropped. That is otherwise invisible: by the time the request
+ * lands, the intended URL exists nowhere except in the app's own state.
+ *
+ * Reported, never acted on. Params on the previous page are not params on this
+ * one, and inheriting them would invent a URL the visitor never had. This
+ * exists to name the phenomenon in a log line, so the fix can be argued from
+ * evidence rather than inferred from a missing rule match.
  */
-function clientIpOf(req: NextRequest): string | null {
-  const forwarded = req.headers.get('x-forwarded-for');
-  if (forwarded) {
-    const first = forwarded.split(',')[0]?.trim();
-    if (first) return first;
+function refererParamGap(
+  req: NextRequest,
+  publicUrl: URL,
+): { referer?: string; droppedFromReferer?: string[] } {
+  const raw = req.headers.get('referer');
+  if (!raw) return {};
+  let from: URL;
+  try {
+    from = new URL(raw);
+  } catch {
+    return {};
   }
-  return req.headers.get('x-real-ip');
+  if (from.host !== publicUrl.host) return { referer: raw };
+
+  const here = new Set<string>();
+  publicUrl.searchParams.forEach((_v, k) => here.add(k));
+  const dropped: string[] = [];
+  from.searchParams.forEach((_v, k) => {
+    if (!here.has(k)) dropped.push(k);
+  });
+  return { referer: raw, ...(dropped.length > 0 ? { droppedFromReferer: dropped } : {}) };
 }
 
 /**
@@ -451,6 +567,15 @@ function clientIpOf(req: NextRequest): string | null {
 function orphanNote(state: VisitorCookieState): { cookieLoss?: number } {
   if (state.hadVisitorId || state.otherCookies === 0) return {};
   return { cookieLoss: state.otherCookies };
+}
+
+/** Rename one optional key, dropping it when absent. Keeps the call sites flat. */
+function pick<K extends string>(
+  source: { droppedFromReferer?: string[] },
+  from: 'droppedFromReferer',
+  to: K,
+): Partial<Record<K, string[]>> {
+  return source[from] ? ({ [to]: source[from] } as Record<K, string[]>) : {};
 }
 
 /** Compact per-assignment summary for the debug trace. */
@@ -538,6 +663,12 @@ export interface VariationHookContext {
 export interface VisitorCookieState {
   /** Did the request carry `_testa_uuid`? False means this pageview mints one. */
   hadVisitorId: boolean;
+  /**
+   * Did it carry the server-owned `HttpOnly` copy (`_testa_uuid_s`)? The
+   * readable cookie can be cleared by a script while this one survives, so a
+   * visitor with only the backup is still a visitor we can name.
+   */
+  hadBackupId: boolean;
   /** Did it carry `_testa_exp`? */
   hadAssignment: boolean;
   /** How many OTHER cookies came with it. */
@@ -550,9 +681,11 @@ export interface VisitorCookieState {
 function readCookieState(req: NextRequest, publicUrl: URL): VisitorCookieState {
   let otherCookies = 0;
   let hadVisitorId = false;
+  let hadBackupId = false;
   let hadAssignment = false;
   for (const cookie of req.cookies.getAll()) {
     if (cookie.name === UUID_COOKIE) hadVisitorId = true;
+    else if (cookie.name === UUID_BACKUP_COOKIE) hadBackupId = true;
     else if (cookie.name === ASSIGNMENT_COOKIE) hadAssignment = true;
     else otherCookies++;
   }
@@ -565,7 +698,7 @@ function readCookieState(req: NextRequest, publicUrl: URL): VisitorCookieState {
       sameSiteReferer = false;
     }
   }
-  return { hadVisitorId, hadAssignment, otherCookies, sameSiteReferer };
+  return { hadVisitorId, hadBackupId, hadAssignment, otherCookies, sameSiteReferer };
 }
 
 /** Invoke the hook without ever letting it break the request; keep async work alive. */

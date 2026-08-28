@@ -22,10 +22,39 @@ export interface ExposurePayload {
   uuid: string;
   title?: string;
   url: string;
+  /**
+   * WHERE this lead was created — which decider, on what kind of request.
+   *
+   * The same experiment is decided in several places (edge proxy on a document
+   * load, edge proxy on a framework data fetch, the client engine on an initial
+   * load, the client engine on a soft navigation), and until now a row in
+   * `/api/leads` looked identical whichever produced it. That makes a counting
+   * discrepancy unattributable: you can see that there are more leads than
+   * visitors and not which path minted the extras.
+   *
+   * crobot ignores unknown fields, so this is inert until a column exists for
+   * it; the same value also goes to `/log`, which records it today.
+   */
+  source?: string;
 }
+
+/**
+ * Once-per-page-load guard, keyed by `(experiment, variation, uuid)` — mirrors
+ * `dom/goals/convert.ts`. The client reports an exposure on every load rather
+ * than only on fresh enrollment (3.3.3 pixel model): it is the only side that
+ * can resolve the visitor id once a cookie stops sticking, and crobot dedups on
+ * `(experiment_id, uuid)` so repeats collapse. This trims the obvious in-page
+ * repeats — a soft-nav re-apply, a re-render — before they reach the network.
+ */
+const sentThisLoad = new Set<string>();
 
 /** POST an exposure to `{trackingHost}/api/leads`. Never throws. */
 export function emitExposure(trackingHost: string, payload: ExposurePayload): Promise<void> {
+  if (!payload.uuid) return Promise.resolve();
+  const key = `${payload.experiment}:${payload.variation}:${payload.uuid}`;
+  if (sentThisLoad.has(key)) return Promise.resolve();
+  sentThisLoad.add(key);
+
   const url = `${trackingHost.replace(/\/+$/, '')}/api/leads`;
   return fetch(url, {
     method: 'POST',
@@ -36,4 +65,9 @@ export function emitExposure(trackingHost: string, payload: ExposurePayload): Pr
     () => undefined,
     () => undefined,
   );
+}
+
+/** Test hook — clear the once-per-load guard. */
+export function resetExposureGuard(): void {
+  sentThisLoad.clear();
 }

@@ -22,6 +22,20 @@ export interface ExposurePayload {
   uuid: string;
   title?: string;
   url: string;
+  /**
+   * WHERE this lead was created — which decider, on what kind of request.
+   *
+   * The same experiment is decided in several places (edge proxy on a document
+   * load, edge proxy on a framework data fetch, the client engine on an initial
+   * load, the client engine on a soft navigation), and until now a row in
+   * `/api/leads` looked identical whichever produced it. That makes a counting
+   * discrepancy unattributable: you can see that there are more leads than
+   * visitors and not which path minted the extras.
+   *
+   * crobot ignores unknown fields, so this is inert until a column exists for
+   * it; the same value also goes to `/log`, which records it today.
+   */
+  source?: string;
 }
 
 /** The visitor's own request context, forwarded with a server-side exposure. */
