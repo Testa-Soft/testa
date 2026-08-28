@@ -14,6 +14,8 @@
  * see the response.
  */
 
+import type { UrlTraceEvent } from '@testa-soft/experiment-core';
+
 /** Response header carrying the JSON `DebugTrace` when debug is enabled. */
 export const DEBUG_HEADER = 'x-testa-debug';
 
@@ -24,7 +26,7 @@ export interface DebugTrace {
   /** Which mechanism produced the public host — see url-resolver.ts. */
   urlSource?: string;
   /** Why the request was passed through untouched, when it was. */
-  bypass?: 'method' | 'path' | 'bot' | 'no-config';
+  bypass?: 'method' | 'path' | 'bot' | 'no-config' | 'not-a-pageview';
   /** Request method, included on method bypasses. */
   method?: string;
   /**
@@ -45,6 +47,29 @@ export interface DebugTrace {
   applied?: ReadonlyArray<{ experiment: number; variation: number; first: boolean }>;
   redirect?: string;
   shield?: boolean;
+  /**
+   * The URL exactly as it ARRIVED, before public-host recovery and before
+   * Next's own query params were stripped. Compare against `url` (what the
+   * engine actually matched on): a difference beyond a host swap or a
+   * framework param means something upstream reshaped the visitor's query.
+   */
+  rawUrl?: string;
+  /** The `Referer` — the previous page as the BROWSER saw it, not as the app rebuilt it. */
+  referer?: string;
+  /**
+   * Query params the same-site `Referer` carried that THIS request does not.
+   * Non-empty means the navigation that produced this request dropped them —
+   * the visitor had them a moment ago and the URL we must decide on no longer
+   * does. Reported only; a param on the previous page is not a param on this one.
+   */
+  droppedFromReferer?: string[];
+  /**
+   * Every URL rewrite inside the decision, in order — engine input, page-rule
+   * verdict, which exclusion matched, the redirect build and the param merge.
+   * This is what answers "the rule is right there in the URL, why didn't it
+   * fire" and "which stage dropped the campaign params".
+   */
+  urlTrace?: ReadonlyArray<UrlTraceEvent>;
 }
 
 export type DebugEmitter = (res: { headers: Headers }, trace: DebugTrace) => void;

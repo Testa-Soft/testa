@@ -28,6 +28,7 @@ import type { TargetingCondition } from '@testa-platform/shared-types';
 import { ASSIGNMENT_COOKIE } from './cookie-store.ts';
 import { parsePacked } from './packed-cookie.ts';
 import { safeUrl } from './redirect/url.ts';
+import { isUrlTracing, traceUrl } from './trace.ts';
 
 export interface TargetingContext {
   url: string;
@@ -179,7 +180,10 @@ function matchExperiment(
   const id = Number(condition.value);
   if (!Number.isFinite(id)) return { matched: false, supported: false };
   const state = parsePacked(ctx.getCookie(ASSIGNMENT_COOKIE)).get(id);
-  return { matched: state !== undefined && !state.excluded && state.variation >= 0, supported: true };
+  return {
+    matched: state !== undefined && !state.excluded && state.variation >= 0,
+    supported: true,
+  };
 }
 
 /** True when the visitor is excluded (ANY exclusion matches). Unsupported → not excluding. */
@@ -188,8 +192,32 @@ export function isExcludedByRules(
   ctx: TargetingContext,
 ): boolean {
   if (!exclusions || exclusions.length === 0) return false;
-  return exclusions.some((c) => {
-    const { matched, supported } = evaluate(c, ctx);
-    return supported && matched;
+
+  let hit: TargetingCondition | undefined;
+  // `some` short-circuits, which is what we want in production; the tracing
+  // branch evaluates every rule so a trace shows the full picture rather than
+  // stopping at the first match.
+  const excluded = isUrlTracing()
+    ? exclusions.reduce((acc, c) => {
+        const { matched, supported } = evaluate(c, ctx);
+        if (supported && matched && !hit) hit = c;
+        return acc || (supported && matched);
+      }, false)
+    : exclusions.some((c) => {
+        const { matched, supported } = evaluate(c, ctx);
+        return supported && matched;
+      });
+
+  traceUrl({
+    stage: 'exclusion',
+    in: ctx.url,
+    detail: {
+      excluded,
+      ...(hit ? { matchedBy: `${hit.dimension} ${hit.operator} ${hit.value}` } : {}),
+      // Which rules COULD have matched had the URL carried what they look for —
+      // the fast way to see that a rule is inert because the value never arrives.
+      ...(excluded ? {} : { evaluated: exclusions.length }),
+    },
   });
+  return excluded;
 }

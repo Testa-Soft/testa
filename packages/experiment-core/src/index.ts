@@ -81,3 +81,11 @@ export type {
 
 // Crawler detection — shared by the proxy and the client engine (see bot.ts).
 export { isCrawlerUserAgent } from './bot.ts';
+
+// URL decision tracing (opt-in; no-op unless a trace is active) — see trace.ts.
+export { beginUrlTrace, endUrlTrace, isUrlTracing, traceUrl, queryKeysOf } from './trace.ts';
+export type { UrlTraceEvent } from './trace.ts';
+
+// crobot `/log` diagnostic beacon (3.3.3 `sendLog` parity) — see log-url.ts.
+export { buildLogUrl } from './log-url.ts';
+export type { LogLevel } from './log-url.ts';

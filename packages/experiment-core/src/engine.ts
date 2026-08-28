@@ -60,6 +60,7 @@ import {
   refreshSession,
 } from './session.ts';
 import { type TargetingContext, isExcludedByRules, passesTargeting } from './targeting.ts';
+import { queryKeysOf, traceUrl } from './trace.ts';
 
 /** Payload passed to the `onVariationApplied` listener when a visitor is enrolled. */
 export interface VariationAppliedEvent {
@@ -134,6 +135,12 @@ export function runExperiments(ctx: EngineContext, store: CookieStore): EngineRe
   };
   const withTrace = (r: EngineResult): EngineResult => (ctx.debug ? { ...r, trace } : r);
 
+  traceUrl({
+    stage: 'engine-input',
+    in: ctx.currentUrl,
+    detail: { keys: queryKeysOf(ctx.currentUrl), visitorId: ctx.visitorId, country: ctx.country },
+  });
+
   applyInboundCrossDomain(ctx.currentUrl, ctx.config, store);
 
   const targetingCtx: TargetingContext = {
@@ -162,6 +169,11 @@ export function runExperiments(ctx: EngineContext, store: CookieStore): EngineRe
 
     const state = packed.get(id);
     const onPage = matchesPageRule(ctx.currentUrl, experiment.rules);
+    traceUrl({
+      stage: 'page-rule',
+      in: ctx.currentUrl,
+      detail: { experiment: id, onPage, rules: describeRules(experiment.rules), state },
+    });
 
     // a. Targeting gate — evaluated SITE-WIDE (before the page rule) and CACHED
     // first-touch (crobot 3.3.3 `_testa_excl`). A UTM on the landing page is
