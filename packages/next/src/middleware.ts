@@ -357,10 +357,11 @@ export function createTestaProxy(options: TestaProxyOptions): TestaProxy {
         ? ('head' as const)
         : undefined;
     if (speculative) {
-      const redirectTo = computePrefetchRedirect(
+      const warm = computePrefetchRedirect(
         {
           config,
           currentUrl: publicUrl.href,
+          canRewrite: true,
           visitorId: store.get(UUID_COOKIE),
           now: Date.now(),
           getCookie: (name) => store.get(name),
@@ -371,14 +372,23 @@ export function createTestaProxy(options: TestaProxyOptions): TestaProxy {
         },
         store, // written into by the engine, then intentionally discarded (no applyTo)
       );
-      const res = redirectTo
-        ? NextResponse.redirect(new URL(redirectTo, publicUrl), 307)
-        : await delegate(options.handler, req, event);
+      // A rewrite target that fails the same-origin check is refused here too —
+      // warming a prefetch must not be a looser gate than serving the real
+      // navigation would be.
+      const warmTarget =
+        warm?.delivery === 'rewrite' ? safeRewriteTarget(warm.url, publicUrl) : null;
+      const res =
+        warm?.delivery === 'redirect'
+          ? NextResponse.redirect(new URL(warm.url, publicUrl), 307)
+          : warmTarget
+            ? NextResponse.rewrite(warmTarget)
+            : await delegate(options.handler, req, event);
       emitDebug?.(res, {
         url: publicUrl.href,
         urlSource,
         speculative,
-        ...(redirectTo ? { redirect: redirectTo } : {}),
+        ...(warm?.delivery === 'redirect' ? { redirect: warm.url } : {}),
+        ...(warmTarget ? { rewrite: warmTarget.href } : {}),
       });
       return res;
     }
@@ -411,6 +421,7 @@ export function createTestaProxy(options: TestaProxyOptions): TestaProxy {
         {
           config,
           currentUrl: publicUrl.href,
+          canRewrite: true,
           visitorId,
           now: Date.now(),
           getCookie: (name) => store.get(name),
@@ -430,6 +441,53 @@ export function createTestaProxy(options: TestaProxyOptions): TestaProxy {
 
     for (const applied of result.applied) {
       fireVariationAssigned(options.onVariationAssigned, applied, event, cookieState);
+    }
+
+    // A rewrite variation: serve the destination's content AT this URL. No
+    // navigation, so no round trip and nothing for the browser to do — the
+    // variant is simply what the first response contains. Cookies ride the
+    // rewrite response exactly as they would a redirect.
+    //
+    // A cross-origin (or unparsable) target is REFUSED: `NextResponse.rewrite`
+    // to another host silently proxies the customer's traffic through their own
+    // deployment, which is never what a split-URL test meant to ask for. On
+    // refusal we fall through and serve the control page — failing open beats
+    // serving something surprising.
+    const rewriteTarget = result.rewriteTo ? safeRewriteTarget(result.rewriteTo, publicUrl) : null;
+    const rewriteRefused = Boolean(result.rewriteTo) && !rewriteTarget;
+
+    if (rewriteTarget) {
+      const res = NextResponse.rewrite(rewriteTarget);
+      store.applyTo(res.cookies);
+      const trace = {
+        url: publicUrl.href,
+        urlSource,
+        visitor: visitorId,
+        configHash: config.config_hash,
+        applied: summarizeApplied(result.applied),
+        rewrite: rewriteTarget.href,
+        rawUrl: req.url,
+        urlTrace,
+        ...refererParamGap(req, publicUrl),
+        ...orphanNote(cookieState),
+      };
+      emitDebug?.(res, trace);
+      beacon(trace, event);
+      logDecision(
+        {
+          urlIn: req.url,
+          urlEval: publicUrl.href,
+          urlSource,
+          urlOut: rewriteTarget.href,
+          delivery: 'rewrite',
+          uuid: visitorId,
+          applied: summarizeApplied(result.applied),
+          nav: navigation ? 'document' : 'data',
+          ...pick(refererParamGap(req, publicUrl), 'droppedFromReferer', 'dropped'),
+        },
+        event,
+      );
+      return res;
     }
 
     if (result.redirectTo) {
@@ -455,6 +513,7 @@ export function createTestaProxy(options: TestaProxyOptions): TestaProxy {
           urlEval: publicUrl.href,
           urlSource,
           urlOut: result.redirectTo,
+          delivery: 'redirect',
           uuid: visitorId,
           applied: summarizeApplied(result.applied),
           nav: navigation ? 'document' : 'data',
@@ -482,6 +541,7 @@ export function createTestaProxy(options: TestaProxyOptions): TestaProxy {
       visitor: visitorId,
       configHash: config.config_hash,
       applied: summarizeApplied(result.applied),
+      ...(rewriteRefused ? { rewrite: `refused-cross-origin: ${result.rewriteTo}` } : {}),
       shield,
       rawUrl: req.url,
       urlTrace,
@@ -721,6 +781,31 @@ function fireVariationAssigned(
 }
 
 /** Best-effort ISO country from common edge geo headers (Vercel / Cloudflare). */
+/**
+ * Resolve a rewrite destination, or null when it must be refused.
+ *
+ * SAME-ORIGIN ONLY. `NextResponse.rewrite` to another host turns the customer's
+ * deployment into a proxy for that host: their edge fetches it, their bandwidth
+ * pays for it, and the visitor's address bar never shows where the content came
+ * from. A split-URL experiment authored in crobot means "show them the other
+ * page", never "become a reverse proxy" — so a cross-origin target is a config
+ * mistake (or an injection) and is dropped rather than honoured.
+ *
+ * Relative targets are the normal case (`/pricing-v2`) and resolve against the
+ * public URL, which is also what keeps the rewrite on the visitor's real origin
+ * rather than an internal one.
+ */
+function safeRewriteTarget(destination: string, publicUrl: URL): URL | null {
+  let target: URL;
+  try {
+    target = new URL(destination, publicUrl);
+  } catch {
+    return null;
+  }
+  if (target.origin !== publicUrl.origin) return null;
+  return target;
+}
+
 function geoCountry(req: NextRequest): string | undefined {
   return (req.headers.get('x-vercel-ip-country') ?? req.headers.get('cf-ipcountry') ?? undefined) as
     | string

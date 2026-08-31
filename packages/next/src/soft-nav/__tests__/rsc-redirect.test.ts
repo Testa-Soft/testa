@@ -51,7 +51,8 @@ describe('computePrefetchRedirect — compute but do not commit', () => {
       { ...base, visitorId: 'v-known', getCookie: (n) => store.get(n) },
       store,
     );
-    expect(to).toContain('/pricing-v2');
+    expect(to?.url).toContain('/pricing-v2');
+    expect(to?.delivery).toBe('redirect');
   });
 
   it('never mints a visitor id (the no-commit invariant it owns)', () => {

@@ -150,6 +150,25 @@ export type VariationChange =
        * - `regex`: treat `from_url` as a regex; expand `$1..$n` backrefs into `to_url`.
        */
       url_match_type?: 'exact' | 'contains' | 'query' | 'regex';
+      /**
+       * HOW the variant is delivered. Everything above (matching, param merging)
+       * is identical either way; only the response differs.
+       *
+       * - `'redirect'` (default) — a `307` to `to_url`. The address bar changes,
+       *   the visitor pays a round trip, and any client surface can do it.
+       * - `'rewrite'` — the SERVER returns `to_url`'s content AT the current URL.
+       *   No navigation, no second round trip, nothing for the browser to do, so
+       *   it cannot flicker; on Vercel the target can be a prerendered route
+       *   served from the edge cache.
+       *
+       * A rewrite is SERVER-ONLY: no client surface can serve someone else's
+       * route in place. The engine therefore refuses to deliver one off the
+       * server path (see `runExperiments`), which means a rewrite experiment
+       * requires `decisions: 'server'` — under `hybrid`, a cold instance would
+       * hand the pageview to the client, which would serve control to everyone
+       * it touched. That is an SRM, not a flicker.
+       */
+      nav?: 'redirect' | 'rewrite';
     };
 
 export interface GoalConfig {

@@ -28,9 +28,11 @@
  *      d. Assign (cookie-first + deterministic bucket) and stamp/slide the session
  *         window — the conversion-attribution clock (`isSessionLive`). State lives
  *         in the packed `_testa_exp` cookie, the SAME format the v2 pixel uses.
- *      e. Emit a `variation_applied` event; if the assigned variation is a
- *         redirect, resolve the destination and redirect (first redirect wins;
- *         DOM-only experiments fall through and accumulate).
+ *      e. Emit a `variation_applied` event; if the assigned variation carries a
+ *         split-URL destination, resolve it and deliver it — a 307 the visitor
+ *         follows, or (`nav: 'rewrite'`, server hosts only) that destination's
+ *         content served at the current URL. First one to resolve wins; DOM-only
+ *         experiments fall through and accumulate.
  *
  * The caller (middleware) MUST only invoke this on a real navigation, never a
  * prefetch — the engine commits cookies via the store and fires listener events.
@@ -70,7 +72,13 @@ export interface VariationAppliedEvent {
   title?: string;
   /** True when the applied variation triggered a server-side redirect. */
   redirected: boolean;
-  /** Resolved destination URL, present when `redirected`. */
+  /**
+   * How a split-URL variant was delivered, when one was. `'rewrite'` means the
+   * server served the destination's content at the current URL — the visitor
+   * never navigated, so `redirected` stays false while `destinationUrl` is set.
+   */
+  delivery?: 'redirect' | 'rewrite';
+  /** Resolved destination URL, present when `redirected` or `delivery === 'rewrite'`. */
   destinationUrl?: string;
   visitorId: string;
   /** The request URL the variation was applied on. */
@@ -88,6 +96,8 @@ export type DecisionReason =
   | 'traffic_excluded' // bucketed out by traffic_allocation
   | 'assigned_dom' // assigned a variation with DOM/no changes (no redirect)
   | 'redirect' // assigned a redirect variation and will navigate
+  | 'rewrite' // assigned a rewrite variation; the server serves the target here
+  | 'rewrite_unavailable' // rewrite variation, but this host can't rewrite (client path)
   | 'redirect_skipped'; // redirect variation but no navigation (already there / invalid / no match)
 
 export interface DecisionTrace {
@@ -105,6 +115,13 @@ export interface DecisionTrace {
 export interface EngineResult {
   /** Destination to 307-redirect to, if an experiment fired. */
   redirectTo?: string;
+  /**
+   * Destination whose content should be served AT the current URL, if a rewrite
+   * variation fired. Mutually exclusive with `redirectTo`: the first split-URL
+   * variant to resolve wins, and it resolves as one or the other, never both.
+   * Only set when the caller declared `canRewrite`.
+   */
+  rewriteTo?: string;
   /** Every variation applied on this request (control + variant), in order. */
   applied: VariationAppliedEvent[];
   /** Per-experiment decision trace — populated only when `ctx.debug` is true. */
@@ -125,6 +142,14 @@ export interface EngineContext {
   debug?: boolean;
   /** Session / exclusion-cooldown window in seconds. Default `SESSION_LENGTH_SEC` (30m). */
   sessionLengthSec?: number;
+  /**
+   * Can this host serve another route's content at the current URL? Only a
+   * server can (the Next proxy sets it). Left false, a `nav: 'rewrite'`
+   * variation is NOT delivered and NOT downgraded to a redirect — downgrading
+   * would move a visitor the experiment intended to keep in place. The
+   * assignment still stands, so the next server-decided pageview delivers it.
+   */
+  canRewrite?: boolean;
 }
 
 export function runExperiments(ctx: EngineContext, store: CookieStore): EngineResult {
@@ -249,32 +274,60 @@ export function runExperiments(ctx: EngineContext, store: CookieStore): EngineRe
     // Enrolled: stamp / slide the session window (conversion-attribution clock).
     refreshSession(store, id, result.variationId, expiresSec);
 
-    // e. Resolve redirect (if the applied variation is a redirect) + emit event.
+    // e. Resolve the split-URL destination (if the applied variation carries one)
+    // + emit event. `nav` decides HOW it is delivered: a 307 the visitor follows,
+    // or a rewrite the server serves in place.
     const variation = experiment.variations.find((v) => v.variation_id === result.variationId);
     const change = variation ? redirectChangeOf(variation) : undefined;
     const dest = change ? resolveRedirectDestination(change, ctx.currentUrl) : undefined;
-    const redirected = Boolean(dest?.shouldRedirect && dest.finalUrl);
+    const wantsRewrite = change?.nav === 'rewrite';
+    // A rewrite off the server path is not deliverable, and must NOT fall back
+    // to a redirect: the experiment asked for the visitor to stay put.
+    const canDeliver =
+      Boolean(dest?.shouldRedirect && dest.finalUrl) && (!wantsRewrite || ctx.canRewrite === true);
+    const redirected = canDeliver && !wantsRewrite;
 
     applied.push({
       experimentId: experiment.experiment_id,
       variationId: result.variationId,
       ...(experiment.title ? { title: experiment.title } : {}),
       redirected,
-      ...(redirected && dest?.finalUrl ? { destinationUrl: dest.finalUrl } : {}),
+      ...(canDeliver
+        ? { delivery: wantsRewrite ? ('rewrite' as const) : ('redirect' as const) }
+        : {}),
+      ...(canDeliver && dest?.finalUrl ? { destinationUrl: dest.finalUrl } : {}),
       visitorId: ctx.visitorId,
       url: ctx.currentUrl,
       firstAssignment: !result.fromCookie,
     });
 
-    if (redirected && dest?.finalUrl) {
+    if (canDeliver && dest?.finalUrl) {
       note({
         ...base,
-        reason: 'redirect',
+        reason: wantsRewrite ? 'rewrite' : 'redirect',
         variationId: result.variationId,
         fromCookie: result.fromCookie,
         detail: `-> ${dest.finalUrl}`,
       });
-      return withTrace({ redirectTo: dest.finalUrl, applied });
+      return withTrace(
+        wantsRewrite
+          ? { rewriteTo: dest.finalUrl, applied }
+          : { redirectTo: dest.finalUrl, applied },
+      );
+    }
+
+    // A rewrite this host can't serve: the assignment stands (never re-rolled),
+    // and the next server-decided pageview delivers it. Keep scanning — a later
+    // DOM experiment on this page still applies.
+    if (wantsRewrite && dest?.shouldRedirect) {
+      note({
+        ...base,
+        reason: 'rewrite_unavailable',
+        variationId: result.variationId,
+        fromCookie: result.fromCookie,
+        detail: 'host cannot rewrite — needs a server decision',
+      });
+      continue;
     }
 
     note({

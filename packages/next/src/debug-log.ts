@@ -41,9 +41,10 @@ export function sendDebugLog(
 }
 
 /**
- * A REDIRECT the server issued, in one flat line, shipped to crobot's `/log`.
+ * A split-URL delivery the server made — a redirect or a rewrite — in one flat
+ * line, shipped to crobot's `/log`.
  *
- * Only redirects are logged. A pass-through is the default outcome of almost
+ * Only deliveries are logged. A pass-through is the default outcome of almost
  * every request and carries little on its own; the question worth a durable
  * record is where the proxy SENT someone. (`debug: true` still traces every
  * decision, with a per-experiment reason, when you need the negative case.)
@@ -66,7 +67,8 @@ export function sendDebugLog(
  *     `x-testa-host`, `forwarded`, `x-forwarded-host`, `host`, `request-url`),
  *     so a decision made
  *     against an internal host is visible rather than inferred.
- *   - `urlOut`  — the destination we sent them to.
+ *   - `urlOut`  — the destination we sent them to, or served in place; see
+ *     `delivery` for which.
  *
  * Comparing them across many decisions is what shows where a parameter set (or
  * a hostname) stops existing.
@@ -82,8 +84,15 @@ export interface DecisionLog {
    * `Host`, those two are how you see that rules matched an internal origin.
    */
   urlSource: PublicUrlSource;
-  /** The redirect destination. */
+  /** The destination we sent them to, or served in place. */
   urlOut: string;
+  /**
+   * How the variant was delivered. `'redirect'` is a 307 the visitor followed;
+   * `'rewrite'` means the server returned `urlOut`'s content at `urlEval` and
+   * the address bar never changed — so a rewrite line has urlEval !== urlOut
+   * while the visitor never navigated.
+   */
+  delivery: 'redirect' | 'rewrite';
   /** `_testa_uuid` as resolved for this request. */
   uuid: string;
   /** Every variation applied — empty when the visitor was excluded or unmatched. */
