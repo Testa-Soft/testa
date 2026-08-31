@@ -103,8 +103,11 @@ export interface TestaProxyOptions extends ConfigSource {
    */
   debug?: boolean;
   /**
-   * Ship one line per decision to `{trackingHost}/log` — the URL as it arrived,
-   * where we sent the visitor, the uuid, and what was applied.
+   * Ship one line to `{trackingHost}/log` for every REDIRECT the proxy issues —
+   * the URL as it arrived, the URL the engine evaluated, where we sent the
+   * visitor, the uuid, and what was applied. Pass-throughs are not logged; they
+   * are the bulk of all traffic and explain little on their own (use `debug`
+   * when you need to know why a pageview did not redirect).
    *
    * Separate from `debug`, and safe to leave on: it adds no response header and
    * no console output, so it exposes nothing to the visitor. Since the proxy
@@ -449,6 +452,8 @@ export function createTestaProxy(options: TestaProxyOptions): TestaProxy {
       logDecision(
         {
           urlIn: req.url,
+          urlEval: publicUrl.href,
+          urlSource,
           urlOut: result.redirectTo,
           uuid: visitorId,
           applied: summarizeApplied(result.applied),
@@ -485,17 +490,10 @@ export function createTestaProxy(options: TestaProxyOptions): TestaProxy {
     };
     emitDebug?.(res, trace);
     beacon(trace, event);
-    logDecision(
-      {
-        urlIn: req.url,
-        urlOut: null,
-        uuid: visitorId,
-        applied: summarizeApplied(result.applied),
-        nav: navigation ? 'document' : 'data',
-        ...pick(refererParamGap(req, publicUrl), 'droppedFromReferer', 'dropped'),
-      },
-      event,
-    );
+    // No decision line here: pass-throughs are the overwhelming majority of
+    // requests and say little on their own. Only redirects are logged — turn on
+    // `debug` when you need to see why a pageview did NOT redirect (the trace
+    // carries a per-experiment reason).
     return res;
   };
 
