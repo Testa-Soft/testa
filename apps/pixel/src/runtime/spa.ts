@@ -27,6 +27,18 @@ const DEBUG_RING_SIZE = 20;
 export interface InstallSpaOptions {
   /** Called when a meaningful URL transition happens. */
   onTransition: (canonicalUrl: string) => void;
+  /**
+   * Called SYNCHRONOUSLY on the first nav event of a burst, before the debounce
+   * — the hook for tearing applied DOM changes back down. A soft nav swaps the
+   * page's content while the variant's mutations are still in the DOM, so
+   * waiting for the debounced cycle would show variant content on the new page
+   * for `DEBOUNCE_MS`+. Only fires when the canonical URL actually differs, so
+   * a same-URL `pushState` never wipes anything.
+   *
+   * Whatever it tore down is put back by `onTransition`, which is guaranteed to
+   * run after this fires (even if the URL settles back to where it started).
+   */
+  onNavigate?: () => void;
   /** Per-project hash-routes setting. Default false. */
   includeHash?: boolean;
   /** Test injection for `Date.now`. */
@@ -57,6 +69,8 @@ export function installSpaHandler(opts: InstallSpaOptions): () => void {
   let lastCanonical = canonicalize(window.location.href, { includeHash });
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
   let pendingDebouncedCount = 0;
+  /** True once `onNavigate` tore changes down and the re-apply hasn't run yet. */
+  let killed = false;
 
   const ring: SpaDebug['ring'] = [];
 
@@ -68,6 +82,23 @@ export function installSpaHandler(opts: InstallSpaOptions): () => void {
 
   function onChange(): void {
     pendingDebouncedCount += 1;
+
+    // Kill applied changes NOW, undebounced — but only on a real URL change, or
+    // a framework's same-URL `pushState` would wipe the variant with no cycle
+    // coming to restore it. `killed` makes the debounced pass re-run even when
+    // the URL settles back to `lastCanonical` (A→B→A inside one burst), so a
+    // teardown is never left without its matching re-apply.
+    if (opts.onNavigate && canonicalize(window.location.href, { includeHash }) !== lastCanonical) {
+      killed = true;
+      try {
+        opts.onNavigate();
+      } catch (err) {
+        // Teardown must never blank the page or abort the cycle. Swallow + log.
+        // eslint-disable-next-line no-console
+        console.error('[testa] SPA teardown threw:', err);
+      }
+    }
+
     if (debounceTimer !== null) return;
     debounceTimer = setTimeout(() => {
       debounceTimer = null;
@@ -84,7 +115,10 @@ export function installSpaHandler(opts: InstallSpaOptions): () => void {
         sameCanonical,
       });
 
-      if (sameCanonical) return;
+      // `killed` forces the cycle even on a same-canonical settle — we already
+      // tore the changes down and MUST re-apply (re-bucketed, cookie-first).
+      if (sameCanonical && !killed) return;
+      killed = false;
       lastCanonical = next;
       try {
         opts.onTransition(next);
