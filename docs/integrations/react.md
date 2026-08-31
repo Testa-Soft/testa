@@ -130,20 +130,52 @@ once-per-visitor server-side.
 
 ## Analytics events (GA4 / GTM / PostHog / Segment)
 
-Same client event bus as `@testa-soft/next` — **`variation_applied`** fires
-once per session when a visitor is shown a variation:
+Same client event bus as `@testa-soft/next`. Two events, two moments:
+
+- **`variation_applied`** — the visitor was **shown** the variation: on the page
+  for DOM/copy tests, after the navigation for split-URL. Once per page load per
+  `(experiment, variation)`.
+- **`variation_assigned`** — the visitor was **bucketed**, at decision time and
+  *before* any split-URL redirect leaves the page — the only event a redirected
+  visitor can be counted by.
+
+**Multiple handlers are allowed**, and each registration returns an unsubscribe:
 
 ```ts
 import { testa } from '@testa-soft/react'
 
-testa.onVariationApplied((d) => posthog.capture('$experiment_viewed', d))
-// d = { project_id, experiment, variation, uuid, title, url }
+const off = testa.onVariationApplied((d) => posthog.capture('$experiment_viewed', d))
+testa.onVariationApplied((d) => analytics.track('Experiment Viewed', d))
+testa.onVariationAssigned((d) => logEnrollment(d))
+off() // removes just that one handler
+
+// d = {
+//   project_id: 123,
+//   experiment: 456,                     // experiment identifier, not the DB pk
+//   variation: 1,                        // 0 = control
+//   uuid: "0198f2c1-4b7a-7f3e-9d21-...",
+//   title: "Homepage Hero Test",         // omitted when the experiment has no name
+//   url: "https://example.com/pricing",
+// }
 ```
 
-Handlers registered late still receive already-fired events (history replay).
-Every `variation_applied` also pushes the GTM `dataLayer` event `Analytica`
-(`ExperimentId`, `ExperimentName`, `VariationId`, `VariationName`) — add a GTM
-Custom Event trigger on `Analytica`.
+`experiment` and `variation` are crobot IDENTIFIERS (0-based; variation `0` is
+always the control), not database primary keys.
+
+Three guarantees worth relying on:
+
+- **History replay** — a handler registered *after* the event fired still
+  receives it, so late-loading analytics never miss an exposure.
+- **Per-handler dedup** — each handler sees each unique `(experiment, variation)`
+  event at most once, so a re-render or soft-nav re-apply can't double-count.
+- **Handler isolation** — a throwing handler breaks neither the SDK nor the other
+  handlers.
+
+`window.testa.onVariationApplied` is installed too, for GTM Custom HTML and
+non-bundled scripts. Every `variation_applied` also pushes the GTM `dataLayer`
+event `Analytica` (`ExperimentId`, `ExperimentName`, `VariationId`,
+`VariationName`) — add a GTM Custom Event trigger on `Analytica`. `VariationName`
+is `Control` for variation `0`, else the configured name or `Variation<id>`.
 
 ## Preview mode
 
@@ -177,13 +209,27 @@ DOM changes are disposed before the next route's apply.
 | `cookieDomain`  | `string`                   | —                                | Cookie `Domain` for cross-subdomain sharing (e.g. `.acme.com`).     |
 | `shield`        | `boolean \| ShieldOptions` | `true`                           | Smart anti-flicker overlay. `false` to disable; object to customize. |
 
+### Event bus
+
+| Export | Type | Description |
+| --- | --- | --- |
+| `testa.onVariationApplied` | `(handler) => Unsubscribe` | Subscribe to `variation_applied`. Multiple handlers; history replay; per-handler dedup. |
+| `testa.onVariationAssigned` | `(handler) => Unsubscribe` | Subscribe to `variation_assigned` (bucketing). Same semantics. |
+| `onVariationApplied` | `(handler) => Unsubscribe` | Standalone equivalent of `testa.onVariationApplied`. |
+| `onVariationAssigned` | `(handler) => Unsubscribe` | Standalone equivalent of `testa.onVariationAssigned`. |
+| `window.testa` | `{ onVariationApplied, onVariationAssigned }` | Same API for GTM Custom HTML / non-bundled scripts. |
+| `installTestaGlobal` | `() => void` | Attach `window.testa` by hand. Idempotent; the provider already calls it. |
+| `pushEvent` | `(name, data?) => void` | Fire a custom goal (also `window.testa.pushEvent`). |
+
+Handler signature: `(event: VariationEvent) => void`, where `VariationEvent` is
+`{ project_id, experiment, variation, uuid, title?, url }`.
+
 ### Other exports
 
-`useTestaVariant(experimentId)`, the event bus (`testa`, `onVariationApplied`,
-`onVariationAssigned`, `pushEvent`, `installTestaGlobal`), `TestaShield` /
-`raiseShield` for manual shield control, and the lower-level building blocks
-(`initTesta`, `runExperiments`, `ConfigClient`, `DocumentCookieStore`,
-`emitExposure`, preview helpers, `installSpaNav`) for custom integrations.
+`useTestaVariant(experimentId)`, `TestaShield` / `raiseShield` for manual shield
+control, and the lower-level building blocks (`initTesta`, `runExperiments`,
+`ConfigClient`, `DocumentCookieStore`, `emitExposure`, preview helpers,
+`installSpaNav`) for custom integrations.
 
 ## Troubleshooting
 
