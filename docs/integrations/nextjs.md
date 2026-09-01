@@ -423,7 +423,7 @@ events on user actions, or import `pushEvent` from the package).
 
 ---
 
-## Analytics events (GA4 / GTM / PostHog / Segment)
+## Analytics events
 
 Testa exposes experiment exposures on **two independent surfaces** — a
 **client-side** event bus in the browser, and a **server-side** hook in the proxy.
@@ -457,7 +457,8 @@ export function TestaAnalytics(): null {
   useEffect(
     () =>
       onVariationApplied((d) => {
-        posthog.capture('$experiment_viewed', {
+        // Hand it to whatever you use — an analytics SDK, your own endpoint.
+        track('Experiment Viewed', {
           experiment: d.experiment,
           variation: d.variation,
           title: d.title,
@@ -473,7 +474,7 @@ Render it once under your root layout. Register as many handlers as you like —
 each subscription is independent and returns its own unsubscribe:
 
 ```tsx
-useEffect(() => onVariationApplied((d) => analytics.track('Experiment Viewed', d)), [])
+useEffect(() => onVariationApplied((d) => track('Experiment Viewed', d)), [])
 useEffect(() => onVariationApplied((d) => console.debug('shown', d.experiment, d.variation)), [])
 ```
 
@@ -532,7 +533,8 @@ trigger.
 
 ### Server-side (`variation_assigned`)
 
-For server-side destinations — PostHog server, a data warehouse, a webhook — use
+For server-side destinations — a data warehouse, a server-side collector, a
+webhook — use
 the `onVariationAssigned` option on `createTestaProxy`. It fires for each
 variation the visitor is assigned on a request:
 
@@ -549,12 +551,12 @@ export const proxy = createTestaProxy({
     // ctx.waitUntil keeps this fetch alive AFTER the response is sent,
     // without delaying it — edge/runtime-safe.
     ctx.waitUntil(
-      fetch('https://us.i.posthog.com/capture/', {
+      fetch(process.env.ANALYTICS_INGEST_URL as string, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
-          api_key: process.env.POSTHOG_API_KEY,
-          event: '$experiment_assigned',
+          api_key: process.env.ANALYTICS_API_KEY,
+          event: 'experiment_assigned',
           distinct_id: event.visitorId,
           properties: {
             experiment_id: event.experimentId,
@@ -574,8 +576,8 @@ rejections are swallowed so a hook can never break the request.
 
 - **`ctx.waitUntil(promise)`** — keeps an async call alive until it completes
   **after** the response has been sent. It never delays the response, so tracking
-  latency is invisible to the visitor. Use it for any network call (PostHog
-  server, warehouse, webhook).
+  latency is invisible to the visitor. Use it for any network call — an analytics
+  ingest endpoint, a warehouse, a webhook.
 - **`event.firstAssignment`** — `true` only when the visitor was freshly bucketed
   on this request (`false` when served from the sticky cookie). Guard on it for
   **once-per-visitor** semantics.
@@ -602,10 +604,10 @@ from the client payload — document them per surface:
 ### Which surface should I use?
 
 The two surfaces are **independent**. Client-side (`variation_applied`) is right
-for anything that lives in the browser session — GA4, GTM, PostHog client,
-Segment. Server-side (`onVariationAssigned`) is right for destinations you'd
-rather not trust to the client — a warehouse, a server-side PostHog, a webhook —
-and it fires even if the visitor has JavaScript disabled. Wire up whichever you
+for anything that lives in the browser session — a tag manager, or any analytics
+SDK already loaded on the page. Server-side (`onVariationAssigned`) is right for
+destinations you'd rather not trust to the client — a warehouse, a server-side
+collector, a webhook — and it fires even if the visitor has JavaScript disabled. Wire up whichever you
 need; wire up both if you want the exposure in two places.
 
 ---

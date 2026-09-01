@@ -86,7 +86,7 @@ Supported change types are crobot-native and applied by the shared DOM engine: `
 
 Split-URL tests send a bucketed visitor to a different URL. With no server to issue a `307`, the provider performs the redirect **client-side** via `window.location.replace(destination)` as early as it can on load. It's loop-guarded by a per-experiment `_testa_redirected_<id>` cookie so a visitor is never bounced back and forth. Because there's no edge, expect a brief navigation rather than the flicker-free server redirect the Next.js package gives you — the provider's built-in shield keeps the source page hidden while the redirect navigates away.
 
-## Analytics events (GA4 / GTM / PostHog / Segment)
+## Analytics events
 
 The SDK emits two client-side events. Subscribe with named functions — **multiple handlers are allowed**, and each call returns an unsubscribe function:
 
@@ -102,8 +102,8 @@ import { onVariationApplied } from '@testa-soft/react'
 import { useEffect } from 'react'
 
 export function TestaAnalytics(): null {
-  useEffect(() => onVariationApplied((d) => posthog.capture('$experiment_viewed', d)), [])
-  useEffect(() => onVariationApplied((d) => analytics.track('Experiment Viewed', d)), [])
+  // `track` is whatever you already use — an analytics SDK, or your own fetch.
+  useEffect(() => onVariationApplied((d) => track('Experiment Viewed', d)), [])
   return null
 }
 ```

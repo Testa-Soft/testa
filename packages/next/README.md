@@ -485,12 +485,12 @@ Returns a Next.js middleware function. Import from `@testa-soft/next`.
 | `trackingHost`       | `string`                                       | `https://new.testa-soft.tech`        | Host for exposure tracking (`{trackingHost}/api/leads`). Also settable via the `TESTA_TRACKING_HOST` env var. |
 | `skipPaths`          | `(string \| RegExp)[]`                         | —                                    | Extra paths to pass through untouched, on top of the built-in filter (`/_next/*`, `/api/*`, `/.well-known/*`, asset extensions). Strings match as segment-aligned prefixes (`'/admin'` matches `/admin/users`, not `/administrator`); RegExps test the pathname. |
 | `handler`            | `(req, event) => Response \| null \| undefined \| Promise<…>` | —                     | Your own middleware logic, composed inside the proxy — see [Composing with your own middleware](#composing-with-your-own-middleware). |
-| `onVariationAssigned`| `(event, ctx) => void \| Promise<void>`       | —                                    | **Server-side** hook per assignment. `ctx.waitUntil(promise)` keeps async work (PostHog server, webhook) alive past the response — never delays it. Guard on `event.firstAssignment` for once-per-visitor. |
+| `onVariationAssigned`| `(event, ctx) => void \| Promise<void>`       | —                                    | **Server-side** hook per assignment. `ctx.waitUntil(promise)` keeps async work (a warehouse write, a webhook) alive past the response — never delays it. Guard on `event.firstAssignment` for once-per-visitor. |
 
 Exported constants: `DEFAULT_CONFIG_HOST`, `DEFAULT_TRACKING_HOST`, `PUBLIC_HOST_HEADER`, `PUBLIC_PROTO_HEADER`. Exported
 type: `VariationAppliedEvent` (the argument to `onVariationAssigned`).
 
-## Analytics events (GA4 / GTM / PostHog / Segment)
+## Analytics events
 
 Two independent surfaces — use either or both:
 
@@ -510,7 +510,8 @@ export function TestaAnalytics(): null {
   // onVariationApplied returns its own unsubscribe, so returning it from the
   // effect is the whole cleanup — without it, Fast Refresh and StrictMode's
   // double mount stack duplicate handlers.
-  useEffect(() => onVariationApplied((d) => posthog.capture('$experiment_viewed', d)), [])
+  // `track` is whatever you already use — an analytics SDK, or your own fetch.
+  useEffect(() => onVariationApplied((d) => track('Experiment Viewed', d)), [])
   return null
 }
 // d = { project_id, experiment, variation, uuid, title, url }
@@ -531,7 +532,7 @@ is also installed for GTM Custom HTML / non-bundled scripts.
 ```
 Add a GTM **Custom Event** trigger on `Analytica`.
 
-**Server-side** — for PostHog server, a warehouse, or webhooks, use the
+**Server-side** — for a warehouse, a server-side collector, or webhooks, use the
 `onVariationAssigned` proxy option (above) with `ctx.waitUntil`. It's independent
 of the client surface — wire up both if you want.
 

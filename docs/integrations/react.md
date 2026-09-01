@@ -128,7 +128,7 @@ GTM Custom HTML and non-bundled scripts. Conversions POST the legacy crobot
 payload, so results populate identically to the pixel; crobot dedups
 once-per-visitor server-side.
 
-## Analytics events (GA4 / GTM / PostHog / Segment)
+## Analytics events
 
 Same client event bus as `@testa-soft/next`. Two events, two moments:
 
@@ -149,8 +149,8 @@ import { useEffect } from 'react'
 
 export function TestaAnalytics(): null {
   // Returning the unsubscribe from the effect IS the cleanup.
-  useEffect(() => onVariationApplied((d) => posthog.capture('$experiment_viewed', d)), [])
-  useEffect(() => onVariationApplied((d) => analytics.track('Experiment Viewed', d)), [])
+  // `track` here is whatever you already use — an analytics SDK, your own fetch.
+  useEffect(() => onVariationApplied((d) => track('Experiment Viewed', d)), [])
   useEffect(() => onVariationAssigned((d) => logEnrollment(d)), [])
   return null
 }
