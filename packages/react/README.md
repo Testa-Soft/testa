@@ -93,22 +93,24 @@ The SDK emits two client-side events. Subscribe with named functions — **multi
 - **`variation_applied`** — the visitor was **shown** a variation: on the page for DOM/copy tests, after the navigation for split-URL. Fires **once per page load** per `(experiment, variation)`.
 - **`variation_assigned`** — the visitor was **bucketed**, fired at decision time, *before* any split-URL redirect leaves the page. This is the only event a redirected visitor can be counted by, since they never reach the apply step.
 
-```ts
-import { testa } from '@testa-soft/react'
+Subscribe from a component, in an effect. `onVariationApplied` returns its own
+unsubscribe, so returning it from the effect is the whole cleanup — without it,
+Fast Refresh and StrictMode's double mount stack duplicate handlers.
 
-// PostHog
-const off = testa.onVariationApplied((d) => posthog.capture('$experiment_viewed', d))
+```tsx
+import { onVariationApplied } from '@testa-soft/react'
+import { useEffect } from 'react'
 
-// Segment
-testa.onVariationApplied((d) => analytics.track('Experiment Viewed', d))
-
-// Raw handler — do anything with the payload
-testa.onVariationApplied((d) => {
-  console.debug('shown', d.experiment, d.variation, 'at', d.url)
-})
-
-off() // removes just that one handler
+export function TestaAnalytics(): null {
+  useEffect(() => onVariationApplied((d) => posthog.capture('$experiment_viewed', d)), [])
+  useEffect(() => onVariationApplied((d) => analytics.track('Experiment Viewed', d)), [])
+  return null
+}
 ```
+
+Render it once inside `<TestaProvider>`. Module-scope
+`testa.onVariationApplied(...)` also works and is the right shape outside a React
+tree, but nothing unsubscribes it.
 
 The payload (crobot 3.3.3 `leadData`), identical for both events:
 

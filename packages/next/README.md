@@ -496,16 +496,29 @@ Two independent surfaces — use either or both:
 
 **Client-side** — the SDK fires **`variation_applied`** in the browser once per
 session when a visitor is shown a variation (after the redirect for split-URL, on
-the page for DOM). Subscribe with named functions (multiple handlers allowed;
-each returns an unsubscribe), or `window.testa`:
+the page for DOM). Subscribe with named functions — multiple handlers allowed,
+each returning its own unsubscribe:
 
-```ts
-import { testa } from '@testa-soft/next'
+```tsx
+// app/components/TestaAnalytics.tsx
+'use client'
 
-const off = testa.onVariationApplied((d) => posthog.capture('$experiment_viewed', d))
-testa.onVariationApplied((d) => segment.track('Experiment Viewed', d))
+import { onVariationApplied } from '@testa-soft/next'
+import { useEffect } from 'react'
+
+export function TestaAnalytics(): null {
+  // onVariationApplied returns its own unsubscribe, so returning it from the
+  // effect is the whole cleanup — without it, Fast Refresh and StrictMode's
+  // double mount stack duplicate handlers.
+  useEffect(() => onVariationApplied((d) => posthog.capture('$experiment_viewed', d)), [])
+  return null
+}
 // d = { project_id, experiment, variation, uuid, title, url }
 ```
+
+Render it once under your root layout. Module-scope `testa.onVariationApplied(...)`
+also works, but only outside a React tree — a server component has no `window`,
+and nothing ever unsubscribes.
 
 A handler registered **after** the event fired still receives it (history
 replay), so late-loading analytics don't miss it. `window.testa.onVariationApplied`

@@ -139,16 +139,26 @@ Same client event bus as `@testa-soft/next`. Two events, two moments:
   *before* any split-URL redirect leaves the page — the only event a redirected
   visitor can be counted by.
 
-**Multiple handlers are allowed**, and each registration returns an unsubscribe:
+Subscribe from a component, in an effect — module scope leaves the handler
+registered forever, and in a Next server component there is no `window` at all.
+**Multiple handlers are allowed**, each returning its own unsubscribe:
+
+```tsx
+import { onVariationApplied, onVariationAssigned } from '@testa-soft/react'
+import { useEffect } from 'react'
+
+export function TestaAnalytics(): null {
+  // Returning the unsubscribe from the effect IS the cleanup.
+  useEffect(() => onVariationApplied((d) => posthog.capture('$experiment_viewed', d)), [])
+  useEffect(() => onVariationApplied((d) => analytics.track('Experiment Viewed', d)), [])
+  useEffect(() => onVariationAssigned((d) => logEnrollment(d)), [])
+  return null
+}
+```
+
+The payload:
 
 ```ts
-import { testa } from '@testa-soft/react'
-
-const off = testa.onVariationApplied((d) => posthog.capture('$experiment_viewed', d))
-testa.onVariationApplied((d) => analytics.track('Experiment Viewed', d))
-testa.onVariationAssigned((d) => logEnrollment(d))
-off() // removes just that one handler
-
 // d = {
 //   project_id: 123,
 //   experiment: 456,                     // experiment identifier, not the DB pk
@@ -213,10 +223,9 @@ DOM changes are disposed before the next route's apply.
 
 | Export | Type | Description |
 | --- | --- | --- |
-| `testa.onVariationApplied` | `(handler) => Unsubscribe` | Subscribe to `variation_applied`. Multiple handlers; history replay; per-handler dedup. |
-| `testa.onVariationAssigned` | `(handler) => Unsubscribe` | Subscribe to `variation_assigned` (bucketing). Same semantics. |
-| `onVariationApplied` | `(handler) => Unsubscribe` | Standalone equivalent of `testa.onVariationApplied`. |
-| `onVariationAssigned` | `(handler) => Unsubscribe` | Standalone equivalent of `testa.onVariationAssigned`. |
+| `onVariationApplied` | `(handler) => Unsubscribe` | Subscribe to `variation_applied`. Multiple handlers; history replay; per-handler dedup. **Use this one inside a React tree**, in an effect. |
+| `onVariationAssigned` | `(handler) => Unsubscribe` | Subscribe to `variation_assigned` (bucketing). Same semantics. |
+| `testa` | `{ onVariationApplied, onVariationAssigned }` | Namespace form of the two above — the importable twin of `window.testa`, for code that isn't in a component. |
 | `window.testa` | `{ onVariationApplied, onVariationAssigned }` | Same API for GTM Custom HTML / non-bundled scripts. |
 | `installTestaGlobal` | `() => void` | Attach `window.testa` by hand. Idempotent; the provider already calls it. |
 | `pushEvent` | `(name, data?) => void` | Fire a custom goal (also `window.testa.pushEvent`). |

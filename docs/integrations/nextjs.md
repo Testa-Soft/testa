@@ -442,30 +442,45 @@ The SDK fires `variation_applied` in the browser once per session when a visitor
 is shown a variation. Subscribe with named functions — **multiple handlers are
 allowed**, and each call returns an unsubscribe function:
 
-```ts
-import { testa } from '@testa-soft/next'
+Subscribe from a **client component**, in an effect. `onVariationApplied` returns
+its own unsubscribe, so returning it from the effect is the whole cleanup —
+without it, Fast Refresh and StrictMode's double mount stack duplicate handlers.
 
-// PostHog (client)
-const off = testa.onVariationApplied((d) => {
-  posthog.capture('$experiment_viewed', {
-    experiment: d.experiment,
-    variation: d.variation,
-    title: d.title,
-  })
-})
+```tsx
+// app/components/TestaAnalytics.tsx
+'use client'
 
-// Segment
-testa.onVariationApplied((d) => {
-  analytics.track('Experiment Viewed', d)
-})
+import { onVariationApplied } from '@testa-soft/next'
+import { useEffect } from 'react'
 
-// Raw handler — do anything you like with the payload
-testa.onVariationApplied((d) => {
-  console.debug('shown variation', d.experiment, d.variation, 'at', d.url)
-})
-
-// off() removes just that one handler
+export function TestaAnalytics(): null {
+  useEffect(
+    () =>
+      onVariationApplied((d) => {
+        posthog.capture('$experiment_viewed', {
+          experiment: d.experiment,
+          variation: d.variation,
+          title: d.title,
+        })
+      }),
+    [],
+  )
+  return null
+}
 ```
+
+Render it once under your root layout. Register as many handlers as you like —
+each subscription is independent and returns its own unsubscribe:
+
+```tsx
+useEffect(() => onVariationApplied((d) => analytics.track('Experiment Viewed', d)), [])
+useEffect(() => onVariationApplied((d) => console.debug('shown', d.experiment, d.variation)), [])
+```
+
+> Module-scope `testa.onVariationApplied(...)` also works, but only outside a
+> React tree: in a server component there is no `window`, and nothing ever
+> unsubscribes. Use the named import in an effect inside the app, and the
+> `testa` namespace (or `window.testa`) outside a bundle.
 
 The payload is:
 
