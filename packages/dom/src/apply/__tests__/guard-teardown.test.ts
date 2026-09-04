@@ -15,7 +15,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { LATE_MATCH_WINDOW_MS, applyVariation, eachMatching } from '../index.ts';
+import { applyVariation, eachMatching } from '../index.ts';
 
 const tick = () => new Promise((r) => setTimeout(r, 0));
 
@@ -89,9 +89,7 @@ describe('teardown undo', () => {
   it('change_html teardown restores the original innerHTML', () => {
     resetDom();
     document.body.innerHTML = '<h1><em>orig</em></h1>';
-    const teardowns = applyVariation(7, [
-      { type: 'change_html', selector: 'h1', content: 'variant' },
-    ]);
+    const teardowns = applyVariation(7, [{ type: 'change_html', selector: 'h1', content: 'variant' }]);
     expect(document.querySelector('h1')?.textContent).toBe('variant');
     for (const t of teardowns) t();
     expect(document.querySelector('h1')?.innerHTML).toBe('<em>orig</em>');
@@ -100,9 +98,7 @@ describe('teardown undo', () => {
   it('change_html teardown does NOT stomp content React re-rendered meanwhile', () => {
     resetDom();
     document.body.innerHTML = '<h1>orig</h1>';
-    const teardowns = applyVariation(7, [
-      { type: 'change_html', selector: 'h1', content: 'variant' },
-    ]);
+    const teardowns = applyVariation(7, [{ type: 'change_html', selector: 'h1', content: 'variant' }]);
     // React re-rendered the node with fresh content — our change is gone already.
     const h1 = document.querySelector('h1') as HTMLElement;
     h1.innerHTML = 'react-owned';
@@ -133,9 +129,7 @@ describe('teardown undo', () => {
     document.body.innerHTML = '<h1>calculator</h1>';
     // No guard (worst case): observer applies to the next page's h1 before the
     // effect cleanup runs — teardown must restore it.
-    const teardowns = applyVariation(7, [
-      { type: 'change_html', selector: 'h1', content: 'variant' },
-    ]);
+    const teardowns = applyVariation(7, [{ type: 'change_html', selector: 'h1', content: 'variant' }]);
     document.body.innerHTML = '<h1>about page</h1>';
     await tick(); // observer wrongly applies to the new h1
     expect(document.querySelector('h1')?.textContent).toBe('variant');
@@ -148,9 +142,7 @@ describe('change_html keeper (React-clobber re-assert)', () => {
   it('re-asserts the change when the host framework overwrites the content', async () => {
     resetDom();
     document.body.innerHTML = '<h1>Calculator</h1>';
-    const teardowns = applyVariation(7, [
-      { type: 'change_html', selector: 'h1', content: 'variant' },
-    ]);
+    const teardowns = applyVariation(7, [{ type: 'change_html', selector: 'h1', content: 'variant' }]);
     const h1 = document.querySelector('h1') as HTMLElement;
     expect(h1.textContent).toBe('variant');
 
@@ -169,13 +161,9 @@ describe('change_html keeper (React-clobber re-assert)', () => {
     resetDom();
     document.body.innerHTML = '<h1>Calculator</h1>';
     let onPage = true;
-    const teardowns = applyVariation(
-      7,
-      [{ type: 'change_html', selector: 'h1', content: 'variant' }],
-      {
-        guard: () => onPage,
-      },
-    );
+    const teardowns = applyVariation(7, [{ type: 'change_html', selector: 'h1', content: 'variant' }], {
+      guard: () => onPage,
+    });
     const h1 = document.querySelector('h1') as HTMLElement;
     expect(h1.textContent).toBe('variant');
 
@@ -186,12 +174,13 @@ describe('change_html keeper (React-clobber re-assert)', () => {
     for (const t of teardowns) t();
   });
 
-  it('keeper survives past the new-match window (no timeout on re-assert)', async () => {
+  it('keeper survives past the 10s new-match window (no timeout on re-assert)', async () => {
     resetDom();
     document.body.innerHTML = '<h1>orig</h1>';
-    const teardowns = applyVariation(7, [
-      { type: 'change_html', selector: 'h1', content: 'variant' },
-    ]);
+    const teardowns = applyVariation(
+      7,
+      [{ type: 'change_html', selector: 'h1', content: 'variant' }],
+    );
     const h1 = document.querySelector('h1') as HTMLElement;
     // Simulate repeated framework rewrites — each must be re-asserted.
     for (let i = 0; i < 3; i++) {
@@ -201,53 +190,5 @@ describe('change_html keeper (React-clobber re-assert)', () => {
     }
     for (const t of teardowns) t();
     expect(h1.textContent).toBe('render-2');
-  });
-});
-
-describe('late-match discovery window', () => {
-  it('defaults to 2s — the budget for a framework to paint its components', () => {
-    expect(LATE_MATCH_WINDOW_MS).toBe(2_000);
-  });
-
-  it('applies to a node that renders INSIDE the window', async () => {
-    resetDom();
-    document.body.innerHTML = '<main></main>';
-    const stop = eachMatching(
-      'h1',
-      (el) => {
-        el.innerHTML = 'variant';
-      },
-      { timeoutMs: 40 },
-    );
-
-    const early = document.createElement('h1');
-    early.innerHTML = 'early';
-    document.querySelector('main')?.appendChild(early);
-    await tick();
-
-    expect(early.innerHTML).toBe('variant');
-    stop();
-  });
-
-  it('leaves a node that renders AFTER the window alone', async () => {
-    resetDom();
-    document.body.innerHTML = '<main></main>';
-    const stop = eachMatching(
-      'h1',
-      (el) => {
-        el.innerHTML = 'variant';
-      },
-      { timeoutMs: 40 },
-    );
-
-    await new Promise((r) => setTimeout(r, 80)); // window lapsed
-    const late = document.createElement('h1');
-    late.innerHTML = 'late';
-    document.querySelector('main')?.appendChild(late);
-    await tick();
-
-    // Discovery is over — only a fresh apply cycle can change this node now.
-    expect(late.innerHTML).toBe('late');
-    stop();
   });
 });

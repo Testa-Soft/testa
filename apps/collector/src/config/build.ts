@@ -63,12 +63,6 @@ interface SourceExperiment {
   title?: string;
   url: string;
   url_match_type: string;
-  /**
-   * Delivery mode for a split_url experiment: `'rewrite'` serves the variant
-   * route's content at the control URL (server-side only, zero flicker);
-   * anything else — including absent — is the default 307 redirect.
-   */
-  nav?: string | null;
   traffic: number;
   type: string;
   status: string;
@@ -203,29 +197,21 @@ function buildVariation(v: SourceVariation, e: SourceExperiment): VariationConfi
   return { variation_id: v.identifier, weight: v.traffic, changes };
 }
 
-/**
- * Split-URL variant → a single `redirect` change.
- *
- * `nav` rides along when the experiment asked to be delivered as a rewrite. It
- * is only emitted for `'rewrite'`: leaving the field off for the default keeps
- * every existing config byte-identical (and so keeps `config_hash` stable for
- * projects that never opt in).
- */
+/** Split-URL variant → a single `redirect` change (unchanged from v1). */
 function buildRedirectChange(v: SourceVariation, e: SourceExperiment): VariationChange[] {
   const change = v.changes?.[0];
-  if (!change?.content) return [];
-  const rewrite = e.nav === 'rewrite';
-  return [
-    {
-      type: 'redirect',
-      from_url: e.url,
-      to_url: change.content,
-      url_match_type: mapRedirectMode(
-        change.url_match_type ?? v.url_match_type ?? e.url_match_type,
-      ),
-      ...(rewrite ? { nav: 'rewrite' as const } : {}),
-    },
-  ];
+  return change?.content
+    ? [
+        {
+          type: 'redirect',
+          from_url: e.url,
+          to_url: change.content,
+          url_match_type: mapRedirectMode(
+            change.url_match_type ?? v.url_match_type ?? e.url_match_type,
+          ),
+        },
+      ]
+    : [];
 }
 
 /**

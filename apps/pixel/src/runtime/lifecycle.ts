@@ -25,12 +25,11 @@ import type {
   ProjectConfig,
 } from '@testa-platform/shared-types';
 import type { ConsentState } from '@testa-platform/shared-types';
-import { type Teardown, applyVariation } from '@testa-soft/dom';
-import { matchesPageRule, shuffleForVisitor } from '@testa-soft/experiment-core';
 import type { TestaDebugSnapshot } from '../loader/queue.ts';
 import { TRACKER_VERSION } from '../version.ts';
 import * as consentMod from './consent.ts';
 import * as cookies from './cookies.ts';
+import { type Teardown, applyVariation } from '@testa-soft/dom';
 import {
   type CrossDomainExperiment,
   applyInboundCrossDomain,
@@ -49,6 +48,7 @@ import {
   assign,
   recordExposure,
 } from './experiments/traffic.ts';
+import { shuffleForVisitor } from '@testa-soft/experiment-core';
 import { pushLeadToDataLayer } from './legacy/data-layer.ts';
 import { fireEvent, installLegacy, publishLoaded, publishUuid } from './legacy/index.ts';
 import { snapshot as healthSnapshot } from './network/health.ts';
@@ -101,23 +101,6 @@ let _pendingEvents: PendingEvent[] = [];
 let _alreadyHydrated = false;
 /** DOM-watching teardowns from the previous cycle's appliers; disposed at the start of each cycle. */
 let _activeTeardowns: Teardown[] = [];
-
-/**
- * Undo every DOM change applied by the last cycle and disconnect its watchers.
- * Idempotent — the teardowns are dropped once run, so a nav-time teardown
- * followed by the cycle's own does not double-restore.
- */
-function teardownAppliedChanges(): void {
-  const pending = _activeTeardowns;
-  _activeTeardowns = [];
-  for (const t of pending) {
-    try {
-      t();
-    } catch {
-      // A throwing teardown must not strand the rest.
-    }
-  }
-}
 /** Goal controller for the current cycle (click listeners + custom-goal registry). */
 let _goals: GoalController | null = null;
 /** True once preview mode took over — the normal experiment cycle is skipped. */
@@ -568,14 +551,6 @@ function installSpaListener(): void {
   // Idempotent: dispose any prior listener first.
   _spaUninstall?.();
   _spaUninstall = installSpaHandler({
-    // Undebounced: the instant the URL changes, put the DOM back the way the
-    // app rendered it. On a fast soft nav the variant's mutations would
-    // otherwise still be on screen while the new page paints — a variation
-    // showing on a page it was never targeted at. The cycle below re-applies
-    // (re-bucketed, cookie-first) if the NEW url is still the experiment's page.
-    onNavigate: () => {
-      guardedInit('spa_teardown', teardownAppliedChanges);
-    },
     onTransition: () => {
       guardedInit('spa_cycle', () => {
         runExperimentCycle();
@@ -665,11 +640,9 @@ function redirectNavigate(crossDomain: boolean): (url: string) => void {
  * One pass over every experiment in the project config:
  *   1. Build EvalContext from cookies + DOM + cfPrefill.
  *   2. Filter experiments whose audience matches.
- *   3. Page-rule gate — enroll/apply ONLY on the experiment's own page; off-page
- *      an already-assigned visitor keeps their goals armed and nothing else.
- *   4. assign() each match → cookie + variation_id (or excluded).
- *   5. For non-excluded matches: fire `experiment_view`, recordExposure.
- *   6. Apply the variation's non-redirect DOM changes, page-guarded.
+ *   3. assign() each match → cookie + variation_id (or excluded).
+ *   4. For non-excluded matches: fire `experiment_view`, recordExposure.
+ *   5. Variation application (DOM mutations) is deferred to Phase 3.9.
  *
  * Exported for tests + for Phase 3.5's SPA re-entry path.
  */
@@ -677,10 +650,16 @@ export function runExperimentCycle(): void {
   const project = readProject();
   if (!project) return;
 
-  // Tear down DOM watchers + applied changes from the previous cycle (a soft nav
-  // already did this via `teardownAppliedChanges`; a hard load / manual re-entry
-  // has not, and stale MutationObservers would otherwise pile up).
-  teardownAppliedChanges();
+  // Tear down DOM watchers from the previous cycle (SPA route change leaves
+  // stale MutationObservers otherwise).
+  for (const t of _activeTeardowns) {
+    try {
+      t();
+    } catch {
+      // ignore
+    }
+  }
+  _activeTeardowns = [];
 
   // Tear down last cycle's goal listeners; start a fresh controller for this
   // pass (SPA re-entry otherwise leaves stale click handlers attached).
@@ -700,34 +679,14 @@ export function runExperimentCycle(): void {
   // deterministic per visitor (same reasoning as hash bucketing: no SRM, no
   // cross-pageview flip-flop). With mutual exclusions + 100% traffic on N
   // experiments this splits NEW visitors evenly between them.
-  for (const expConfig of shuffleForVisitor(project.experiments, cookies.getUuid() ?? '')) {
+  for (const expConfig of shuffleForVisitor(
+    project.experiments,
+    cookies.getUuid() ?? '',
+  )) {
     if (expConfig.status !== 'active') continue;
 
     if (expConfig.audience !== undefined && !evaluate(expConfig.audience, ctx)) {
       stats.excluded += 1;
-      continue;
-    }
-
-    // Page-rule gate (experiment-core engine step b parity). An experiment
-    // ENROLLS and APPLIES only on its own page — `rules` is what crobot's
-    // experiment URL + url_match_type map to. Without this the cycle bucketed
-    // the visitor on whatever page they happened to land on and applied the
-    // variation's DOM changes site-wide.
-    //
-    // Off-page we do NOT bucket, expose, or mutate — but an ALREADY-assigned
-    // visitor keeps their goals armed, because a goal usually completes on a
-    // different page than the experiment runs on (3.3.3 `belongsToExperiment` +
-    // `checkSession`; the session is NOT bumped off-page, so the attribution
-    // window still expires on its own).
-    if (!matchesPageRule(ctx.page.url, expConfig.rules)) {
-      const prior = cookies.getAssignment(expConfig.experiment_id);
-      if (prior !== null && isSessionActive(expConfig.experiment_id)) {
-        assigned.push({
-          experimentId: expConfig.experiment_id,
-          variationId: prior,
-          goals: expConfig.goals,
-        });
-      }
       continue;
     }
 
@@ -811,13 +770,7 @@ export function runExperimentCycle(): void {
     // Non-redirect changes (css/html/text/attribute/js).
     const nonRedirect = variation.changes.filter((c) => c.type !== 'redirect');
     if (nonRedirect.length > 0) {
-      const teardowns = applyVariation(result.variationId, nonRedirect, {
-        // Re-checked at the LIVE URL on every DOM touch: the appliers'
-        // MutationObservers outlive a soft navigation, so without this a late
-        // match on the NEXT page would still be mutated.
-        guard: () =>
-          typeof location !== 'undefined' && matchesPageRule(location.href, expConfig.rules),
-      });
+      const teardowns = applyVariation(result.variationId, nonRedirect);
       _activeTeardowns.push(...teardowns);
     }
 
@@ -1034,7 +987,14 @@ export function __resetForTests(): void {
   _crossDomainUninstall = null;
   _goals?.teardown();
   _goals = null;
-  teardownAppliedChanges();
+  for (const t of _activeTeardowns) {
+    try {
+      t();
+    } catch {
+      // ignore
+    }
+  }
+  _activeTeardowns = [];
 }
 
 // Audience type re-export for callers that don't want to depend on

@@ -95,4 +95,4 @@ export { applyChangeHtml, stripScriptTags } from './html.ts';
 export { applyHide } from './hide.ts';
 export { applyAppend, applyPrepend } from './insert.ts';
 export { applyMove } from './move.ts';
-export { LATE_MATCH_WINDOW_MS, eachMatching, safeQuerySelectorAll } from './dom.ts';
+export { eachMatching, safeQuerySelectorAll } from './dom.ts';

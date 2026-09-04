@@ -68,29 +68,6 @@ describe('buildTestaConfig', () => {
     expect(paused.experiments[0]?.status).toBe('paused');
   });
 
-  it("emits nav:'rewrite' on the redirect change when the experiment asks for it", () => {
-    const cfg = buildTestaConfig({
-      ...sourceProject,
-      experiments: [{ ...baseExp, nav: 'rewrite' }],
-    });
-    const change = cfg.experiments[0]?.variations[1]?.changes[0];
-    expect(change).toMatchObject({ type: 'redirect', nav: 'rewrite' });
-  });
-
-  it('omits nav entirely for the default redirect delivery (keeps config_hash stable)', () => {
-    const cfg = buildTestaConfig(sourceProject);
-    const change = cfg.experiments[0]?.variations[1]?.changes[0];
-    expect(change).not.toHaveProperty('nav');
-  });
-
-  it('treats an unrecognised nav value as the default redirect', () => {
-    const cfg = buildTestaConfig({
-      ...sourceProject,
-      experiments: [{ ...baseExp, nav: 'teleport' }],
-    });
-    expect(cfg.experiments[0]?.variations[1]?.changes[0]).not.toHaveProperty('nav');
-  });
-
   it('maps a `copy` (HTML/DOM) experiment’s crobot-native changes through', () => {
     const copyExp = {
       ...baseExp,
@@ -146,14 +123,7 @@ describe('buildTestaConfig', () => {
         {
           ...baseExp,
           goals: [
-            {
-              id: 7,
-              title: 'Quiz reached',
-              type: 'page_view',
-              action: '/quiz',
-              match_type: 'contains',
-              rank: 1,
-            },
+            { id: 7, title: 'Quiz reached', type: 'page_view', action: '/quiz', match_type: 'contains', rank: 1 },
             { id: 8, title: 'CTA click', type: 'click', action: '#cta', match_type: null, rank: 2 },
             { id: 9, title: 'Signup', type: 'custom', action: 'signup_done', rank: 3 },
           ],
@@ -161,13 +131,7 @@ describe('buildTestaConfig', () => {
       ],
     });
     expect(cfg.experiments[0]?.goals).toEqual([
-      {
-        goal_id: 7,
-        name: 'Quiz reached',
-        type: 'page_view',
-        action: '/quiz',
-        match_type: 'contains',
-      },
+      { goal_id: 7, name: 'Quiz reached', type: 'page_view', action: '/quiz', match_type: 'contains' },
       { goal_id: 8, name: 'CTA click', type: 'click', action: '#cta' },
       { goal_id: 9, name: 'Signup', type: 'custom', action: 'signup_done' },
     ]);

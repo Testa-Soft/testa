@@ -44,7 +44,7 @@ export {
   applyMove,
   applyPrepend,
 } from './apply/index.ts';
-export { LATE_MATCH_WINDOW_MS, eachMatching, safeQuerySelectorAll } from './apply/dom.ts';
+export { eachMatching, safeQuerySelectorAll } from './apply/dom.ts';
 export type { EachMatchingOptions } from './apply/dom.ts';
 export { stripScriptTags } from './apply/html.ts';
 export {

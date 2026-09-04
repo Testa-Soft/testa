@@ -16,17 +16,10 @@
  *    nearly anything into the admin UI; we should refuse to crash on `.foo[`.
  */
 
-/**
- * How long the late-match observer keeps looking for elements that hadn't
- * rendered when the variation was applied — the budget we give a framework to
- * paint its components. After it lapses, discovery stops: a NEW apply cycle
- * (re-bucketed on navigation, see the pixel lifecycle) is what puts changes
- * back, not a watcher lingering for the rest of the session.
- */
-export const LATE_MATCH_WINDOW_MS = 2_000;
+const MUTATION_OBSERVER_TIMEOUT_MS = 10_000;
 
 export interface EachMatchingOptions {
-  /** Observer lifetime (ms) for late-rendered matches. Default 2s. */
+  /** Observer lifetime (ms) for late-rendered matches. Default 10s. */
   timeoutMs?: number;
   /**
    * Checked immediately before EVERY application (existing and late nodes).
@@ -36,13 +29,13 @@ export interface EachMatchingOptions {
   guard?: () => boolean;
 }
 
-/** Run `fn` on every current and future match for `selector`, capped by timeout (2s). */
+/** Run `fn` on every current and future match for `selector`, capped by timeout. */
 export function eachMatching(
   selector: string,
   fn: (el: Element) => void,
   opts: EachMatchingOptions = {},
 ): () => void {
-  const timeoutMs = opts.timeoutMs ?? LATE_MATCH_WINDOW_MS;
+  const timeoutMs = opts.timeoutMs ?? MUTATION_OBSERVER_TIMEOUT_MS;
   const guard = opts.guard;
   const seen = new WeakSet<Element>();
 

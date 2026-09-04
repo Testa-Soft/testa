@@ -612,42 +612,6 @@ need; wire up both if you want the exposure in two places.
 
 ---
 
-## Split-URL delivery: redirect or rewrite
-
-A split-URL variant is delivered one of two ways, set per experiment by the
-`nav` field on its redirect change:
-
-| `nav` | What the visitor gets | URL | Round trips |
-| --- | --- | --- | --- |
-| `redirect` (default) | A `307` to the variant URL | changes | 2 |
-| `rewrite` | The variant route's content, served at the URL they asked for | unchanged | 1 |
-
-A rewrite cannot flicker: the variant *is* the first response. On Vercel the
-target can be a prerendered route served straight from the edge cache, and the
-control URL keeps its analytics identity because the address bar never moves.
-It's the right choice when the customer can author the variant as a real route.
-
-Two conditions, both hard:
-
-1. **The variant route must exist.** A rewrite to a missing route serves a 404
-   at the control URL — and unlike a redirect there's no chain to inspect.
-2. **The experiment must run `decisions: 'server'`.** No client surface can serve
-   another route in place, so the engine refuses to deliver a rewrite off the
-   server path — and deliberately does *not* downgrade it to a redirect, which
-   would move a visitor the experiment meant to keep still. Under `hybrid`, a
-   cold instance hands the pageview to the client, which would then serve
-   control to everyone it touched. That's an SRM, not a flicker.
-
-Cross-origin rewrite targets are refused (the proxy serves the control page
-instead): rewriting to another host would turn the deployment into a reverse
-proxy for it, which is never what a split-URL test asked for.
-
-Prefetches are warmed with the rewrite too — a rewrite lands at the control URL,
-so an un-warmed prefetch would cache the *control* payload under exactly the key
-the click reads.
-
----
-
 ## Targeting (audience rules)
 
 Targeting is **session-scoped and first-touch**, matching crobot 3.3.3. When a
