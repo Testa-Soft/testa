@@ -1,6 +1,6 @@
 {
   "name": "@testa-soft/experiment-core",
-  "version": "1.4.0-dev.0",
+  "version": "1.4.0",
   "type": "module",
   "description": "Host-agnostic experiment decision core: deterministic bucketing, assignment, split-URL redirect resolution.",
   "license": "UNLICENSED",
@@ -18,7 +18,7 @@
   ],
   "publishConfig": {
     "access": "public",
-    "tag": "dev",
+    "tag": "latest",
     "main": "./dist/index.cjs",
     "module": "./dist/index.js",
     "types": "./dist/index.d.ts",
