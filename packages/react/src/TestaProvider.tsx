@@ -81,6 +81,17 @@ export interface TestaProviderProps {
    * manage the shield yourself (e.g. an `index.html` snippet / `<TestaShield/>`).
    */
   shield?: boolean | ShieldOptions;
+  /**
+   * TEMPORARY, for a site cutting over from the legacy crobot pixel while
+   * experiments are LIVE: adopt a returning visitor's legacy 3.x cookies into
+   * the packed `_testa_exp` cookie before this engine decides anything.
+   *
+   * Set it to the SAME value as the proxy's `legacyCookiesEnabled`. The client
+   * engine owns any pageview the proxy passed through — a cold instance, or
+   * `decisions: 'client'` — so leaving it off here re-buckets exactly the
+   * visitors the proxy would have carried over.
+   */
+  legacyCookiesEnabled?: boolean;
 }
 
 export function TestaProvider(props: TestaProviderProps): JSX.Element {
@@ -162,6 +173,7 @@ export function TestaProvider(props: TestaProviderProps): JSX.Element {
         ...(props.previewApiUrl ? { previewApiUrl: props.previewApiUrl } : {}),
         ...(props.tracking !== undefined ? { tracking: props.tracking } : {}),
         ...(props.trackingHost ? { trackingHost: props.trackingHost } : {}),
+        ...(props.legacyCookiesEnabled ? { legacyCookiesEnabled: true } : {}),
       });
       if (disposed) {
         disposeTeardowns(result.teardowns);

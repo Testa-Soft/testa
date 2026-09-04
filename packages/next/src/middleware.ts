@@ -13,13 +13,20 @@
  *   export const config = { matcher: ['/((?!_next/|api/|favicon.ico|sitemap.xml|robots.txt).*)'] }
  */
 
-import { ASSIGNMENT_COOKIE, UUID_BACKUP_COOKIE, UUID_COOKIE } from '@testa-soft/experiment-core';
 import {
+  ASSIGNMENT_COOKIE,
+  SESSION_LENGTH_SEC,
+  UUID_BACKUP_COOKIE,
+  UUID_COOKIE,
+} from '@testa-soft/experiment-core';
+import {
+  type LegacyMigrationResult,
   type UrlTraceEvent,
   type VariationAppliedEvent,
   beginUrlTrace,
   endUrlTrace,
   hasPendingDomChange,
+  maybeMigrateLegacyCookies,
   runExperiments,
 } from '@testa-soft/experiment-core';
 import { NextRequest, NextResponse } from 'next/server.js';
@@ -74,6 +81,28 @@ export interface TestaProxyOptions extends ConfigSource {
    * attributed. Default 30 min (`SESSION_LENGTH_SEC`).
    */
   sessionLengthSec?: number;
+  /**
+   * TEMPORARY, for a site cutting over from the legacy crobot pixel while
+   * experiments are LIVE. Before deciding anything, adopt a returning visitor's
+   * legacy 3.x cookies (`_testa_exp_<id>`, `_testa_excl_<id>`, `_testa_ses_<id>`)
+   * into the packed `_testa_exp` cookie this SDK uses.
+   *
+   * Without it, a visitor the legacy script already assigned looks brand new
+   * here and is re-bucketed. 3.x allocated with `Math.random()`, so that re-roll
+   * is a coin flip rather than a stable rehash: about half of all returning
+   * visitors change variation mid-test, splitting their own conversions across
+   * both arms.
+   *
+   * Leave it OFF for a project that has never run the legacy pixel — there is
+   * nothing to adopt, and the flag only makes this SDK read cookies that will
+   * never be there.
+   *
+   * TURN IT OFF once the experiments that were live during the cutover have
+   * ended. It stops doing anything on its own at that point (it only looks at
+   * experiments in the current config), so the flag is then dead weight rather
+   * than a risk — but removing it is what lets the code go too.
+   */
+  legacyCookiesEnabled?: boolean;
   /**
    * Explicit cookie `Domain` for cross-subdomain tracking (e.g. `.acme.com`).
    * Wins over `discoverRootDomain`.
@@ -336,10 +365,32 @@ export function createTestaProxy(options: TestaProxyOptions): TestaProxy {
     // costs a visible flash of the control page. `<TestaGuard/>` reads this
     // header, and `<TestaProvider/>` reveals once it has decided.
     if (!config) {
+      // TEMPORARY (legacy cutover) — migrate even here, WITHOUT a config. The
+      // visitor's own cookies say which experiments they were in, so a returning
+      // 3.x visitor assigned to experiment 103 variation 1 keeps variation 1 on
+      // every later visit, including the ones a cold instance serves. The client
+      // engine decides this pageview and reads the cookie we set on this very
+      // response, so the hand-off is seamless.
+      //
+      // Speculative loads are excluded: a prefetch must never commit state, and
+      // this writes a cookie. Non-navigations are excluded for the same reason
+      // the guardrail below excludes them — they are not a pageview.
+      const coldMigrated =
+        !isPrefetchRequest(req) && req.method !== 'HEAD' && isNavigationRequest(req.headers)
+          ? maybeMigrateLegacyCookies(options.legacyCookiesEnabled, migrationCtx(options), store)
+          : NO_MIGRATION;
+
       const requestHeaders = new Headers(req.headers);
       requestHeaders.set(SHIELD_HEADER, '1');
       const res = await resolveDownstream(options.handler, req, requestHeaders, event);
-      emitDebug?.(res, { url: publicUrl.href, urlSource, bypass: 'no-config', shield: true });
+      store.applyTo(res.cookies);
+      emitDebug?.(res, {
+        url: publicUrl.href,
+        urlSource,
+        bypass: 'no-config',
+        shield: true,
+        ...migratedNote(coldMigrated),
+      });
       return res;
     }
 
@@ -410,6 +461,18 @@ export function createTestaProxy(options: TestaProxyOptions): TestaProxy {
     }
 
     const visitorId = ensureVisitorId(store);
+
+    // TEMPORARY (legacy cutover) — carry a returning 3.x visitor's assignment
+    // into the packed cookie BEFORE the engine reads it, so `assign()`'s
+    // cookie-first path finds it and never re-buckets them. No-op unless the
+    // customer opted in, and inert once the legacy experiments leave the config.
+    // See experiment-core/legacy-migration.ts.
+    const migrated = maybeMigrateLegacyCookies(
+      options.legacyCookiesEnabled,
+      migrationCtx(options),
+      store,
+    );
+
     // Trace every URL rewrite inside the decision (see experiment-core/trace.ts).
     // Bracketing is safe because `runExperiments` is fully synchronous; the
     // `finally` guarantees the buffer is released even if the engine throws.
@@ -470,6 +533,7 @@ export function createTestaProxy(options: TestaProxyOptions): TestaProxy {
         urlTrace,
         ...refererParamGap(req, publicUrl),
         ...orphanNote(cookieState),
+        ...migratedNote(migrated),
       };
       emitDebug?.(res, trace);
       beacon(trace, event);
@@ -504,6 +568,7 @@ export function createTestaProxy(options: TestaProxyOptions): TestaProxy {
         urlTrace,
         ...refererParamGap(req, publicUrl),
         ...orphanNote(cookieState),
+        ...migratedNote(migrated),
       };
       emitDebug?.(res, trace);
       beacon(trace, event);
@@ -547,6 +612,7 @@ export function createTestaProxy(options: TestaProxyOptions): TestaProxy {
       urlTrace,
       ...refererParamGap(req, publicUrl),
       ...orphanNote(cookieState),
+      ...migratedNote(migrated),
     };
     emitDebug?.(res, trace);
     beacon(trace, event);
@@ -625,6 +691,34 @@ function refererParamGap(
 function orphanNote(state: VisitorCookieState): { cookieLoss?: number } {
   if (state.hadVisitorId || state.otherCookies === 0) return {};
   return { cookieLoss: state.otherCookies };
+}
+
+/**
+ * TEMPORARY (legacy cutover) — surface which experiments adopted 3.x state on
+ * this request, and nothing at all when none did. Watching this go quiet is how
+ * you know the cutover is finished and `legacyCookiesEnabled` can come off.
+ */
+/** Shared "nothing happened" result, so the cold path needs no null handling. */
+const NO_MIGRATION: LegacyMigrationResult = { assignments: [], verdicts: [] };
+
+/**
+ * TEMPORARY (legacy cutover) — the same context both call sites pass. They are
+ * identical by design: which experiments get migrated comes from the VISITOR's
+ * cookies, never from whether this instance happens to hold a config.
+ */
+function migrationCtx(options: TestaProxyOptions): {
+  nowMs: number;
+  sessionLengthSec: number;
+} {
+  return {
+    nowMs: Date.now(),
+    sessionLengthSec: options.sessionLengthSec ?? SESSION_LENGTH_SEC,
+  };
+}
+
+function migratedNote(result: LegacyMigrationResult): { legacyMigrated?: number[] } {
+  const ids = [...result.assignments, ...result.verdicts];
+  return ids.length > 0 ? { legacyMigrated: ids } : {};
 }
 
 /** Rename one optional key, dropping it when absent. Keeps the call sites flat. */

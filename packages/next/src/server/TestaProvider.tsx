@@ -46,6 +46,19 @@ interface CommonProps {
    * at a different scope than the proxy's.
    */
   cookieDomain?: string;
+  /**
+   * TEMPORARY, for a site cutting over from the legacy crobot pixel while
+   * experiments are LIVE: adopt a returning visitor's legacy 3.x cookies
+   * (`_testa_exp_<id>`, `_testa_excl_<id>`, `_testa_ses_<id>`) into the packed
+   * `_testa_exp` cookie before deciding anything.
+   *
+   * Pass the SAME value as the proxy's `legacyCookiesEnabled`. The client owns
+   * every pageview the proxy passed through (a cold instance, `decisions:
+   * 'client'`), so leaving it off here re-buckets exactly the visitors the
+   * proxy would have carried over. See
+   * `experiment-core/legacy-migration.ts` for what it reads and when it stops.
+   */
+  legacyCookiesEnabled?: boolean;
 }
 
 /**
@@ -79,6 +92,7 @@ export async function TestaProvider(props: TestaProviderProps): Promise<JSX.Elem
       {...(props.trackingHost ? { trackingHost: props.trackingHost } : {})}
       {...(props.secureCookies !== undefined ? { secureCookies: props.secureCookies } : {})}
       {...(props.cookieDomain ? { cookieDomain: props.cookieDomain } : {})}
+      {...(props.legacyCookiesEnabled ? { legacyCookiesEnabled: true } : {})}
     />
   );
 }

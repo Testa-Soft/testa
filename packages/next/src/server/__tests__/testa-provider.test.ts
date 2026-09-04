@@ -29,6 +29,19 @@ describe('TestaProvider (server component)', () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
+  it('forwards legacyCookiesEnabled to the client, which owns the cold/client-mode pageview', async () => {
+    // The proxy cannot migrate when it has no config (decisions: 'client', or a
+    // cold hybrid instance) — the client engine does. A dropped prop here would
+    // silently re-bucket exactly those visitors, with every proxy test still green.
+    const withFlag = await TestaProvider({ config: CONFIG, legacyCookiesEnabled: true });
+    const without = await TestaProvider({ config: CONFIG });
+
+    expect((withFlag as { props: Record<string, unknown> }).props.legacyCookiesEnabled).toBe(true);
+    expect((without as { props: Record<string, unknown> }).props).not.toHaveProperty(
+      'legacyCookiesEnabled',
+    );
+  });
+
   it('fetches by projectId and renders with the fetched config', async () => {
     const fetchSpy = vi.fn(
       async () => ({ ok: true, json: async () => CONFIG }) as unknown as Response,

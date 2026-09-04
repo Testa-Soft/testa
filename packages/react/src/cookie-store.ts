@@ -221,6 +221,38 @@ export class DocumentCookieStore implements CookieStore {
     return held.value;
   }
 
+  /**
+   * Names visible to this store: `document.cookie` plus both Web Storage
+   * mirrors. All three are consulted because the legacy pixel wrote to cookies
+   * AND localStorage, so a visitor whose cookie jar was cleared (ITP, a consent
+   * tool) can still have their assignment recovered from the mirror.
+   */
+  names(): string[] {
+    const found = new Set<string>();
+    if (!hasDocument()) return [];
+
+    for (const pair of document.cookie.split(';')) {
+      const name = pair.split('=')[0]?.trim();
+      if (name) found.add(name);
+    }
+    if (this.mirror) {
+      for (const area of ['localStorage', 'sessionStorage'] as const) {
+        try {
+          const storage = globalThis[area];
+          if (!storage) continue;
+          for (let i = 0; i < storage.length; i++) {
+            const key = storage.key(i);
+            if (key) found.add(key);
+          }
+        } catch {
+          // storage disabled / partitioned — the cookie names still stand
+        }
+      }
+      for (const key of memory.keys()) found.add(key);
+    }
+    return [...found];
+  }
+
   private readMirror(name: string): Held | undefined {
     return (
       live(memory.get(name)) ??

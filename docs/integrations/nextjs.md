@@ -687,6 +687,7 @@ Returns a Next.js proxy/middleware function. Import from `@testa-soft/next`.
 | `secureCookies`      | `boolean`                                        | `true`                           | Emit `Secure` cookies. `false` for local http dev.                                   |
 | `cookieDomain`       | `string`                                         | —                                | Explicit cookie `Domain` for cross-subdomain tracking (e.g. `.example.com`).         |
 | `discoverRootDomain` | `boolean`                                        | `false`                          | Auto-derive the registrable domain for cookies.                                      |
+| `legacyCookiesEnabled` | `boolean`                                      | `false`                          | **Temporary, cutover only.** Adopt a returning visitor's legacy 3.x pixel cookies (`_testa_exp_<id>` etc.) before deciding, so a live experiment doesn't re-bucket them. Set the same value on `<TestaProvider>`. |
 | `tracking`           | `boolean`                                        | `true`                           | Emit exposures so results populate. `false` for redirects-only, or if a pixel owns tracking. |
 | `trackingHost`       | `string`                                         | `https://new.testa-soft.tech`    | Host for exposure tracking (`{trackingHost}/api/leads`). Also via `TESTA_TRACKING_HOST`. |
 | `onVariationAssigned`| `(event, ctx) => void \| Promise<void>`         | —                                | **Server-side** hook per assignment. `ctx.waitUntil(promise)` keeps async work alive past the response — never delays it. Guard on `event.firstAssignment` for once-per-visitor. |
@@ -725,6 +726,7 @@ applier. Fails open (renders nothing) when the config can't be resolved.
 | `revalidateSec` | `number`        | `30`                             | Next data-cache revalidation window for the config fetch.             |
 | `previewApiUrl` | `string`        | —                                | Backend base URL; enables `?testa_preview`.                           |
 | `trackingHost`  | `string`        | `https://new.testa-soft.tech`    | Backend base URL for goal conversions.                                |
+| `legacyCookiesEnabled` | `boolean` | `false`                          | **Temporary, cutover only.** Must match the proxy's value.            |
 
 This is the **only** `<TestaProvider>` to mount in a Next.js app. (The exports
 map also contains `./_internal/experiments` — the private client half of these

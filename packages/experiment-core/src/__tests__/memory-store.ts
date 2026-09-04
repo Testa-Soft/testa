@@ -14,6 +14,7 @@ export function memoryStore(initial: Record<string, string> = {}): CookieStore &
     set: (name, value) => {
       jar.set(name, value);
     },
+    names: () => [...jar.keys()],
     dump: () => Object.fromEntries(jar),
   };
 }

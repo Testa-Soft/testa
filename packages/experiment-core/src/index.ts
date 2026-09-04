@@ -71,6 +71,16 @@ export {
   isAssigned,
   isFresh,
 } from './session.ts';
+
+// TEMPORARY — 3.x → v2 cookie adoption for live cutovers. Self-terminating and
+// self-contained; see the removal note in legacy-migration.ts.
+export {
+  discoverLegacyExperimentIds,
+  maybeMigrateLegacyCookies,
+  migrateLegacyCookies,
+  LEGACY_SESSION_LENGTH_SEC,
+} from './legacy-migration.ts';
+export type { LegacyMigrationContext, LegacyMigrationResult } from './legacy-migration.ts';
 export type {
   EngineContext,
   EngineResult,

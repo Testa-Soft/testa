@@ -12,6 +12,21 @@ import { PROD_PROJECT_ID, demoConfig, useProdConfig } from './testa.config.ts';
  */
 const decisions = process.env.TESTA_DEMO_DECISIONS as 'hybrid' | 'server' | 'client' | undefined;
 
+/**
+ * `TESTA_DEMO_LEGACY=1` — adopt legacy 3.x pixel cookies, the cutover flag.
+ *
+ * To exercise it, give yourself a legacy assignment in the browser console and
+ * reload `/pricing`:
+ *
+ *   document.cookie = '_testa_exp_101=2; path=/'   // variant → expect a 307
+ *   document.cookie = '_testa_exp_101=1; path=/'   // control → expect no redirect
+ *
+ * Pair it with `TESTA_DEMO_DECISIONS=client` to prove the COLD path: the proxy
+ * then has no config at all and still has to keep you on your legacy variation,
+ * reading the experiment ids out of your own cookie jar.
+ */
+const legacyCookiesEnabled = process.env.TESTA_DEMO_LEGACY === '1';
+
 export const middleware = createTestaProxy({
   ...(decisions ? { decisions } : {}),
   // Inline config → zero infra (no collector/crobot needed to run the demo).
@@ -20,6 +35,7 @@ export const middleware = createTestaProxy({
   // `TESTA_DEMO_PROD=1` switches to the REAL config API (see testa.config.ts).
   projectId: useProdConfig ? PROD_PROJECT_ID : '12345',
   ...(useProdConfig ? {} : { config: demoConfig }),
+  ...(legacyCookiesEnabled ? { legacyCookiesEnabled: true } : {}),
   tracking: false, // no local /api/leads in the zero-infra demo
   secureCookies: false, // local http dev
   // SERVER-side event hook — logs to the dev-server console (your terminal),

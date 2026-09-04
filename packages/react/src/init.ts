@@ -29,9 +29,11 @@ import {
 import {
   ASSIGNMENT_COOKIE,
   type CookieStore,
+  SESSION_LENGTH_SEC,
   UUID_COOKIE,
   UUID_TTL_SEC,
   isCrawlerUserAgent,
+  maybeMigrateLegacyCookies,
   resolveExposures,
 } from '@testa-soft/experiment-core';
 import { type VariationAppliedEvent, runExperiments } from '@testa-soft/experiment-core';
@@ -117,6 +119,22 @@ export interface InitOptions {
    * came over the wire.
    */
   allowAssign?: boolean;
+  /**
+   * TEMPORARY, for a site cutting over from the legacy crobot pixel while
+   * experiments are LIVE: adopt a returning visitor's legacy 3.x cookies into
+   * the packed `_testa_exp` cookie before anything reads it. Mirrors the proxy's
+   * `legacyCookiesEnabled` and must be set to the SAME value — a pageview the
+   * proxy passed through (cold instance, `decisions: 'client'`) is decided here,
+   * and would otherwise re-bucket the visitor the proxy would have carried over.
+   *
+   * This side also reaches the legacy localStorage MIRROR, which the server
+   * cannot see: 3.x wrote every cookie to both, so a visitor whose cookie jar
+   * was cleared can still be recovered here.
+   *
+   * See `experiment-core/legacy-migration.ts` for what it reads and when it
+   * stops doing anything.
+   */
+  legacyCookiesEnabled?: boolean;
 }
 
 export interface InitResult {
@@ -183,6 +201,17 @@ export async function initTesta(opts: InitOptions): Promise<InitResult> {
   if (!visitorId) {
     return { applied: [], teardowns: [], redirected: false };
   }
+
+  // TEMPORARY (legacy cutover) — carry a returning 3.x visitor's assignment into
+  // the packed cookie before ANYTHING reads it. Deliberately outside the
+  // `decide` gate below: this is not a decision, it is repairing storage, and a
+  // cookie-first soft-nav cycle needs the migrated assignment just as much as a
+  // deciding one does. See experiment-core/legacy-migration.ts.
+  maybeMigrateLegacyCookies(
+    opts.legacyCookiesEnabled,
+    { nowMs: now, sessionLengthSec: SESSION_LENGTH_SEC },
+    store,
+  );
 
   // ── Decide, unless the caller withheld permission ───────────────────────
   // A cookie-first cycle skips the engine entirely: nothing is bucketed and no

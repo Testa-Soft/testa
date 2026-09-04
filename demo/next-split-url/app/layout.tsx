@@ -5,6 +5,9 @@ import { PROD_PROJECT_ID, demoConfig, useProdConfig } from '../testa.config.ts';
 import { ReloadSentinel } from './reload-sentinel.tsx';
 import { TestaDebug } from './testa-debug.tsx';
 
+/** Mirrors the proxy's `TESTA_DEMO_LEGACY` — see middleware.ts. */
+const legacyCookiesEnabled = process.env.TESTA_DEMO_LEGACY === '1';
+
 export const metadata = {
   title: 'Testa split-URL + HTML demo',
   description: '@testa-soft/next split-URL redirects + client HTML/DOM experiments',
@@ -61,13 +64,19 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             so it must be configured the same way, or the demo would report
             enrollments into the real project over http-rejected cookies. */}
         {useProdConfig ? (
-          <TestaProvider projectId={PROD_PROJECT_ID} tracking={false} secureCookies={false} />
+          <TestaProvider
+            projectId={PROD_PROJECT_ID}
+            tracking={false}
+            secureCookies={false}
+            legacyCookiesEnabled={legacyCookiesEnabled}
+          />
         ) : (
           <TestaProvider
             config={demoConfig}
             previewApiUrl="http://localhost:3200"
             tracking={false}
             secureCookies={false}
+            legacyCookiesEnabled={legacyCookiesEnabled}
           />
         )}
         <TestaDebug />

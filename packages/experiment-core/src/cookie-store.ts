@@ -26,6 +26,15 @@ export interface CookieStore {
   get(name: string): string | null;
   /** Set the cookie value. Must be reflected by subsequent `get(name)` calls. */
   set(name: string, value: string, opts: CookieSetOptions): void;
+  /**
+   * Names of the values this store can see, when it can enumerate them.
+   *
+   * Optional because enumeration is a strictly-more-than-`get` capability that
+   * not every jar has, and nothing in the decision core needs it: the engine
+   * always knows which cookie it wants. The legacy cutover is the exception —
+   * it has to find state belonging to experiments no config may mention.
+   */
+  names?(): string[];
 }
 
 // ─── shared cookie names + TTLs (kept in parity with the pixel's cookies.ts) ──

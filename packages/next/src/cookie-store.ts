@@ -17,6 +17,11 @@ import type { CookieSetOptions, CookieStore } from '@testa-soft/experiment-core'
 
 export interface ReadableCookies {
   get(name: string): { value: string } | undefined;
+  /**
+   * Every cookie on the request. `NextRequest.cookies` provides this; it is
+   * optional here only so a test fake can supply `get` alone.
+   */
+  getAll?(): { name: string }[];
 }
 
 export interface WritableCookies {
@@ -66,6 +71,15 @@ export class NextCookieStore implements CookieStore {
   /** True when any cookie is queued to be written. */
   hasWrites(): boolean {
     return this.pending.size > 0;
+  }
+
+  /**
+   * Names of the cookies the request carried. Used by the legacy cutover to
+   * find a returning visitor's per-experiment cookies when there is no config
+   * to enumerate experiments from. Empty when the jar cannot enumerate.
+   */
+  names(): string[] {
+    return this.reqCookies.getAll?.().map((c) => c.name) ?? [];
   }
 
   /** Flush buffered cookies onto a response's cookie jar. */
