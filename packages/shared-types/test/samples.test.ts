@@ -87,4 +87,36 @@ describe('modeled samples match the shared types', () => {
     },
     { timeout: 120_000 },
   );
+
+  test(
+    'docs/reference/report-examples.json points at every modeled sample, each compiling as its declared type',
+    () => {
+      const index = JSON.parse(
+        readFileSync(resolve(SAMPLES_DIR, '../report-examples.json'), 'utf8'),
+      ) as {
+        samples: { file: string; type: string }[];
+      };
+      const listed = index.samples.map((e) => e.file).sort();
+      const onDisk = samples.map(({ set, file }) => `samples/${set}/modeled/${file}`).sort();
+      expect(listed).toEqual(onDisk);
+      const dir = mkdtempSync(join(tmpdir(), 'shared-types-report-examples-'));
+      try {
+        const files = index.samples.map((entry, i) => {
+          const out = join(dir, `entry_${i}.ts`);
+          writeFileSync(
+            out,
+            [
+              `import type { ${entry.type} } from '${TYPES_ENTRY}';`,
+              `export const sample: ${entry.type} = ${readFileSync(resolve(SAMPLES_DIR, '..', entry.file), 'utf8')};`,
+            ].join('\n'),
+          );
+          return out;
+        });
+        expect(compileErrors(files)).toEqual([]);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    },
+    { timeout: 120_000 },
+  );
 });
