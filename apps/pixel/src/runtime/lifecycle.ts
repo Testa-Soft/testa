@@ -30,6 +30,7 @@ import { type Teardown, applyVariation } from '@testa-soft/dom';
 import { matchesPageRule, shuffleForVisitor } from '@testa-soft/experiment-core';
 import type { TestaDebugSnapshot } from '../loader/queue.ts';
 import { TRACKER_VERSION } from '../version.ts';
+import { entryFor, readUtms, stripClickIds } from './attribution.ts';
 import * as consentMod from './consent.ts';
 import * as cookies from './cookies.ts';
 import {
@@ -61,7 +62,7 @@ import { maybeEnterPreviewMode } from './preview.ts';
 import { readBreadcrumbs as readRedirectBreadcrumbs } from './redirect/breadcrumbs.ts';
 import { evaluateAndApply as evaluateRedirect } from './redirect/index.ts';
 import { type EvalContext, evaluate } from './rules/audience.ts';
-import { SESSION_ID_COOKIE, getOrCreateSessionId } from './session.ts';
+import { SESSION_ID_COOKIE, getOrCreateSessionId, readVisitNumber } from './session.ts';
 import { installSpaHandler } from './spa.ts';
 import { readValue } from './storage.ts';
 import { detectBrowser, detectOs } from './ua.ts';
@@ -506,7 +507,14 @@ function buildPixelEvent(
   const consentState = consentMod.consent.getState();
 
   const { lifted, rest } = liftReservedProps(props);
-  const utms = readUtms();
+  const search = typeof location !== 'undefined' ? location.search : '';
+  const utms = readUtms(search);
+  const v2Pipeline = v2ExperimentIds(project).size > 0;
+  // Session-entry attribution: captured on the browsing session's first page
+  // (first event), stamped on experiment_view only (PRD §5.3).
+  const entry = entryFor(sessionId);
+  const visitNumber = readVisitNumber();
+  const href = typeof location !== 'undefined' ? location.href : '';
 
   const event: PixelEvent = {
     event_id: uuidv7(ts),
@@ -515,7 +523,8 @@ function buildPixelEvent(
     project_id: project?.project_id ?? 0,
     visitor_id: visitorId,
     session_id: sessionId,
-    url: typeof location !== 'undefined' ? location.href : '',
+    // Click-id values never leave the browser on the v2 pipeline (type only).
+    url: v2Pipeline ? stripClickIds(href) : href,
     consent_state: consentState,
     tracker_version: TRACKER_VERSION,
     viewport_w: typeof window !== 'undefined' ? window.innerWidth || 0 : 0,
@@ -524,7 +533,9 @@ function buildPixelEvent(
     screen_h: typeof screen !== 'undefined' ? screen.height || 0 : 0,
     exp,
     // PRD-006: in_experiment = notEmpty(exp), for projects on the v2 pipeline.
-    ...(v2ExperimentIds().size > 0 ? { in_experiment: exp.length > 0 ? 1 : 0 } : {}),
+    ...(v2Pipeline ? { in_experiment: exp.length > 0 ? 1 : 0 } : {}),
+    ...(visitNumber > 0 ? { visit_number: visitNumber } : {}),
+    ...(name === 'experiment_view' ? entry : {}),
     ...(typeof document !== 'undefined' && document.referrer
       ? { referrer: document.referrer }
       : {}),
@@ -571,19 +582,6 @@ function liftReservedProps(props: Record<string, unknown>): {
     }
   }
   return { lifted, rest };
-}
-
-function readUtms(): Pick<PixelEvent, 'utm_source' | 'utm_medium' | 'utm_campaign'> {
-  if (typeof location === 'undefined' || !location.search) return {};
-  const params = new URLSearchParams(location.search);
-  const out: { utm_source?: string; utm_medium?: string; utm_campaign?: string } = {};
-  const s = params.get('utm_source');
-  const m = params.get('utm_medium');
-  const c = params.get('utm_campaign');
-  if (s) out.utm_source = s;
-  if (m) out.utm_medium = m;
-  if (c) out.utm_campaign = c;
-  return out;
 }
 
 /** Coerce arbitrary prop values to PixelEvent['props'] shape (string/number/boolean/null). */

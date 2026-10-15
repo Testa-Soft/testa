@@ -16,6 +16,30 @@ import { SECONDS_PER_HOUR, readValue, writeValue } from './storage.ts';
 export const SESSION_ID_COOKIE = '_testa_sid';
 const SESSION_TTL_SEC = SECONDS_PER_HOUR / 2;
 
+/** Browsing-session count on the site (PRD-006 §5.3), informational only. */
+export const VISIT_NUMBER_COOKIE = '_testa_vn';
+const VISIT_NUMBER_TTL_SEC = 400 * 24 * SECONDS_PER_HOUR;
+
+/** Current visit number (0 when unknown / storage blocked). */
+export function readVisitNumber(): number {
+  try {
+    const n = Number(readValue(VISIT_NUMBER_COOKIE));
+    return Number.isSafeInteger(n) && n > 0 ? n : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function bumpVisitNumber(): void {
+  try {
+    writeValue(VISIT_NUMBER_COOKIE, String(readVisitNumber() + 1), {
+      maxAgeSec: VISIT_NUMBER_TTL_SEC,
+    });
+  } catch {
+    // Informational only; never break session minting.
+  }
+}
+
 /**
  * Read the current session id, or mint one if absent. Always refreshes the
  * cookie's Max-Age so the session keeps sliding forward while the visitor
@@ -29,6 +53,9 @@ export function getOrCreateSessionId(): string {
   }
   const fresh = generateSessionId();
   writeValue(SESSION_ID_COOKIE, fresh, { maxAgeSec: SESSION_TTL_SEC });
+  // A new browsing session starts: `_testa_vn` += 1 (not used for new vs
+  // returning — that is the experiment sessionIdx, PRD §1.3a).
+  bumpVisitNumber();
   return fresh;
 }
 
