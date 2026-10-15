@@ -25,14 +25,23 @@
     "./consent": {
       "types": "./src/consent.ts",
       "default": "./src/consent.ts"
+    },
+    "./sync": {
+      "types": "./src/sync.ts",
+      "default": "./src/sync.ts"
+    },
+    "./report": {
+      "types": "./src/report.ts",
+      "default": "./src/report.ts"
     }
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "echo \"shared-types is type-only, no tests\" && exit 0",
+    "test": "bun test",
     "clean": "rm -rf .turbo *.tsbuildinfo"
   },
   "devDependencies": {
+    "@types/bun": "1.1.13",
     "typescript": "5.6.3"
   }
 }

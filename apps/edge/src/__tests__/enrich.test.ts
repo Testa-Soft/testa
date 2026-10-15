@@ -26,6 +26,9 @@ function makeEvent(overrides: Partial<PixelEvent> = {}): PixelEvent {
     tracker_version: '4.0.0',
     viewport_w: 1920,
     viewport_h: 1080,
+    screen_w: 1920,
+    screen_h: 1080,
+    exp: [],
     ...overrides,
   };
 }

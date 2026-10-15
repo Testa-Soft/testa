@@ -45,6 +45,7 @@ export function enrich(inputs: EnrichInputs, ev: PixelEvent): EnrichedEvent {
   const country = (countryHeader ?? '').toUpperCase() || 'XX';
 
   const browser = result.browser.name ?? '';
+  const browserVersion = result.browser.version ?? '';
   const osName = result.os.name ?? '';
   const osVersion = result.os.version ?? '';
   const os = osName ? (osVersion ? `${osName} ${osVersion}` : osName) : '';
@@ -59,8 +60,25 @@ export function enrich(inputs: EnrichInputs, ev: PixelEvent): EnrichedEvent {
     device_type: mapDeviceType(result.device.type, userAgent),
     browser,
     os,
+    // TODO 5.3: real derivation (OS/browser family vocab, channel rules, same-site check).
+    os_name: osName,
+    os_version: osVersion,
+    browser_name: browser,
+    browser_version: browserVersion,
+    referrer_domain: referrerDomain(ev.entry_referrer ?? ev.referrer ?? ''),
+    channel: 'Direct',
     is_bot: 0,
   };
+}
+
+/** Host of the referrer, `www.` stripped; `(direct)` when empty or unparseable. */
+function referrerDomain(referrer: string): string {
+  if (!referrer) return '(direct)';
+  try {
+    return new URL(referrer).hostname.replace(/^www\./, '') || '(direct)';
+  } catch {
+    return '(direct)';
+  }
 }
 
 /**

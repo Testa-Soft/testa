@@ -450,6 +450,10 @@ function buildPixelEvent(name: string, props: Record<string, unknown>, ts: numbe
     tracker_version: TRACKER_VERSION,
     viewport_w: typeof window !== 'undefined' ? window.innerWidth || 0 : 0,
     viewport_h: typeof window !== 'undefined' ? window.innerHeight || 0 : 0,
+    screen_w: typeof screen !== 'undefined' ? screen.width || 0 : 0,
+    screen_h: typeof screen !== 'undefined' ? screen.height || 0 : 0,
+    // TODO 5.5/5.6: stamp the active experiment sessions from the packed cookie.
+    exp: [],
     ...(typeof document !== 'undefined' && document.referrer
       ? { referrer: document.referrer }
       : {}),
