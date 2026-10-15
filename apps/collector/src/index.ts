@@ -3,7 +3,8 @@
  *
  * Routes:
  *   POST /_ingest                 HMAC-signed batch from edge worker
- *   GET  /api/v1/metrics/:metric  pre-aggregated metric summaries (Phase 4.1)
+ *   *    /api/v1/experiments/*    PRD-006 sync API (X-Service-Token) — sync/router.ts (P4)
+ *   POST /api/v1/stats            Bayesian stats (X-Service-Token) — stats/router.ts (P3)
  *   GET  /_internal/fx-rates      CH dictionary source (Phase 1.6)
  *   GET  /_internal/live          liveness (always 200, no deps) — Fly health check
  *   GET  /_internal/health        readiness: Redis/CH ping
@@ -18,6 +19,12 @@ import { makeFxRatesHandler } from './fx/route.ts';
 import { syncToday } from './fx/sync.ts';
 import { makeIngestHandler } from './ingest/route.ts';
 import { ping as pingRedis, redis } from './redis/client.ts';
+import { makeStatsRouter } from './stats/router.ts';
+import { makeSyncRouter } from './sync/router.ts';
+// Query views register themselves with the view registry on import.
+import './products/view.ts';
+import './distributions/view.ts';
+import './health/view.ts';
 
 const app = new Hono();
 
@@ -53,7 +60,11 @@ app.post(
 );
 app.get('/api/v1/config/:projectId', makeConfigGetHandler({ store: configStore }));
 
-app.get('/api/v1/metrics/:metric', (c) => c.text('not implemented', 501)); // Phase 4.1
+// PRD-006 analytics. Mounted on their own prefixes so the service-token
+// middleware never covers other /api/v1 routes (the config API has its own auth).
+// After P0 nobody edits these lines: each package owns its router file.
+app.route('/api/v1/experiments', makeSyncRouter({ serviceToken: config.serviceToken }));
+app.route('/api/v1/stats', makeStatsRouter({ serviceToken: config.serviceToken }));
 
 app.get('/_internal/fx-rates', makeFxRatesHandler());
 
