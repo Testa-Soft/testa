@@ -4,7 +4,7 @@
  */
 
 import { config } from '../config.ts';
-import { close as closeCh, insertEvents } from '../db/clickhouse.ts';
+import { close as closeCh, insertEventItems, insertEvents } from '../db/clickhouse.ts';
 import { close as closeRedis, redis } from '../redis/client.ts';
 import { Consumer } from './consumer.ts';
 
@@ -12,6 +12,7 @@ async function main(): Promise<void> {
   const consumer = new Consumer({
     redis: redis(),
     insertEvents,
+    insertItems: insertEventItems,
     streamKey: config.redis.streamKey,
     consumerGroup: config.redis.consumerGroup,
     consumerName: config.redis.consumerName,

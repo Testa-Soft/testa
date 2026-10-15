@@ -13,12 +13,17 @@
 
 import type { EnrichedEvent } from '@testa-platform/shared-types';
 import type { Redis } from 'ioredis';
-import { rowFromEvent } from '../db/row-mapper.ts';
+import { itemRowsFromEvent, rowFromEvent } from '../db/row-mapper.ts';
 
 export interface ConsumerDeps {
   redis: Redis;
   /** Inserts rows into ClickHouse `events_buffer`. Throws on failure. */
   insertEvents: (rows: readonly object[]) => Promise<void>;
+  /**
+   * Inserts rows into ClickHouse `event_items` (PRD-006: one row per item).
+   * Optional so pre-PRD-006 callers keep working; without it items aren't stored.
+   */
+  insertItems?: (rows: readonly object[]) => Promise<void>;
   streamKey: string;
   consumerGroup: string;
   consumerName: string;
@@ -49,8 +54,9 @@ interface PendingEntry {
 
 export class Consumer {
   private readonly deps: Required<
-    Omit<ConsumerDeps, 'log' | 'backoffStartMs' | 'backoffMaxMs' | 'poisonRetries'>
+    Omit<ConsumerDeps, 'log' | 'backoffStartMs' | 'backoffMaxMs' | 'poisonRetries' | 'insertItems'>
   > & {
+    insertItems: ConsumerDeps['insertItems'];
     log: NonNullable<ConsumerDeps['log']>;
     backoffStartMs: number;
     backoffMaxMs: number;
@@ -64,6 +70,7 @@ export class Consumer {
   constructor(deps: ConsumerDeps) {
     this.deps = {
       ...deps,
+      insertItems: deps.insertItems,
       backoffStartMs: deps.backoffStartMs ?? DEFAULT_BACKOFF_START,
       backoffMaxMs: deps.backoffMaxMs ?? DEFAULT_BACKOFF_MAX,
       poisonRetries: deps.poisonRetries ?? DEFAULT_POISON_RETRIES,
@@ -235,12 +242,19 @@ export class Consumer {
     return out;
   }
 
+  /**
+   * Insert one batch, then ACK. Items go first: if the events insert then
+   * fails, the retry re-inserts the items too (possible duplicate item rows),
+   * but an event row is never stored without its items.
+   */
   private async flush(entries: PendingEntry[]): Promise<void> {
     const rows = entries.map((e) => rowFromEvent(e.event));
+    const items = this.deps.insertItems ? entries.flatMap((e) => itemRowsFromEvent(e.event)) : [];
+    if (items.length > 0 && this.deps.insertItems) await this.deps.insertItems(items);
     await this.deps.insertEvents(rows);
     const ids = entries.map((e) => e.id);
     await this.deps.redis.xack(this.deps.streamKey, this.deps.consumerGroup, ...ids);
-    this.deps.log('info', 'flushed batch', { count: entries.length });
+    this.deps.log('info', 'flushed batch', { count: entries.length, items: items.length });
   }
 }
 

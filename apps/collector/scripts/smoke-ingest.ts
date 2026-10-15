@@ -1,6 +1,8 @@
 /**
  * Smoke test for POST /_ingest.
  * Builds a batch, HMAC-signs the exact JSON body, posts it, prints the response.
+ * The batch includes a PRD-006 purchase with 2 items: with the consumer
+ * running, expect 1 `events` row + 2 `event_items` rows for it.
  *
  *   bun run scripts/smoke-ingest.ts
  *
@@ -30,6 +32,16 @@ const base = {
   browser: 'chrome',
   os: 'macos',
   is_bot: 0 as const,
+  // PRD-006 envelope + edge enrichment.
+  screen_w: 1512,
+  screen_h: 982,
+  exp: [[1001, 2, Math.floor(now / 1000), 1]],
+  os_name: 'macOS',
+  os_version: '14.5',
+  browser_name: 'Chrome',
+  browser_version: '129',
+  referrer_domain: '',
+  channel: '',
 };
 
 const batch = {
@@ -53,7 +65,13 @@ const batch = {
       value_native: 149.99,
       currency: 'EUR',
       order_id: `order-${now}`,
+      purchase_type: 'initial',
       items_count: 3,
+      // 2 items → 2 `event_items` rows.
+      items: [
+        { item_id: 'SW-MER-NVY-M', product_id: 'SW-MER', price: 50, quantity: 2 },
+        { item_id: 'SCF-WL-GRY', price: 49.99, quantity: 1 },
+      ],
     },
   ],
 };
