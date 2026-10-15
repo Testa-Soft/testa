@@ -71,22 +71,48 @@ The Phase 3 corpus reflects the 2026-05-06 grilling decisions: anti-flicker is t
 
 ## Phase 4 — Collector read API
 
+> **2026-10-14 — cancelled, superseded by Phase 5 / PRD-006** (flat report endpoint + Bayesian stats replace the per-metric MV endpoints and Welch/bootstrap).
+
 Serves crobot's `MetricsProxyController` the pre-aggregated metrics in `packages/shared-types/src/metric-summary.ts` — AOV, RPV, sessions, funnel — computed over the ClickHouse daily MVs (migrations 003–007) + the `fx_rates` dictionary (1.6), gated by a service token. Read path drawn in `docs/architecture/diagrams/03-read-path.mmd`. Scoped 2026-08-05 against the existing MV/type contract.
 
 | ID | Task | Status | Blocked by |
 |---|---|---|---|
-| [4.1](./phase-4/4.1-read-api-auth-router.md) | Read-API router skeleton + `X-Service-Token` auth + param validation | pending | — |
-| [4.2](./phase-4/4.2-statistics-module.md) | Statistics — Welch's t-test + seeded bootstrap CI/significance | pending | — |
-| [4.3](./phase-4/4.3-query-layer-fx.md) | Metrics query layer over the MVs + FX conversion (`dictGet`) | pending | 4.1 |
-| [4.4](./phase-4/4.4-aov-endpoint.md) | `GET /api/v1/metrics/aov` → `AovSummary` (Welch significance) | pending | 4.2, 4.3 |
-| [4.5](./phase-4/4.5-rpv-endpoint.md) | `GET /api/v1/metrics/rpv` → `RpvSummary` (bootstrap, exposed-visitor denominator) | pending | 4.2, 4.3 |
-| [4.6](./phase-4/4.6-sessions-endpoint.md) | `GET /api/v1/metrics/sessions` → `SessionsSummary` | pending | 4.3 |
-| [4.7](./phase-4/4.7-funnel-endpoint.md) | `GET /api/v1/metrics/funnel` → `FunnelSummary` (`windowFunnel`) | pending | 4.3 |
-| [4.8](./phase-4/4.8-read-api-integration-tests.md) | Read-API integration tests (live CH) + coverage gate | pending | 4.4, 4.5, 4.6, 4.7 |
+| [4.1](./phase-4/4.1-read-api-auth-router.md) | Read-API router skeleton + `X-Service-Token` auth + param validation | cancelled — superseded by Phase 5 (PRD-006) | — |
+| [4.2](./phase-4/4.2-statistics-module.md) | Statistics — Welch's t-test + seeded bootstrap CI/significance | cancelled — superseded by Phase 5 (PRD-006) | — |
+| [4.3](./phase-4/4.3-query-layer-fx.md) | Metrics query layer over the MVs + FX conversion (`dictGet`) | cancelled — superseded by Phase 5 (PRD-006) | 4.1 |
+| [4.4](./phase-4/4.4-aov-endpoint.md) | `GET /api/v1/metrics/aov` → `AovSummary` (Welch significance) | cancelled — superseded by Phase 5 (PRD-006) | 4.2, 4.3 |
+| [4.5](./phase-4/4.5-rpv-endpoint.md) | `GET /api/v1/metrics/rpv` → `RpvSummary` (bootstrap, exposed-visitor denominator) | cancelled — superseded by Phase 5 (PRD-006) | 4.2, 4.3 |
+| [4.6](./phase-4/4.6-sessions-endpoint.md) | `GET /api/v1/metrics/sessions` → `SessionsSummary` | cancelled — superseded by Phase 5 (PRD-006) | 4.3 |
+| [4.7](./phase-4/4.7-funnel-endpoint.md) | `GET /api/v1/metrics/funnel` → `FunnelSummary` (`windowFunnel`) | cancelled — superseded by Phase 5 (PRD-006) | 4.3 |
+| [4.8](./phase-4/4.8-read-api-integration-tests.md) | Read-API integration tests (live CH) + coverage gate | cancelled — superseded by Phase 5 (PRD-006) | 4.4, 4.5, 4.6, 4.7 |
 
-## Phase 5 — Crobot integration
+## Phase 5 — Ecommerce metrics + sync API (PRD-006)
 
-To be scoped (lives in `crobot` repo; tracked here for cross-repo coherence).
+Implements `docs/prds/006-ecommerce-events-and-metric-modeling.md` (**Parts 5–6 win**). Supersedes Phase 4. Crobot's side: `../crobot/tasks/prd-analytics-v2.md` + `../crobot/tasks/analytics-v2/`.
+
+**Start here:** one orchestrator following [`orchestration/ORCHESTRATOR.md`](./orchestration/ORCHESTRATOR.md) hands **work packages** ([`orchestration/PACKAGES.md`](./orchestration/PACKAGES.md)) to worker sessions by ID, each in its own git worktree. Per-task rules: [`phase-5/LOOP.md`](./phase-5/LOOP.md). Validation spec: `docs/prds/006-validation.md`.
+
+| ID | Task | Package | Status | Blocked by |
+|---|---|---|---|---|
+| [5.1](./phase-5/5.1-shared-types.md) | Shared types — envelope, Item, sync API + view + stats types | P0 | pending | — |
+| [5.2](./phase-5/5.2-clickhouse-migrations.md) | ClickHouse migrations 013–023 | P0 | pending | — |
+| [5.18](./phase-5/5.18-attribution-core-and-route-stubs.md) | Attribution core + sync/stats stubs + view registry | P0 | pending | 5.1, 5.2 |
+| [5.5](./phase-5/5.5-pixel-experiment-session.md) | Pixel — experiment session, `session_idx`, `exp` stamping | P1 | pending | 5.1 |
+| [5.6](./phase-5/5.6-pixel-attribution-fields.md) | Pixel — session-entry attribution, screen size, utm_term/content | P1 | pending | 5.1 |
+| [5.7](./phase-5/5.7-track-api-helpers.md) | Pixel + next/react — `track()` + typed helpers | P1 | pending | 5.5 |
+| [5.3](./phase-5/5.3-edge-validation-enrichment.md) | Edge — Zod, alias, OS/browser split, referrer_domain, channel | P2 | pending | 5.1 |
+| [5.4](./phase-5/5.4-consumer-row-mapping.md) | Consumer — new columns + event_items fan-out | P2 | pending | 5.1, 5.2 |
+| [5.19](./phase-5/5.19-fx-previous-day-and-backfill.md) | FX — previous-day rate, backfill, fallback | P2 | pending | 5.1 |
+| [5.10](./phase-5/5.10-bayesian-stats-module.md) | Bayesian Monte Carlo stats module | P3 | pending | 5.1 |
+| [5.11](./phase-5/5.11-stats-endpoint.md) | `POST /api/v1/stats` | P3 | pending | 5.10 |
+| [5.9](./phase-5/5.9-daily-rows-builder.md) | Daily rows builder (22 keys) | P4 | pending | 5.18 |
+| [5.15](./phase-5/5.15-modeler-process.md) | Modeler process — scheduler, queue, workers, webhook | P4 | pending | 5.9 |
+| [5.8](./phase-5/5.8-sync-api-routes.md) | Sync API routes | P4 | pending | 5.15 |
+| [5.14](./phase-5/5.14-e2e-validation-harness.md) | E2E validation harness | P5 | pending | 5.1 |
+| [5.16](./phase-5/5.16-products-distributions-views.md) | Products + distributions views | P7 | pending | 5.18 |
+| [5.17](./phase-5/5.17-health-view.md) | Health view | P8 | pending | 5.18 |
+| [5.12](./phase-5/5.12-docs-update.md) | Docs update | P6 | pending | all |
+| [5.13](./phase-5/5.13-crobot-handoff.md) | Crobot handoff (moved to the crobot repo) | — | cancelled | — |
 
 ## Phase N — Next.js split-URL middleware (`@testa/next`)
 
