@@ -1,0 +1,958 @@
+{
+  "_about": "Synthetic report examples for PRD-006 §3 (POST /api/v1/experiments/{id}/report). Simulated visitors, so totals are consistent. Variation 100 = control, 101 = variant. Rates are 0–1.",
+  "examples": [
+    {
+      "title": "1. Daily CR + AOV per variation (the timeseries chart)",
+      "ui": "Line chart: CR and AOV per day, control vs variant",
+      "request": {
+        "project_id": 42,
+        "from": "2026-10-01",
+        "to": "2026-10-07",
+        "report_currency": "EUR",
+        "group_by": ["date", "variation"],
+        "metrics": ["visitors", "purchasers", "cr", "aov"]
+      },
+      "response": {
+        "experiment_id": 1717,
+        "from": "2026-10-01",
+        "to": "2026-10-07",
+        "report_currency": "EUR",
+        "computed_at": "2026-10-07T10:45:03Z",
+        "columns": ["date", "variation", "visitors", "purchasers", "cr", "aov"],
+        "rows": [
+          {
+            "date": "2026-10-01",
+            "variation": 100,
+            "visitors": 674,
+            "purchasers": 18,
+            "cr": 0.0267,
+            "aov": 93.08
+          },
+          {
+            "date": "2026-10-01",
+            "variation": 101,
+            "visitors": 673,
+            "purchasers": 16,
+            "cr": 0.0238,
+            "aov": 109.94
+          },
+          {
+            "date": "2026-10-02",
+            "variation": 100,
+            "visitors": 640,
+            "purchasers": 24,
+            "cr": 0.0375,
+            "aov": 99.92
+          },
+          {
+            "date": "2026-10-02",
+            "variation": 101,
+            "visitors": 684,
+            "purchasers": 20,
+            "cr": 0.0292,
+            "aov": 88.61
+          },
+          {
+            "date": "2026-10-03",
+            "variation": 100,
+            "visitors": 708,
+            "purchasers": 21,
+            "cr": 0.0297,
+            "aov": 102.22
+          },
+          {
+            "date": "2026-10-03",
+            "variation": 101,
+            "visitors": 719,
+            "purchasers": 23,
+            "cr": 0.032,
+            "aov": 98.38
+          },
+          {
+            "date": "2026-10-04",
+            "variation": 100,
+            "visitors": 619,
+            "purchasers": 9,
+            "cr": 0.0145,
+            "aov": 82.92
+          },
+          {
+            "date": "2026-10-04",
+            "variation": 101,
+            "visitors": 745,
+            "purchasers": 26,
+            "cr": 0.0349,
+            "aov": 80.99
+          },
+          {
+            "date": "2026-10-05",
+            "variation": 100,
+            "visitors": 738,
+            "purchasers": 13,
+            "cr": 0.0176,
+            "aov": 67.96
+          },
+          {
+            "date": "2026-10-05",
+            "variation": 101,
+            "visitors": 704,
+            "purchasers": 21,
+            "cr": 0.0298,
+            "aov": 93.0
+          },
+          {
+            "date": "2026-10-06",
+            "variation": 100,
+            "visitors": 639,
+            "purchasers": 14,
+            "cr": 0.0219,
+            "aov": 95.3
+          },
+          {
+            "date": "2026-10-06",
+            "variation": 101,
+            "visitors": 666,
+            "purchasers": 20,
+            "cr": 0.03,
+            "aov": 54.26
+          },
+          {
+            "date": "2026-10-07",
+            "variation": 100,
+            "visitors": 719,
+            "purchasers": 16,
+            "cr": 0.0223,
+            "aov": 81.42
+          },
+          {
+            "date": "2026-10-07",
+            "variation": 101,
+            "visitors": 599,
+            "purchasers": 11,
+            "cr": 0.0184,
+            "aov": 82.38
+          }
+        ],
+        "totals": [
+          {
+            "date": "2026-10-01",
+            "variation": 100,
+            "visitors": 674,
+            "purchasers": 18,
+            "cr": 0.0267,
+            "aov": 93.08
+          },
+          {
+            "date": "2026-10-01",
+            "variation": 101,
+            "visitors": 673,
+            "purchasers": 16,
+            "cr": 0.0238,
+            "aov": 109.94
+          },
+          {
+            "date": "2026-10-02",
+            "variation": 100,
+            "visitors": 640,
+            "purchasers": 24,
+            "cr": 0.0375,
+            "aov": 99.92
+          },
+          {
+            "date": "2026-10-02",
+            "variation": 101,
+            "visitors": 684,
+            "purchasers": 20,
+            "cr": 0.0292,
+            "aov": 88.61
+          },
+          {
+            "date": "2026-10-03",
+            "variation": 100,
+            "visitors": 708,
+            "purchasers": 21,
+            "cr": 0.0297,
+            "aov": 102.22
+          },
+          {
+            "date": "2026-10-03",
+            "variation": 101,
+            "visitors": 719,
+            "purchasers": 23,
+            "cr": 0.032,
+            "aov": 98.38
+          },
+          {
+            "date": "2026-10-04",
+            "variation": 100,
+            "visitors": 619,
+            "purchasers": 9,
+            "cr": 0.0145,
+            "aov": 82.92
+          },
+          {
+            "date": "2026-10-04",
+            "variation": 101,
+            "visitors": 745,
+            "purchasers": 26,
+            "cr": 0.0349,
+            "aov": 80.99
+          },
+          {
+            "date": "2026-10-05",
+            "variation": 100,
+            "visitors": 738,
+            "purchasers": 13,
+            "cr": 0.0176,
+            "aov": 67.96
+          },
+          {
+            "date": "2026-10-05",
+            "variation": 101,
+            "visitors": 704,
+            "purchasers": 21,
+            "cr": 0.0298,
+            "aov": 93.0
+          },
+          {
+            "date": "2026-10-06",
+            "variation": 100,
+            "visitors": 639,
+            "purchasers": 14,
+            "cr": 0.0219,
+            "aov": 95.3
+          },
+          {
+            "date": "2026-10-06",
+            "variation": 101,
+            "visitors": 666,
+            "purchasers": 20,
+            "cr": 0.03,
+            "aov": 54.26
+          },
+          {
+            "date": "2026-10-07",
+            "variation": 100,
+            "visitors": 719,
+            "purchasers": 16,
+            "cr": 0.0223,
+            "aov": 81.42
+          },
+          {
+            "date": "2026-10-07",
+            "variation": 101,
+            "visitors": 599,
+            "purchasers": 11,
+            "cr": 0.0184,
+            "aov": 82.38
+          }
+        ]
+      }
+    },
+    {
+      "title": "2. Whole test, all MVP metrics (the overview table)",
+      "ui": "One row per variation, every metric as a column",
+      "request": {
+        "project_id": 42,
+        "from": "2026-10-01",
+        "to": "2026-10-07",
+        "report_currency": "EUR",
+        "group_by": ["variation"],
+        "metrics": [
+          "visitors",
+          "purchasers",
+          "orders",
+          "revenue",
+          "cr",
+          "aov",
+          "rpv",
+          "add_to_cart_rate",
+          "begin_checkout_rate",
+          "contact_details_rate",
+          "payment_load_rate",
+          "upsell_rate",
+          "lead_register_rate",
+          "pages_per_visitor",
+          "session_duration"
+        ]
+      },
+      "response": {
+        "experiment_id": 1717,
+        "from": "2026-10-01",
+        "to": "2026-10-07",
+        "report_currency": "EUR",
+        "computed_at": "2026-10-07T10:45:03Z",
+        "columns": [
+          "variation",
+          "visitors",
+          "purchasers",
+          "orders",
+          "revenue",
+          "cr",
+          "aov",
+          "rpv",
+          "add_to_cart_rate",
+          "begin_checkout_rate",
+          "contact_details_rate",
+          "payment_load_rate",
+          "upsell_rate",
+          "lead_register_rate",
+          "pages_per_visitor",
+          "session_duration"
+        ],
+        "rows": [
+          {
+            "variation": 100,
+            "visitors": 4737,
+            "purchasers": 115,
+            "orders": 123,
+            "revenue": 11680.22,
+            "cr": 0.0243,
+            "aov": 90.9,
+            "rpv": 2.47,
+            "add_to_cart_rate": 0.1184,
+            "begin_checkout_rate": 0.068,
+            "contact_details_rate": 0.0483,
+            "payment_load_rate": 0.0395,
+            "upsell_rate": 0.1382,
+            "lead_register_rate": 0.0262,
+            "pages_per_visitor": 4.81,
+            "session_duration": 332.9
+          },
+          {
+            "variation": 101,
+            "visitors": 4790,
+            "purchasers": 137,
+            "orders": 142,
+            "revenue": 13008.06,
+            "cr": 0.0286,
+            "aov": 86.18,
+            "rpv": 2.72,
+            "add_to_cart_rate": 0.134,
+            "begin_checkout_rate": 0.0749,
+            "contact_details_rate": 0.0585,
+            "payment_load_rate": 0.0451,
+            "upsell_rate": 0.2042,
+            "lead_register_rate": 0.0351,
+            "pages_per_visitor": 4.79,
+            "session_duration": 329.8
+          }
+        ],
+        "totals": [
+          {
+            "variation": 100,
+            "visitors": 4737,
+            "purchasers": 115,
+            "orders": 123,
+            "revenue": 11680.22,
+            "cr": 0.0243,
+            "aov": 90.9,
+            "rpv": 2.47,
+            "add_to_cart_rate": 0.1184,
+            "begin_checkout_rate": 0.068,
+            "contact_details_rate": 0.0483,
+            "payment_load_rate": 0.0395,
+            "upsell_rate": 0.1382,
+            "lead_register_rate": 0.0262,
+            "pages_per_visitor": 4.81,
+            "session_duration": 332.9
+          },
+          {
+            "variation": 101,
+            "visitors": 4790,
+            "purchasers": 137,
+            "orders": 142,
+            "revenue": 13008.06,
+            "cr": 0.0286,
+            "aov": 86.18,
+            "rpv": 2.72,
+            "add_to_cart_rate": 0.134,
+            "begin_checkout_rate": 0.0749,
+            "contact_details_rate": 0.0585,
+            "payment_load_rate": 0.0451,
+            "upsell_rate": 0.2042,
+            "lead_register_rate": 0.0351,
+            "pages_per_visitor": 4.79,
+            "session_duration": 329.8
+          }
+        ]
+      }
+    },
+    {
+      "title": "3. Pick one dimension: by device",
+      "ui": "Dimension picker = Device",
+      "request": {
+        "project_id": 42,
+        "from": "2026-10-01",
+        "to": "2026-10-07",
+        "report_currency": "EUR",
+        "group_by": ["variation", "device_type"],
+        "metrics": ["visitors", "purchasers", "cr", "aov", "rpv"]
+      },
+      "response": {
+        "experiment_id": 1717,
+        "from": "2026-10-01",
+        "to": "2026-10-07",
+        "report_currency": "EUR",
+        "computed_at": "2026-10-07T10:45:03Z",
+        "columns": ["variation", "device_type", "visitors", "purchasers", "cr", "aov", "rpv"],
+        "rows": [
+          {
+            "variation": 100,
+            "device_type": "mobile",
+            "visitors": 2931,
+            "purchasers": 54,
+            "cr": 0.0184,
+            "aov": 87.53,
+            "rpv": 1.85
+          },
+          {
+            "variation": 101,
+            "device_type": "mobile",
+            "visitors": 2938,
+            "purchasers": 84,
+            "cr": 0.0286,
+            "aov": 83.65,
+            "rpv": 2.62
+          },
+          {
+            "variation": 100,
+            "device_type": "desktop",
+            "visitors": 1564,
+            "purchasers": 54,
+            "cr": 0.0345,
+            "aov": 95.41,
+            "rpv": 3.64
+          },
+          {
+            "variation": 101,
+            "device_type": "desktop",
+            "visitors": 1593,
+            "purchasers": 47,
+            "cr": 0.0295,
+            "aov": 91.08,
+            "rpv": 2.93
+          },
+          {
+            "variation": 100,
+            "device_type": "tablet",
+            "visitors": 242,
+            "purchasers": 7,
+            "cr": 0.0289,
+            "aov": 81.49,
+            "rpv": 2.36
+          },
+          {
+            "variation": 101,
+            "device_type": "tablet",
+            "visitors": 259,
+            "purchasers": 6,
+            "cr": 0.0232,
+            "aov": 84.06,
+            "rpv": 2.45
+          }
+        ],
+        "totals": [
+          {
+            "variation": 100,
+            "visitors": 4737,
+            "purchasers": 115,
+            "cr": 0.0243,
+            "aov": 90.9,
+            "rpv": 2.47
+          },
+          {
+            "variation": 101,
+            "visitors": 4790,
+            "purchasers": 137,
+            "cr": 0.0286,
+            "aov": 86.18,
+            "rpv": 2.72
+          }
+        ]
+      }
+    },
+    {
+      "title": "4. Pick two dimensions: device × channel, plus a custom event and a goal",
+      "ui": "Dimension picker = Device + Channel; metric picker includes a custom event and goal #12",
+      "request": {
+        "project_id": 42,
+        "from": "2026-10-01",
+        "to": "2026-10-07",
+        "report_currency": "EUR",
+        "group_by": ["variation", "device_type", "channel"],
+        "metrics": ["visitors", "cr", "rpv", "event:size_guide_opened", "goal:12"]
+      },
+      "response": {
+        "experiment_id": 1717,
+        "from": "2026-10-01",
+        "to": "2026-10-07",
+        "report_currency": "EUR",
+        "computed_at": "2026-10-07T10:45:03Z",
+        "columns": [
+          "variation",
+          "device_type",
+          "channel",
+          "visitors",
+          "cr",
+          "rpv",
+          "event:size_guide_opened",
+          "goal:12"
+        ],
+        "rows": [
+          {
+            "variation": 100,
+            "device_type": "mobile",
+            "channel": "Organic Search",
+            "visitors": 860,
+            "cr": 0.014,
+            "rpv": 1.08,
+            "event:size_guide_opened": 0.1128,
+            "goal:12": 0.1523
+          },
+          {
+            "variation": 101,
+            "device_type": "mobile",
+            "channel": "Organic Search",
+            "visitors": 856,
+            "cr": 0.0245,
+            "rpv": 1.95,
+            "event:size_guide_opened": 0.0923,
+            "goal:12": 0.1449
+          },
+          {
+            "variation": 100,
+            "device_type": "mobile",
+            "channel": "Paid Social",
+            "visitors": 649,
+            "cr": 0.0169,
+            "rpv": 1.82,
+            "event:size_guide_opened": 0.0724,
+            "goal:12": 0.1294
+          },
+          {
+            "variation": 101,
+            "device_type": "mobile",
+            "channel": "Paid Social",
+            "visitors": 630,
+            "cr": 0.0159,
+            "rpv": 1.18,
+            "event:size_guide_opened": 0.0968,
+            "goal:12": 0.1349
+          },
+          {
+            "variation": 100,
+            "device_type": "mobile",
+            "channel": "Paid Search",
+            "visitors": 538,
+            "cr": 0.0167,
+            "rpv": 1.59,
+            "event:size_guide_opened": 0.0688,
+            "goal:12": 0.1617
+          },
+          {
+            "variation": 101,
+            "device_type": "mobile",
+            "channel": "Paid Search",
+            "visitors": 560,
+            "cr": 0.0321,
+            "rpv": 3.42,
+            "event:size_guide_opened": 0.1036,
+            "goal:12": 0.1375
+          },
+          {
+            "variation": 100,
+            "device_type": "desktop",
+            "channel": "Organic Search",
+            "visitors": 485,
+            "cr": 0.0289,
+            "rpv": 2.94,
+            "event:size_guide_opened": 0.0969,
+            "goal:12": 0.1526
+          },
+          {
+            "variation": 101,
+            "device_type": "desktop",
+            "channel": "Organic Search",
+            "visitors": 476,
+            "cr": 0.0273,
+            "rpv": 2.21,
+            "event:size_guide_opened": 0.0966,
+            "goal:12": 0.1513
+          },
+          {
+            "variation": 100,
+            "device_type": "mobile",
+            "channel": "Direct",
+            "visitors": 477,
+            "cr": 0.0252,
+            "rpv": 2.53,
+            "event:size_guide_opened": 0.1006,
+            "goal:12": 0.174
+          },
+          {
+            "variation": 101,
+            "device_type": "mobile",
+            "channel": "Direct",
+            "visitors": 477,
+            "cr": 0.0252,
+            "rpv": 2.43,
+            "event:size_guide_opened": 0.0901,
+            "goal:12": 0.1677
+          },
+          {
+            "variation": 100,
+            "device_type": "desktop",
+            "channel": "Paid Social",
+            "visitors": 344,
+            "cr": 0.0145,
+            "rpv": 1.8,
+            "event:size_guide_opened": 0.0872,
+            "goal:12": 0.1541
+          },
+          {
+            "variation": 101,
+            "device_type": "desktop",
+            "channel": "Paid Social",
+            "visitors": 353,
+            "cr": 0.017,
+            "rpv": 2.43,
+            "event:size_guide_opened": 0.0963,
+            "goal:12": 0.1048
+          },
+          {
+            "variation": 100,
+            "device_type": "desktop",
+            "channel": "Paid Search",
+            "visitors": 281,
+            "cr": 0.0249,
+            "rpv": 1.47,
+            "event:size_guide_opened": 0.0747,
+            "goal:12": 0.1352
+          },
+          {
+            "variation": 101,
+            "device_type": "desktop",
+            "channel": "Paid Search",
+            "visitors": 275,
+            "cr": 0.0291,
+            "rpv": 3.21,
+            "event:size_guide_opened": 0.0909,
+            "goal:12": 0.1491
+          },
+          {
+            "variation": 100,
+            "device_type": "mobile",
+            "channel": "Email",
+            "visitors": 262,
+            "cr": 0.0382,
+            "rpv": 4.75,
+            "event:size_guide_opened": 0.0878,
+            "goal:12": 0.1489
+          },
+          {
+            "variation": 101,
+            "device_type": "mobile",
+            "channel": "Email",
+            "visitors": 271,
+            "cr": 0.0701,
+            "rpv": 6.93,
+            "event:size_guide_opened": 0.1107,
+            "goal:12": 0.1808
+          },
+          {
+            "variation": 100,
+            "device_type": "desktop",
+            "channel": "Direct",
+            "visitors": 262,
+            "cr": 0.0725,
+            "rpv": 9.24,
+            "event:size_guide_opened": 0.0802,
+            "goal:12": 0.126
+          },
+          {
+            "variation": 101,
+            "device_type": "desktop",
+            "channel": "Direct",
+            "visitors": 239,
+            "cr": 0.046,
+            "rpv": 4.17,
+            "event:size_guide_opened": 0.0628,
+            "goal:12": 0.1381
+          },
+          {
+            "variation": 100,
+            "device_type": "mobile",
+            "channel": "Referral",
+            "visitors": 145,
+            "cr": 0.0,
+            "rpv": 0.0,
+            "event:size_guide_opened": 0.0483,
+            "goal:12": 0.131
+          },
+          {
+            "variation": 101,
+            "device_type": "mobile",
+            "channel": "Referral",
+            "visitors": 144,
+            "cr": 0.0278,
+            "rpv": 2.34,
+            "event:size_guide_opened": 0.0764,
+            "goal:12": 0.1944
+          },
+          {
+            "variation": 100,
+            "device_type": "desktop",
+            "channel": "Email",
+            "visitors": 123,
+            "cr": 0.0732,
+            "rpv": 6.63,
+            "event:size_guide_opened": 0.1382,
+            "goal:12": 0.1301
+          },
+          {
+            "variation": 101,
+            "device_type": "desktop",
+            "channel": "Email",
+            "visitors": 157,
+            "cr": 0.0382,
+            "rpv": 3.4,
+            "event:size_guide_opened": 0.1146,
+            "goal:12": 0.172
+          },
+          {
+            "variation": 100,
+            "device_type": "desktop",
+            "channel": "Referral",
+            "visitors": 69,
+            "cr": 0.0,
+            "rpv": 0.0,
+            "event:size_guide_opened": 0.1159,
+            "goal:12": 0.0725
+          },
+          {
+            "variation": 101,
+            "device_type": "desktop",
+            "channel": "Referral",
+            "visitors": 93,
+            "cr": 0.0323,
+            "rpv": 3.78,
+            "event:size_guide_opened": 0.1183,
+            "goal:12": 0.129
+          },
+          {
+            "variation": 100,
+            "device_type": "tablet",
+            "channel": "Organic Search",
+            "visitors": 67,
+            "cr": 0.0299,
+            "rpv": 2.5,
+            "event:size_guide_opened": 0.1194,
+            "goal:12": 0.1642
+          },
+          {
+            "variation": 101,
+            "device_type": "tablet",
+            "channel": "Organic Search",
+            "visitors": 74,
+            "cr": 0.0,
+            "rpv": 0.0,
+            "event:size_guide_opened": 0.0946,
+            "goal:12": 0.0811
+          },
+          {
+            "variation": 100,
+            "device_type": "tablet",
+            "channel": "Paid Social",
+            "visitors": 59,
+            "cr": 0.0,
+            "rpv": 0.0,
+            "event:size_guide_opened": 0.0678,
+            "goal:12": 0.2542
+          },
+          {
+            "variation": 101,
+            "device_type": "tablet",
+            "channel": "Paid Social",
+            "visitors": 61,
+            "cr": 0.0164,
+            "rpv": 1.95,
+            "event:size_guide_opened": 0.1475,
+            "goal:12": 0.1475
+          },
+          {
+            "variation": 100,
+            "device_type": "tablet",
+            "channel": "Paid Search",
+            "visitors": 39,
+            "cr": 0.0769,
+            "rpv": 7.51,
+            "event:size_guide_opened": 0.1026,
+            "goal:12": 0.0513
+          },
+          {
+            "variation": 101,
+            "device_type": "tablet",
+            "channel": "Paid Search",
+            "visitors": 47,
+            "cr": 0.0426,
+            "rpv": 2.78,
+            "event:size_guide_opened": 0.0638,
+            "goal:12": 0.1489
+          },
+          {
+            "variation": 100,
+            "device_type": "tablet",
+            "channel": "Direct",
+            "visitors": 40,
+            "cr": 0.0,
+            "rpv": 0.0,
+            "event:size_guide_opened": 0.0,
+            "goal:12": 0.2
+          },
+          {
+            "variation": 101,
+            "device_type": "tablet",
+            "channel": "Direct",
+            "visitors": 40,
+            "cr": 0.05,
+            "rpv": 5.43,
+            "event:size_guide_opened": 0.075,
+            "goal:12": 0.25
+          },
+          {
+            "variation": 100,
+            "device_type": "tablet",
+            "channel": "Email",
+            "visitors": 23,
+            "cr": 0.0435,
+            "rpv": 3.57,
+            "event:size_guide_opened": 0.2174,
+            "goal:12": 0.1304
+          },
+          {
+            "variation": 101,
+            "device_type": "tablet",
+            "channel": "Email",
+            "visitors": 26,
+            "cr": 0.0385,
+            "rpv": 6.48,
+            "event:size_guide_opened": 0.1154,
+            "goal:12": 0.2308
+          },
+          {
+            "variation": 100,
+            "device_type": "tablet",
+            "channel": "Referral",
+            "visitors": 14,
+            "cr": 0.0714,
+            "rpv": 1.99,
+            "event:size_guide_opened": 0.0714,
+            "goal:12": 0.0714
+          },
+          {
+            "variation": 101,
+            "device_type": "tablet",
+            "channel": "Referral",
+            "visitors": 11,
+            "cr": 0.0,
+            "rpv": 0.0,
+            "event:size_guide_opened": 0.1818,
+            "goal:12": 0.1818
+          }
+        ],
+        "totals": [
+          {
+            "variation": 100,
+            "visitors": 4737,
+            "cr": 0.0243,
+            "rpv": 2.47,
+            "event:size_guide_opened": 0.0897,
+            "goal:12": 0.1482
+          },
+          {
+            "variation": 101,
+            "visitors": 4790,
+            "cr": 0.0286,
+            "rpv": 2.72,
+            "event:size_guide_opened": 0.0956,
+            "goal:12": 0.1472
+          }
+        ]
+      }
+    },
+    {
+      "title": "5. Filtered: new vs returning, Baltics only",
+      "ui": "Dimension = Visitor type; filter Country ∈ LT, LV, EE",
+      "request": {
+        "project_id": 42,
+        "from": "2026-10-01",
+        "to": "2026-10-07",
+        "report_currency": "EUR",
+        "group_by": ["variation", "visitor_type"],
+        "metrics": ["visitors", "cr", "aov", "add_to_cart_rate"],
+        "filters": {
+          "country": ["LT", "LV", "EE"]
+        }
+      },
+      "response": {
+        "experiment_id": 1717,
+        "from": "2026-10-01",
+        "to": "2026-10-07",
+        "report_currency": "EUR",
+        "computed_at": "2026-10-07T10:45:03Z",
+        "columns": ["variation", "visitor_type", "visitors", "cr", "aov", "add_to_cart_rate"],
+        "rows": [
+          {
+            "variation": 100,
+            "visitor_type": "new",
+            "visitors": 2310,
+            "cr": 0.0212,
+            "aov": 96.82,
+            "add_to_cart_rate": 0.0987
+          },
+          {
+            "variation": 101,
+            "visitor_type": "new",
+            "visitors": 2398,
+            "cr": 0.0246,
+            "aov": 87.36,
+            "add_to_cart_rate": 0.1247
+          },
+          {
+            "variation": 100,
+            "visitor_type": "returning",
+            "visitors": 1217,
+            "cr": 0.0279,
+            "aov": 88.09,
+            "add_to_cart_rate": 0.1463
+          },
+          {
+            "variation": 101,
+            "visitor_type": "returning",
+            "visitors": 1221,
+            "cr": 0.0369,
+            "aov": 92.31,
+            "add_to_cart_rate": 0.1507
+          }
+        ],
+        "totals": [
+          {
+            "variation": 100,
+            "visitors": 3527,
+            "cr": 0.0235,
+            "aov": 93.15,
+            "add_to_cart_rate": 0.1151
+          },
+          {
+            "variation": 101,
+            "visitors": 3619,
+            "cr": 0.0287,
+            "aov": 89.52,
+            "add_to_cart_rate": 0.1335
+          }
+        ]
+      }
+    }
+  ]
+}

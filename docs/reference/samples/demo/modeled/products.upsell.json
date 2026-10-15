@@ -1,0 +1,324 @@
+{
+  "experiment_id": 1717,
+  "from": "2026-10-01",
+  "to": "2026-10-14",
+  "report_currency": "EUR",
+  "purchase_type": "upsell",
+  "sort": "control_revenue",
+  "limit": 8,
+  "offset": 0,
+  "total_products": 11,
+  "products": [
+    {
+      "product_id": "P-CARE",
+      "name": "Shoe Care Kit",
+      "unit_price": 18.0,
+      "by_variation": {
+        "100": {
+          "units_added": 0,
+          "units_purchased": 14,
+          "units_share": 1.0,
+          "buy_to_cart": null,
+          "revenue": 255.6,
+          "revenue_share": 1.0
+        },
+        "101": {
+          "units_added": 0,
+          "units_purchased": 24,
+          "units_share": 1.0,
+          "buy_to_cart": null,
+          "revenue": 436.5,
+          "revenue_share": 1.0
+        },
+        "102": {
+          "units_added": 0,
+          "units_purchased": 19,
+          "units_share": 1.0,
+          "buy_to_cart": null,
+          "revenue": 342.9,
+          "revenue_share": 1.0
+        }
+      },
+      "variants": [
+        {
+          "item_variant": "Default",
+          "by_variation": {
+            "100": {
+              "units": 14,
+              "share_of_product": 1.0,
+              "revenue_share": 1.0
+            },
+            "101": {
+              "units": 24,
+              "share_of_product": 1.0,
+              "revenue_share": 1.0
+            },
+            "102": {
+              "units": 19,
+              "share_of_product": 1.0,
+              "revenue_share": 1.0
+            }
+          },
+          "low_sample": true
+        }
+      ]
+    },
+    {
+      "product_id": "P-JKT",
+      "name": "",
+      "unit_price": 0,
+      "by_variation": {
+        "100": {
+          "units_added": 56,
+          "units_purchased": 0,
+          "units_share": 0.0,
+          "buy_to_cart": 0.0,
+          "revenue": 0.0,
+          "revenue_share": 0.0
+        },
+        "101": {
+          "units_added": 64,
+          "units_purchased": 0,
+          "units_share": 0.0,
+          "buy_to_cart": 0.0,
+          "revenue": 0.0,
+          "revenue_share": 0.0
+        },
+        "102": {
+          "units_added": 70,
+          "units_purchased": 0,
+          "units_share": 0.0,
+          "buy_to_cart": 0.0,
+          "revenue": 0.0,
+          "revenue_share": 0.0
+        }
+      },
+      "variants": []
+    },
+    {
+      "product_id": "P-RUN",
+      "name": "",
+      "unit_price": 0,
+      "by_variation": {
+        "100": {
+          "units_added": 214,
+          "units_purchased": 0,
+          "units_share": 0.0,
+          "buy_to_cart": 0.0,
+          "revenue": 0.0,
+          "revenue_share": 0.0
+        },
+        "101": {
+          "units_added": 230,
+          "units_purchased": 0,
+          "units_share": 0.0,
+          "buy_to_cart": 0.0,
+          "revenue": 0.0,
+          "revenue_share": 0.0
+        },
+        "102": {
+          "units_added": 228,
+          "units_purchased": 0,
+          "units_share": 0.0,
+          "buy_to_cart": 0.0,
+          "revenue": 0.0,
+          "revenue_share": 0.0
+        }
+      },
+      "variants": []
+    },
+    {
+      "product_id": "P-TEE",
+      "name": "",
+      "unit_price": 0,
+      "by_variation": {
+        "100": {
+          "units_added": 124,
+          "units_purchased": 0,
+          "units_share": 0.0,
+          "buy_to_cart": 0.0,
+          "revenue": 0.0,
+          "revenue_share": 0.0
+        },
+        "101": {
+          "units_added": 129,
+          "units_purchased": 0,
+          "units_share": 0.0,
+          "buy_to_cart": 0.0,
+          "revenue": 0.0,
+          "revenue_share": 0.0
+        },
+        "102": {
+          "units_added": 120,
+          "units_purchased": 0,
+          "units_share": 0.0,
+          "buy_to_cart": 0.0,
+          "revenue": 0.0,
+          "revenue_share": 0.0
+        }
+      },
+      "variants": []
+    },
+    {
+      "product_id": "P-SOX",
+      "name": "",
+      "unit_price": 0,
+      "by_variation": {
+        "100": {
+          "units_added": 70,
+          "units_purchased": 0,
+          "units_share": 0.0,
+          "buy_to_cart": 0.0,
+          "revenue": 0.0,
+          "revenue_share": 0.0
+        },
+        "101": {
+          "units_added": 102,
+          "units_purchased": 0,
+          "units_share": 0.0,
+          "buy_to_cart": 0.0,
+          "revenue": 0.0,
+          "revenue_share": 0.0
+        },
+        "102": {
+          "units_added": 62,
+          "units_purchased": 0,
+          "units_share": 0.0,
+          "buy_to_cart": 0.0,
+          "revenue": 0.0,
+          "revenue_share": 0.0
+        }
+      },
+      "variants": []
+    },
+    {
+      "product_id": "P-GLV",
+      "name": "",
+      "unit_price": 0,
+      "by_variation": {
+        "100": {
+          "units_added": 8,
+          "units_purchased": 0,
+          "units_share": 0.0,
+          "buy_to_cart": 0.0,
+          "revenue": 0.0,
+          "revenue_share": 0.0
+        },
+        "101": {
+          "units_added": 12,
+          "units_purchased": 0,
+          "units_share": 0.0,
+          "buy_to_cart": 0.0,
+          "revenue": 0.0,
+          "revenue_share": 0.0
+        },
+        "102": {
+          "units_added": 13,
+          "units_purchased": 0,
+          "units_share": 0.0,
+          "buy_to_cart": 0.0,
+          "revenue": 0.0,
+          "revenue_share": 0.0
+        }
+      },
+      "variants": []
+    },
+    {
+      "product_id": "P-BTL",
+      "name": "",
+      "unit_price": 0,
+      "by_variation": {
+        "100": {
+          "units_added": 21,
+          "units_purchased": 0,
+          "units_share": 0.0,
+          "buy_to_cart": 0.0,
+          "revenue": 0.0,
+          "revenue_share": 0.0
+        },
+        "101": {
+          "units_added": 22,
+          "units_purchased": 0,
+          "units_share": 0.0,
+          "buy_to_cart": 0.0,
+          "revenue": 0.0,
+          "revenue_share": 0.0
+        },
+        "102": {
+          "units_added": 29,
+          "units_purchased": 0,
+          "units_share": 0.0,
+          "buy_to_cart": 0.0,
+          "revenue": 0.0,
+          "revenue_share": 0.0
+        }
+      },
+      "variants": []
+    },
+    {
+      "product_id": "P-CAP",
+      "name": "",
+      "unit_price": 0,
+      "by_variation": {
+        "100": {
+          "units_added": 41,
+          "units_purchased": 0,
+          "units_share": 0.0,
+          "buy_to_cart": 0.0,
+          "revenue": 0.0,
+          "revenue_share": 0.0
+        },
+        "101": {
+          "units_added": 45,
+          "units_purchased": 0,
+          "units_share": 0.0,
+          "buy_to_cart": 0.0,
+          "revenue": 0.0,
+          "revenue_share": 0.0
+        },
+        "102": {
+          "units_added": 39,
+          "units_purchased": 0,
+          "units_share": 0.0,
+          "buy_to_cart": 0.0,
+          "revenue": 0.0,
+          "revenue_share": 0.0
+        }
+      },
+      "variants": []
+    },
+    {
+      "product_id": "(other)",
+      "name": "Other products",
+      "unit_price": null,
+      "by_variation": {
+        "100": {
+          "units_added": 15,
+          "units_purchased": 0,
+          "units_share": 0.0,
+          "buy_to_cart": 0.0,
+          "revenue": 0.0,
+          "revenue_share": 0.0
+        },
+        "101": {
+          "units_added": 45,
+          "units_purchased": 0,
+          "units_share": 0.0,
+          "buy_to_cart": 0.0,
+          "revenue": 0.0,
+          "revenue_share": 0.0
+        },
+        "102": {
+          "units_added": 24,
+          "units_purchased": 0,
+          "units_share": 0.0,
+          "buy_to_cart": 0.0,
+          "revenue": 0.0,
+          "revenue_share": 0.0
+        }
+      },
+      "variants": [],
+      "product_count": 3
+    }
+  ]
+}

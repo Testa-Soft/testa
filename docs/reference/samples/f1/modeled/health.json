@@ -1,0 +1,226 @@
+{
+  "experiment_id": 1717,
+  "from": "2026-10-01",
+  "to": "2026-10-03",
+  "events": [
+    {
+      "event_name": "purchase",
+      "status": "ok",
+      "last_event_at": "2026-10-03 09:20:00.000",
+      "events": {
+        "100": 1,
+        "101": 3
+      },
+      "visitors": {
+        "100": 1,
+        "101": 2
+      },
+      "params": [
+        {
+          "param": "order_id",
+          "required": true,
+          "present_pct": 1.0
+        },
+        {
+          "param": "value_native",
+          "required": true,
+          "present_pct": 1.0
+        },
+        {
+          "param": "currency",
+          "required": true,
+          "present_pct": 1.0
+        },
+        {
+          "param": "items",
+          "required": true,
+          "present_pct": 1.0
+        },
+        {
+          "param": "items[].item_id",
+          "required": true,
+          "present_pct": 1.0
+        },
+        {
+          "param": "items[].price",
+          "required": true,
+          "present_pct": 1.0
+        },
+        {
+          "param": "items[].quantity",
+          "required": true,
+          "present_pct": 1.0
+        },
+        {
+          "param": "purchase_type",
+          "required": true,
+          "present_pct": 1.0
+        }
+      ]
+    },
+    {
+      "event_name": "add_to_cart",
+      "status": "warning",
+      "last_event_at": "2026-10-02 12:05:00.000",
+      "events": {
+        "100": 1,
+        "101": 1
+      },
+      "visitors": {
+        "100": 1,
+        "101": 1
+      },
+      "params": [
+        {
+          "param": "items",
+          "required": true,
+          "present_pct": 1.0
+        },
+        {
+          "param": "items[].item_id",
+          "required": true,
+          "present_pct": 1.0
+        },
+        {
+          "param": "items[].price",
+          "required": true,
+          "present_pct": 0.5
+        }
+      ]
+    },
+    {
+      "event_name": "add_payment_info",
+      "status": "ok",
+      "last_event_at": "2026-10-01 11:08:00.000",
+      "events": {
+        "100": 1,
+        "101": 1
+      },
+      "visitors": {
+        "100": 1,
+        "101": 1
+      },
+      "params": [
+        {
+          "param": "payment_type",
+          "required": true,
+          "present_pct": 1.0
+        }
+      ]
+    },
+    {
+      "event_name": "begin_checkout",
+      "status": "ok",
+      "last_event_at": "2026-10-01 10:07:00.000",
+      "events": {
+        "100": 1,
+        "101": 0
+      },
+      "visitors": {
+        "100": 1,
+        "101": 0
+      },
+      "params": []
+    },
+    {
+      "event_name": "add_shipping_info",
+      "status": "ok",
+      "last_event_at": "2026-10-01 10:08:00.000",
+      "events": {
+        "100": 1,
+        "101": 0
+      },
+      "visitors": {
+        "100": 1,
+        "101": 0
+      },
+      "params": []
+    },
+    {
+      "event_name": "experiment_view",
+      "status": "ok",
+      "last_event_at": "2026-10-03 09:00:00.000",
+      "events": {
+        "100": 3,
+        "101": 4
+      },
+      "visitors": {
+        "100": 3,
+        "101": 3
+      },
+      "params": []
+    },
+    {
+      "event_name": "page_view",
+      "status": "missing",
+      "last_event_at": null,
+      "events": {
+        "100": 0,
+        "101": 0
+      },
+      "visitors": {
+        "100": 0,
+        "101": 0
+      },
+      "params": []
+    }
+  ],
+  "metrics": [
+    {
+      "key": "cr",
+      "availability": "full",
+      "reason": ""
+    },
+    {
+      "key": "aov",
+      "availability": "full",
+      "reason": ""
+    },
+    {
+      "key": "rpv",
+      "availability": "full",
+      "reason": ""
+    },
+    {
+      "key": "add_to_cart_rate",
+      "availability": "limited",
+      "reason": "add_to_cart: warning"
+    },
+    {
+      "key": "buy_to_cart",
+      "availability": "limited",
+      "reason": "add_to_cart: warning"
+    },
+    {
+      "key": "payment_load_rate",
+      "availability": "full",
+      "reason": ""
+    },
+    {
+      "key": "step_payment_to_purchase",
+      "availability": "full",
+      "reason": ""
+    },
+    {
+      "key": "avg_item_price",
+      "availability": "full",
+      "reason": ""
+    }
+  ],
+  "srm": {
+    "expected_weights": {
+      "100": 0.5,
+      "101": 0.5
+    },
+    "chi2": 0.0,
+    "p_value": 1.0,
+    "ok": true
+  },
+  "summary": {
+    "events_receiving": 6,
+    "events_expected": 7,
+    "param_warnings": 1,
+    "metrics_full": 6,
+    "metrics_limited": 2
+  }
+}

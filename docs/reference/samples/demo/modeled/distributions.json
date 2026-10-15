@@ -1,0 +1,362 @@
+{
+  "experiment_id": 1717,
+  "from": "2026-10-01",
+  "to": "2026-10-14",
+  "report_currency": "EUR",
+  "distributions": {
+    "payment_type": {
+      "basis": "add_payment_info events",
+      "by_variation": {
+        "100": [
+          {
+            "value": "card",
+            "count": 74,
+            "share": 0.536232
+          },
+          {
+            "value": "paypal",
+            "count": 30,
+            "share": 0.217391
+          },
+          {
+            "value": "apple_pay",
+            "count": 22,
+            "share": 0.15942
+          },
+          {
+            "value": "klarna",
+            "count": 12,
+            "share": 0.086957
+          }
+        ],
+        "101": [
+          {
+            "value": "card",
+            "count": 88,
+            "share": 0.615385
+          },
+          {
+            "value": "paypal",
+            "count": 33,
+            "share": 0.230769
+          },
+          {
+            "value": "apple_pay",
+            "count": 20,
+            "share": 0.13986
+          },
+          {
+            "value": "klarna",
+            "count": 2,
+            "share": 0.013986
+          }
+        ],
+        "102": [
+          {
+            "value": "card",
+            "count": 95,
+            "share": 0.650685
+          },
+          {
+            "value": "paypal",
+            "count": 33,
+            "share": 0.226027
+          },
+          {
+            "value": "apple_pay",
+            "count": 14,
+            "share": 0.09589
+          },
+          {
+            "value": "klarna",
+            "count": 4,
+            "share": 0.027397
+          }
+        ]
+      }
+    },
+    "coupon": {
+      "basis": "initial orders",
+      "by_variation": {
+        "100": [
+          {
+            "value": "No coupon",
+            "count": 86,
+            "share": 0.803738
+          },
+          {
+            "value": "WELCOME10",
+            "count": 12,
+            "share": 0.11215
+          },
+          {
+            "value": "AUTUMN15",
+            "count": 6,
+            "share": 0.056075
+          },
+          {
+            "value": "FREESHIP",
+            "count": 3,
+            "share": 0.028037
+          }
+        ],
+        "101": [
+          {
+            "value": "No coupon",
+            "count": 88,
+            "share": 0.733333
+          },
+          {
+            "value": "WELCOME10",
+            "count": 16,
+            "share": 0.133333
+          },
+          {
+            "value": "FREESHIP",
+            "count": 9,
+            "share": 0.075
+          },
+          {
+            "value": "AUTUMN15",
+            "count": 7,
+            "share": 0.058333
+          }
+        ],
+        "102": [
+          {
+            "value": "No coupon",
+            "count": 80,
+            "share": 0.754717
+          },
+          {
+            "value": "WELCOME10",
+            "count": 11,
+            "share": 0.103774
+          },
+          {
+            "value": "FREESHIP",
+            "count": 9,
+            "share": 0.084906
+          },
+          {
+            "value": "AUTUMN15",
+            "count": 6,
+            "share": 0.056604
+          }
+        ]
+      }
+    },
+    "currency": {
+      "basis": "initial orders",
+      "by_variation": {
+        "100": [
+          {
+            "value": "EUR",
+            "count": 84,
+            "share": 0.785047
+          },
+          {
+            "value": "USD",
+            "count": 15,
+            "share": 0.140187
+          },
+          {
+            "value": "GBP",
+            "count": 8,
+            "share": 0.074766
+          }
+        ],
+        "101": [
+          {
+            "value": "EUR",
+            "count": 92,
+            "share": 0.766667
+          },
+          {
+            "value": "USD",
+            "count": 20,
+            "share": 0.166667
+          },
+          {
+            "value": "GBP",
+            "count": 8,
+            "share": 0.066667
+          }
+        ],
+        "102": [
+          {
+            "value": "EUR",
+            "count": 90,
+            "share": 0.849057
+          },
+          {
+            "value": "USD",
+            "count": 10,
+            "share": 0.09434
+          },
+          {
+            "value": "GBP",
+            "count": 6,
+            "share": 0.056604
+          }
+        ]
+      }
+    },
+    "order_value": {
+      "basis": "initial orders",
+      "bins": [0, 19.0, 35.1, 39.0, 80.1, 89.0, 113.0, 178.0],
+      "by_variation": {
+        "100": [
+          {
+            "from": 0,
+            "to": 19.0,
+            "count": 8,
+            "share": 0.074766
+          },
+          {
+            "from": 19.0,
+            "to": 35.1,
+            "count": 14,
+            "share": 0.130841
+          },
+          {
+            "from": 35.1,
+            "to": 39.0,
+            "count": 9,
+            "share": 0.084112
+          },
+          {
+            "from": 39.0,
+            "to": 80.1,
+            "count": 18,
+            "share": 0.168224
+          },
+          {
+            "from": 80.1,
+            "to": 89.0,
+            "count": 4,
+            "share": 0.037383
+          },
+          {
+            "from": 89.0,
+            "to": 113.0,
+            "count": 25,
+            "share": 0.233645
+          },
+          {
+            "from": 113.0,
+            "to": 178.0,
+            "count": 11,
+            "share": 0.102804
+          },
+          {
+            "from": 178.0,
+            "to": null,
+            "count": 18,
+            "share": 0.168224
+          }
+        ],
+        "101": [
+          {
+            "from": 0,
+            "to": 19.0,
+            "count": 11,
+            "share": 0.091667
+          },
+          {
+            "from": 19.0,
+            "to": 35.1,
+            "count": 23,
+            "share": 0.191667
+          },
+          {
+            "from": 35.1,
+            "to": 39.0,
+            "count": 8,
+            "share": 0.066667
+          },
+          {
+            "from": 39.0,
+            "to": 80.1,
+            "count": 25,
+            "share": 0.208333
+          },
+          {
+            "from": 80.1,
+            "to": 89.0,
+            "count": 6,
+            "share": 0.05
+          },
+          {
+            "from": 89.0,
+            "to": 113.0,
+            "count": 26,
+            "share": 0.216667
+          },
+          {
+            "from": 113.0,
+            "to": 178.0,
+            "count": 11,
+            "share": 0.091667
+          },
+          {
+            "from": 178.0,
+            "to": null,
+            "count": 10,
+            "share": 0.083333
+          }
+        ],
+        "102": [
+          {
+            "from": 0,
+            "to": 19.0,
+            "count": 2,
+            "share": 0.018868
+          },
+          {
+            "from": 19.0,
+            "to": 35.1,
+            "count": 20,
+            "share": 0.188679
+          },
+          {
+            "from": 35.1,
+            "to": 39.0,
+            "count": 2,
+            "share": 0.018868
+          },
+          {
+            "from": 39.0,
+            "to": 80.1,
+            "count": 15,
+            "share": 0.141509
+          },
+          {
+            "from": 80.1,
+            "to": 89.0,
+            "count": 10,
+            "share": 0.09434
+          },
+          {
+            "from": 89.0,
+            "to": 113.0,
+            "count": 23,
+            "share": 0.216981
+          },
+          {
+            "from": 113.0,
+            "to": 178.0,
+            "count": 13,
+            "share": 0.122642
+          },
+          {
+            "from": 178.0,
+            "to": null,
+            "count": 21,
+            "share": 0.198113
+          }
+        ]
+      }
+    }
+  }
+}

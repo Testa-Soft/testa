@@ -1,0 +1,688 @@
+{
+  "experiment_id": 1717,
+  "from": "2026-10-01",
+  "to": "2026-10-14",
+  "report_currency": "EUR",
+  "purchase_type": "all",
+  "sort": "control_revenue",
+  "limit": 8,
+  "offset": 0,
+  "total_products": 11,
+  "products": [
+    {
+      "product_id": "P-RUN",
+      "name": "Trail Runner",
+      "unit_price": 89.0,
+      "by_variation": {
+        "100": {
+          "units_added": 214,
+          "units_purchased": 59,
+          "units_share": 0.359756,
+          "buy_to_cart": 0.275701,
+          "revenue": 5153.1,
+          "revenue_share": 0.50325
+        },
+        "101": {
+          "units_added": 230,
+          "units_purchased": 52,
+          "units_share": 0.263959,
+          "buy_to_cart": 0.226087,
+          "revenue": 4303.15,
+          "revenue_share": 0.458875
+        },
+        "102": {
+          "units_added": 228,
+          "units_purchased": 75,
+          "units_share": 0.421348,
+          "buy_to_cart": 0.328947,
+          "revenue": 6483.65,
+          "revenue_share": 0.577629
+        }
+      },
+      "variants": [
+        {
+          "item_variant": "Black / US 10",
+          "by_variation": {
+            "100": {
+              "units": 20,
+              "share_of_product": 0.338983,
+              "revenue_share": 0.176442
+            },
+            "101": {
+              "units": 26,
+              "share_of_product": 0.5,
+              "revenue_share": 0.243436
+            },
+            "102": {
+              "units": 40,
+              "share_of_product": 0.533333,
+              "revenue_share": 0.302095
+            }
+          },
+          "low_sample": false
+        },
+        {
+          "item_variant": "White / US 9",
+          "by_variation": {
+            "100": {
+              "units": 13,
+              "share_of_product": 0.220339,
+              "revenue_share": 0.11473
+            },
+            "101": {
+              "units": 8,
+              "share_of_product": 0.153846,
+              "revenue_share": 0.073078
+            },
+            "102": {
+              "units": 11,
+              "share_of_product": 0.146667,
+              "revenue_share": 0.088408
+            }
+          },
+          "low_sample": true
+        },
+        {
+          "item_variant": "White / US 10",
+          "by_variation": {
+            "100": {
+              "units": 10,
+              "share_of_product": 0.169492,
+              "revenue_share": 0.086482
+            },
+            "101": {
+              "units": 7,
+              "share_of_product": 0.134615,
+              "revenue_share": 0.057419
+            },
+            "102": {
+              "units": 11,
+              "share_of_product": 0.146667,
+              "revenue_share": 0.08484
+            }
+          },
+          "low_sample": true
+        },
+        {
+          "item_variant": "Black / US 9",
+          "by_variation": {
+            "100": {
+              "units": 16,
+              "share_of_product": 0.271186,
+              "revenue_share": 0.125595
+            },
+            "101": {
+              "units": 11,
+              "share_of_product": 0.211538,
+              "revenue_share": 0.084942
+            },
+            "102": {
+              "units": 13,
+              "share_of_product": 0.173333,
+              "revenue_share": 0.102284
+            }
+          },
+          "low_sample": false
+        }
+      ]
+    },
+    {
+      "product_id": "P-JKT",
+      "name": "Rain Jacket",
+      "unit_price": 149.0,
+      "by_variation": {
+        "100": {
+          "units_added": 56,
+          "units_purchased": 19,
+          "units_share": 0.115854,
+          "buy_to_cart": 0.339286,
+          "revenue": 2845.9,
+          "revenue_share": 0.277929
+        },
+        "101": {
+          "units_added": 64,
+          "units_purchased": 18,
+          "units_share": 0.091371,
+          "buy_to_cart": 0.28125,
+          "revenue": 1758.2,
+          "revenue_share": 0.187489
+        },
+        "102": {
+          "units_added": 70,
+          "units_purchased": 18,
+          "units_share": 0.101124,
+          "buy_to_cart": 0.257143,
+          "revenue": 2652.2,
+          "revenue_share": 0.236285
+        }
+      },
+      "variants": [
+        {
+          "item_variant": "Navy / M",
+          "by_variation": {
+            "100": {
+              "units": 9,
+              "share_of_product": 0.473684,
+              "revenue_share": 0.133144
+            },
+            "101": {
+              "units": 7,
+              "share_of_product": 0.388889,
+              "revenue_share": 0.111222
+            },
+            "102": {
+              "units": 6,
+              "share_of_product": 0.333333,
+              "revenue_share": 0.079646
+            }
+          },
+          "low_sample": true
+        },
+        {
+          "item_variant": "Navy / L",
+          "by_variation": {
+            "100": {
+              "units": 9,
+              "share_of_product": 0.473684,
+              "revenue_share": 0.130234
+            },
+            "101": {
+              "units": 6,
+              "share_of_product": 0.333333,
+              "revenue_share": 0.031778
+            },
+            "102": {
+              "units": 6,
+              "share_of_product": 0.333333,
+              "revenue_share": 0.077655
+            }
+          },
+          "low_sample": true
+        },
+        {
+          "item_variant": "Olive / M",
+          "by_variation": {
+            "100": {
+              "units": 1,
+              "share_of_product": 0.052632,
+              "revenue_share": 0.014551
+            },
+            "101": {
+              "units": 5,
+              "share_of_product": 0.277778,
+              "revenue_share": 0.044489
+            },
+            "102": {
+              "units": 6,
+              "share_of_product": 0.333333,
+              "revenue_share": 0.078983
+            }
+          },
+          "low_sample": true
+        }
+      ]
+    },
+    {
+      "product_id": "P-TEE",
+      "name": "Merino Tee",
+      "unit_price": 39.0,
+      "by_variation": {
+        "100": {
+          "units_added": 124,
+          "units_purchased": 37,
+          "units_share": 0.22561,
+          "buy_to_cart": 0.298387,
+          "revenue": 1324.05,
+          "revenue_share": 0.129306
+        },
+        "101": {
+          "units_added": 129,
+          "units_purchased": 30,
+          "units_share": 0.152284,
+          "buy_to_cart": 0.232558,
+          "revenue": 1095.9,
+          "revenue_share": 0.116864
+        },
+        "102": {
+          "units_added": 120,
+          "units_purchased": 19,
+          "units_share": 0.106742,
+          "buy_to_cart": 0.158333,
+          "revenue": 729.3,
+          "revenue_share": 0.064973
+        }
+      },
+      "variants": [
+        {
+          "item_variant": "L",
+          "by_variation": {
+            "100": {
+              "units": 13,
+              "share_of_product": 0.351351,
+              "revenue_share": 0.042658
+            },
+            "101": {
+              "units": 8,
+              "share_of_product": 0.266667,
+              "revenue_share": 0.032023
+            },
+            "102": {
+              "units": 6,
+              "share_of_product": 0.315789,
+              "revenue_share": 0.0205
+            }
+          },
+          "low_sample": true
+        },
+        {
+          "item_variant": "S",
+          "by_variation": {
+            "100": {
+              "units": 6,
+              "share_of_product": 0.162162,
+              "revenue_share": 0.023043
+            },
+            "101": {
+              "units": 11,
+              "share_of_product": 0.366667,
+              "revenue_share": 0.0445
+            },
+            "102": {
+              "units": 6,
+              "share_of_product": 0.315789,
+              "revenue_share": 0.0205
+            }
+          },
+          "low_sample": true
+        },
+        {
+          "item_variant": "M",
+          "by_variation": {
+            "100": {
+              "units": 18,
+              "share_of_product": 0.486486,
+              "revenue_share": 0.063606
+            },
+            "101": {
+              "units": 11,
+              "share_of_product": 0.366667,
+              "revenue_share": 0.040341
+            },
+            "102": {
+              "units": 7,
+              "share_of_product": 0.368421,
+              "revenue_share": 0.023974
+            }
+          },
+          "low_sample": false
+        }
+      ]
+    },
+    {
+      "product_id": "P-SOX",
+      "name": "Wool Socks 3-pack",
+      "unit_price": 19.0,
+      "by_variation": {
+        "100": {
+          "units_added": 70,
+          "units_purchased": 21,
+          "units_share": 0.128049,
+          "buy_to_cart": 0.3,
+          "revenue": 391.4,
+          "revenue_share": 0.038224
+        },
+        "101": {
+          "units_added": 102,
+          "units_purchased": 36,
+          "units_share": 0.182741,
+          "buy_to_cart": 0.352941,
+          "revenue": 599.45,
+          "revenue_share": 0.063924
+        },
+        "102": {
+          "units_added": 62,
+          "units_purchased": 21,
+          "units_share": 0.117978,
+          "buy_to_cart": 0.33871,
+          "revenue": 401.85,
+          "revenue_share": 0.035801
+        }
+      },
+      "variants": [
+        {
+          "item_variant": "M",
+          "by_variation": {
+            "100": {
+              "units": 14,
+              "share_of_product": 0.666667,
+              "revenue_share": 0.025421
+            },
+            "101": {
+              "units": 17,
+              "share_of_product": 0.472222,
+              "revenue_share": 0.030088
+            },
+            "102": {
+              "units": 10,
+              "share_of_product": 0.47619,
+              "revenue_share": 0.016927
+            }
+          },
+          "low_sample": true
+        },
+        {
+          "item_variant": "L",
+          "by_variation": {
+            "100": {
+              "units": 7,
+              "share_of_product": 0.333333,
+              "revenue_share": 0.012803
+            },
+            "101": {
+              "units": 19,
+              "share_of_product": 0.527778,
+              "revenue_share": 0.033836
+            },
+            "102": {
+              "units": 11,
+              "share_of_product": 0.52381,
+              "revenue_share": 0.018874
+            }
+          },
+          "low_sample": true
+        }
+      ]
+    },
+    {
+      "product_id": "P-CARE",
+      "name": "Shoe Care Kit",
+      "unit_price": 18.0,
+      "by_variation": {
+        "100": {
+          "units_added": 0,
+          "units_purchased": 14,
+          "units_share": 0.085366,
+          "buy_to_cart": null,
+          "revenue": 255.6,
+          "revenue_share": 0.024962
+        },
+        "101": {
+          "units_added": 0,
+          "units_purchased": 24,
+          "units_share": 0.121827,
+          "buy_to_cart": null,
+          "revenue": 436.5,
+          "revenue_share": 0.046547
+        },
+        "102": {
+          "units_added": 0,
+          "units_purchased": 19,
+          "units_share": 0.106742,
+          "buy_to_cart": null,
+          "revenue": 342.9,
+          "revenue_share": 0.030549
+        }
+      },
+      "variants": [
+        {
+          "item_variant": "Default",
+          "by_variation": {
+            "100": {
+              "units": 14,
+              "share_of_product": 1.0,
+              "revenue_share": 0.024962
+            },
+            "101": {
+              "units": 24,
+              "share_of_product": 1.0,
+              "revenue_share": 0.046547
+            },
+            "102": {
+              "units": 19,
+              "share_of_product": 1.0,
+              "revenue_share": 0.030549
+            }
+          },
+          "low_sample": true
+        }
+      ]
+    },
+    {
+      "product_id": "P-CAP",
+      "name": "Logo Cap",
+      "unit_price": 24.0,
+      "by_variation": {
+        "100": {
+          "units_added": 41,
+          "units_purchased": 8,
+          "units_share": 0.04878,
+          "buy_to_cart": 0.195122,
+          "revenue": 183.6,
+          "revenue_share": 0.01793
+        },
+        "101": {
+          "units_added": 45,
+          "units_purchased": 13,
+          "units_share": 0.06599,
+          "buy_to_cart": 0.288889,
+          "revenue": 304.8,
+          "revenue_share": 0.032503
+        },
+        "102": {
+          "units_added": 39,
+          "units_purchased": 7,
+          "units_share": 0.039326,
+          "buy_to_cart": 0.179487,
+          "revenue": 168.0,
+          "revenue_share": 0.014967
+        }
+      },
+      "variants": [
+        {
+          "item_variant": "One size",
+          "by_variation": {
+            "100": {
+              "units": 8,
+              "share_of_product": 1.0,
+              "revenue_share": 0.01793
+            },
+            "101": {
+              "units": 13,
+              "share_of_product": 1.0,
+              "revenue_share": 0.032503
+            },
+            "102": {
+              "units": 7,
+              "share_of_product": 1.0,
+              "revenue_share": 0.014967
+            }
+          },
+          "low_sample": true
+        }
+      ]
+    },
+    {
+      "product_id": "P-BTL",
+      "name": "Steel Bottle",
+      "unit_price": 29.0,
+      "by_variation": {
+        "100": {
+          "units_added": 21,
+          "units_purchased": 4,
+          "units_share": 0.02439,
+          "buy_to_cart": 0.190476,
+          "revenue": 58.0,
+          "revenue_share": 0.005664
+        },
+        "101": {
+          "units_added": 22,
+          "units_purchased": 6,
+          "units_share": 0.030457,
+          "buy_to_cart": 0.272727,
+          "revenue": 168.2,
+          "revenue_share": 0.017936
+        },
+        "102": {
+          "units_added": 29,
+          "units_purchased": 7,
+          "units_share": 0.039326,
+          "buy_to_cart": 0.241379,
+          "revenue": 211.7,
+          "revenue_share": 0.01886
+        }
+      },
+      "variants": [
+        {
+          "item_variant": "750 ml",
+          "by_variation": {
+            "100": {
+              "units": 3,
+              "share_of_product": 0.75,
+              "revenue_share": 0.002832
+            },
+            "101": {
+              "units": 5,
+              "share_of_product": 0.833333,
+              "revenue_share": 0.014844
+            },
+            "102": {
+              "units": 4,
+              "share_of_product": 0.571429,
+              "revenue_share": 0.010334
+            }
+          },
+          "low_sample": true
+        },
+        {
+          "item_variant": "500 ml",
+          "by_variation": {
+            "100": {
+              "units": 1,
+              "share_of_product": 0.25,
+              "revenue_share": 0.002832
+            },
+            "101": {
+              "units": 1,
+              "share_of_product": 0.166667,
+              "revenue_share": 0.003092
+            },
+            "102": {
+              "units": 3,
+              "share_of_product": 0.428571,
+              "revenue_share": 0.008526
+            }
+          },
+          "low_sample": true
+        }
+      ]
+    },
+    {
+      "product_id": "P-GLV",
+      "name": "Running Gloves",
+      "unit_price": 22.0,
+      "by_variation": {
+        "100": {
+          "units_added": 8,
+          "units_purchased": 1,
+          "units_share": 0.006098,
+          "buy_to_cart": 0.125,
+          "revenue": 22.0,
+          "revenue_share": 0.002149
+        },
+        "101": {
+          "units_added": 12,
+          "units_purchased": 5,
+          "units_share": 0.025381,
+          "buy_to_cart": 0.416667,
+          "revenue": 107.8,
+          "revenue_share": 0.011495
+        },
+        "102": {
+          "units_added": 13,
+          "units_purchased": 7,
+          "units_share": 0.039326,
+          "buy_to_cart": 0.538462,
+          "revenue": 154.0,
+          "revenue_share": 0.01372
+        }
+      },
+      "variants": [
+        {
+          "item_variant": "L/XL",
+          "by_variation": {
+            "100": {
+              "units": 1,
+              "share_of_product": 1.0,
+              "revenue_share": 0.002149
+            },
+            "101": {
+              "units": 2,
+              "share_of_product": 0.4,
+              "revenue_share": 0.004457
+            },
+            "102": {
+              "units": 5,
+              "share_of_product": 0.714286,
+              "revenue_share": 0.0098
+            }
+          },
+          "low_sample": true
+        },
+        {
+          "item_variant": "S/M",
+          "by_variation": {
+            "100": {
+              "units": 0,
+              "share_of_product": 0.0,
+              "revenue_share": 0.0
+            },
+            "101": {
+              "units": 3,
+              "share_of_product": 0.6,
+              "revenue_share": 0.007038
+            },
+            "102": {
+              "units": 2,
+              "share_of_product": 0.285714,
+              "revenue_share": 0.00392
+            }
+          },
+          "low_sample": true
+        }
+      ]
+    },
+    {
+      "product_id": "(other)",
+      "name": "Other products",
+      "unit_price": null,
+      "by_variation": {
+        "100": {
+          "units_added": 15,
+          "units_purchased": 1,
+          "units_share": 0.006098,
+          "buy_to_cart": 0.066667,
+          "revenue": 6.0,
+          "revenue_share": 0.000586
+        },
+        "101": {
+          "units_added": 45,
+          "units_purchased": 13,
+          "units_share": 0.06599,
+          "buy_to_cart": 0.288889,
+          "revenue": 603.6,
+          "revenue_share": 0.064366
+        },
+        "102": {
+          "units_added": 24,
+          "units_purchased": 5,
+          "units_share": 0.02809,
+          "buy_to_cart": 0.208333,
+          "revenue": 81.0,
+          "revenue_share": 0.007216
+        }
+      },
+      "variants": [],
+      "product_count": 3
+    }
+  ]
+}

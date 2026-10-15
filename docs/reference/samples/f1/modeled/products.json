@@ -1,0 +1,160 @@
+{
+  "experiment_id": 1717,
+  "from": "2026-10-01",
+  "to": "2026-10-03",
+  "report_currency": "EUR",
+  "purchase_type": "all",
+  "sort": "control_revenue",
+  "limit": 8,
+  "offset": 0,
+  "total_products": 4,
+  "products": [
+    {
+      "product_id": "SKU-A",
+      "name": "Product A",
+      "unit_price": 40,
+      "by_variation": {
+        "100": {
+          "units_added": 2,
+          "units_purchased": 2,
+          "units_share": 1.0,
+          "buy_to_cart": 1.0,
+          "revenue": 100.0,
+          "revenue_share": 1.0
+        },
+        "101": {
+          "units_added": 0,
+          "units_purchased": 2,
+          "units_share": 0.5,
+          "buy_to_cart": null,
+          "revenue": 80.0,
+          "revenue_share": 0.551724
+        }
+      },
+      "variants": [
+        {
+          "item_variant": "Default",
+          "by_variation": {
+            "100": {
+              "units": 2,
+              "share_of_product": 1.0,
+              "revenue_share": 1.0
+            },
+            "101": {
+              "units": 2,
+              "share_of_product": 1.0,
+              "revenue_share": 0.551724
+            }
+          },
+          "low_sample": true
+        }
+      ]
+    },
+    {
+      "product_id": "SKU-B",
+      "name": "Product B",
+      "unit_price": 50,
+      "by_variation": {
+        "100": {
+          "units_added": 0,
+          "units_purchased": 0,
+          "units_share": 0.0,
+          "buy_to_cart": null,
+          "revenue": 0.0,
+          "revenue_share": 0.0
+        },
+        "101": {
+          "units_added": 0,
+          "units_purchased": 1,
+          "units_share": 0.25,
+          "buy_to_cart": null,
+          "revenue": 45.0,
+          "revenue_share": 0.310345
+        }
+      },
+      "variants": [
+        {
+          "item_variant": "Default",
+          "by_variation": {
+            "100": {
+              "units": 0,
+              "share_of_product": null,
+              "revenue_share": 0.0
+            },
+            "101": {
+              "units": 1,
+              "share_of_product": 1.0,
+              "revenue_share": 0.310345
+            }
+          },
+          "low_sample": true
+        }
+      ]
+    },
+    {
+      "product_id": "SKU-U",
+      "name": "Upsell U",
+      "unit_price": 20,
+      "by_variation": {
+        "100": {
+          "units_added": 0,
+          "units_purchased": 0,
+          "units_share": 0.0,
+          "buy_to_cart": null,
+          "revenue": 0.0,
+          "revenue_share": 0.0
+        },
+        "101": {
+          "units_added": 0,
+          "units_purchased": 1,
+          "units_share": 0.25,
+          "buy_to_cart": null,
+          "revenue": 20.0,
+          "revenue_share": 0.137931
+        }
+      },
+      "variants": [
+        {
+          "item_variant": "Default",
+          "by_variation": {
+            "100": {
+              "units": 0,
+              "share_of_product": null,
+              "revenue_share": 0.0
+            },
+            "101": {
+              "units": 1,
+              "share_of_product": 1.0,
+              "revenue_share": 0.137931
+            }
+          },
+          "low_sample": true
+        }
+      ]
+    },
+    {
+      "product_id": "SKU-C",
+      "name": "",
+      "unit_price": 0,
+      "by_variation": {
+        "100": {
+          "units_added": 0,
+          "units_purchased": 0,
+          "units_share": 0.0,
+          "buy_to_cart": null,
+          "revenue": 0.0,
+          "revenue_share": 0.0
+        },
+        "101": {
+          "units_added": 1,
+          "units_purchased": 0,
+          "units_share": 0.0,
+          "buy_to_cart": 0.0,
+          "revenue": 0.0,
+          "revenue_share": 0.0
+        }
+      },
+      "variants": []
+    }
+  ]
+}
