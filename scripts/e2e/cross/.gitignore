@@ -1,0 +1,2 @@
+# Run artifacts: logs, report.json/md, screenshots, generated secrets.
+.artifacts/
