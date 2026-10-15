@@ -461,6 +461,8 @@ DROP VIEW IF EXISTS mv_rpv_visitors_daily;
 
 ### 022_create_metric_subscriptions.sql
 
+Experiment ids are unique **per project** only (crobot ids), so subscriptions, `metric_daily` reads, Redis run state, locks and query ids are all keyed by `(project_id, experiment_id)` (R3, P4-fix3 `f572432`); both tables already order by `(project_id, experiment_id, …)`, so no schema change was needed.
+
 What crobot wants modeled (sync API §3.1). Latest PUT wins; read with `FINAL`. `status`: running | stopped | deleted.
 
 ```sql

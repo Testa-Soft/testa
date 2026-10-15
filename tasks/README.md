@@ -94,25 +94,35 @@ Implements `docs/prds/006-ecommerce-events-and-metric-modeling.md` (**Parts 5–
 
 | ID | Task | Package | Status | Blocked by |
 |---|---|---|---|---|
-| [5.1](./phase-5/5.1-shared-types.md) | Shared types — envelope, Item, sync API + view + stats types | P0 | pending | — |
-| [5.2](./phase-5/5.2-clickhouse-migrations.md) | ClickHouse migrations 013–023 | P0 | pending | — |
-| [5.18](./phase-5/5.18-attribution-core-and-route-stubs.md) | Attribution core + sync/stats stubs + view registry | P0 | pending | 5.1, 5.2 |
-| [5.5](./phase-5/5.5-pixel-experiment-session.md) | Pixel — experiment session, `session_idx`, `exp` stamping | P1 | pending | 5.1 |
-| [5.6](./phase-5/5.6-pixel-attribution-fields.md) | Pixel — session-entry attribution, screen size, utm_term/content | P1 | pending | 5.1 |
-| [5.7](./phase-5/5.7-track-api-helpers.md) | Pixel + next/react — `track()` + typed helpers | P1 | pending | 5.5 |
-| [5.3](./phase-5/5.3-edge-validation-enrichment.md) | Edge — Zod, alias, OS/browser split, referrer_domain, channel | P2 | pending | 5.1 |
-| [5.4](./phase-5/5.4-consumer-row-mapping.md) | Consumer — new columns + event_items fan-out | P2 | pending | 5.1, 5.2 |
-| [5.19](./phase-5/5.19-fx-previous-day-and-backfill.md) | FX — previous-day rate, backfill, fallback | P2 | pending | 5.1 |
-| [5.10](./phase-5/5.10-bayesian-stats-module.md) | Bayesian Monte Carlo stats module | P3 | pending | 5.1 |
-| [5.11](./phase-5/5.11-stats-endpoint.md) | `POST /api/v1/stats` | P3 | pending | 5.10 |
-| [5.9](./phase-5/5.9-daily-rows-builder.md) | Daily rows builder (22 keys) | P4 | pending | 5.18 |
-| [5.15](./phase-5/5.15-modeler-process.md) | Modeler process — scheduler, queue, workers, webhook | P4 | pending | 5.9 |
-| [5.8](./phase-5/5.8-sync-api-routes.md) | Sync API routes | P4 | pending | 5.15 |
-| [5.14](./phase-5/5.14-e2e-validation-harness.md) | E2E validation harness | P5 | pending | 5.1 |
-| [5.16](./phase-5/5.16-products-distributions-views.md) | Products + distributions views | P7 | pending | 5.18 |
-| [5.17](./phase-5/5.17-health-view.md) | Health view | P8 | pending | 5.18 |
-| [5.12](./phase-5/5.12-docs-update.md) | Docs update | P6 | pending | all |
+| [5.1](./phase-5/5.1-shared-types.md) | Shared types — envelope, Item, sync API + view + stats types | P0 | done — merged (`c3e2c04`) | — |
+| [5.2](./phase-5/5.2-clickhouse-migrations.md) | ClickHouse migrations 013–023 | P0 | done — merged (`80bb9eb`) | — |
+| [5.18](./phase-5/5.18-attribution-core-and-route-stubs.md) | Attribution core + sync/stats stubs + view registry | P0 | done — merged (`3219295`) | 5.1, 5.2 |
+| [5.5](./phase-5/5.5-pixel-experiment-session.md) | Pixel — experiment session, `session_idx`, `exp` stamping | P1 | done — merged (`c5848e0`, `116d676`) | 5.1 |
+| [5.6](./phase-5/5.6-pixel-attribution-fields.md) | Pixel — session-entry attribution, screen size, utm_term/content | P1 | done — merged (`8391557`) | 5.1 |
+| [5.7](./phase-5/5.7-track-api-helpers.md) | Pixel + next/react — `track()` + typed helpers | P1 | done — merged (`6e40287`) | 5.5 |
+| [5.3](./phase-5/5.3-edge-validation-enrichment.md) | Edge — Zod, alias, OS/browser split, referrer_domain, channel | P2 | done — merged (`544a5d6`) | 5.1 |
+| [5.4](./phase-5/5.4-consumer-row-mapping.md) | Consumer — new columns + event_items fan-out | P2 | done — merged (`6b71520`) | 5.1, 5.2 |
+| [5.19](./phase-5/5.19-fx-previous-day-and-backfill.md) | FX — previous-day rate, backfill, fallback | P2 | done — merged (`c5d021a`) | 5.1 |
+| [5.10](./phase-5/5.10-bayesian-stats-module.md) | Bayesian Monte Carlo stats module | P3 | done — merged (`d7cb1ae`) | 5.1 |
+| [5.11](./phase-5/5.11-stats-endpoint.md) | `POST /api/v1/stats` | P3 | done — merged (`db54724`) | 5.10 |
+| [5.9](./phase-5/5.9-daily-rows-builder.md) | Daily rows builder (22 keys; + `units_upsell` R2) | P4 | done — merged (`3312f5f`) | 5.18 |
+| [5.15](./phase-5/5.15-modeler-process.md) | Modeler process — scheduler, queue, workers, webhook | P4 | done — merged (`c678dbf`) | 5.9 |
+| [5.8](./phase-5/5.8-sync-api-routes.md) | Sync API routes | P4 | done — merged (`6bb35e9`) | 5.15 |
+| [5.14](./phase-5/5.14-e2e-validation-harness.md) | E2E validation harness | P5 | in progress (P5, not yet merged) | 5.1 |
+| [5.16](./phase-5/5.16-products-distributions-views.md) | Products + distributions views | P7 | done — merged (`1cb630a`) | 5.18 |
+| [5.17](./phase-5/5.17-health-view.md) | Health view | P8 | done — merged (`940fb10`) | 5.18 |
+| [5.12](./phase-5/5.12-docs-update.md) | Docs update | P6 | done (part A docs; validation report = part B) | all |
 | [5.13](./phase-5/5.13-crobot-handoff.md) | Crobot handoff (moved to the crobot repo) | — | cancelled | — |
+
+**Follow-ups merged during integration** (from crobot requests R1–R4 in
+`phase-5/logs/CROBOT-REQUESTS.md` and the X0 live harness):
+
+| Fix | What | Merged |
+|---|---|---|
+| P4-fix1 | Config alias by numeric `project_id` + `platform_version` kept by the config build | `b9681b3` |
+| P4-fix2 | R2 `units_upsell` daily-row key (+ oracle, additive samples) | `b4e856d` |
+| P4-fix3 | R3 project-scoped sync API + modeler state (`project_id` on every experiment-scoped call) | `b097929` |
+| P7-fix1 | R4 `distributions.capped` with `cap_outliers` | `6099edb` |
 
 ## Phase N — Next.js split-URL middleware (`@testa/next`)
 

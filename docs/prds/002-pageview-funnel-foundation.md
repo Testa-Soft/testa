@@ -5,6 +5,16 @@
 **Date:** 2026-07-08
 **Origin:** grill-me session 2026-07-08 (design decisions locked below)
 
+> **Update (PRD-006, 2026-10).** On the PRD-006 pipeline (projects with
+> `platform_version: "v2"` experiments) the pixel sends events — `page_view`
+> included — **only inside an active experiment session**; `page_view` now
+> fires after the experiment cycle so it lands in the session (PRD-006 §1.3,
+> §5.3; P1 `c5848e0`). The in-experiment `page_view` retention tier is now
+> **90 days**, not 30 (migration `015_events_ttl_pageview_90d.sql`, P0
+> `80bb9eb`; non-experiment page_views keep 1 day). Projects without v2
+> experiments are unchanged. The TTL snippet below is the original 30-day
+> design, kept for history.
+
 ## Problem Statement
 
 We want to map our clients' funnels — all landing pages, the full user

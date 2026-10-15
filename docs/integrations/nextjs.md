@@ -467,6 +467,20 @@ track('size_guide_opened', { product_id: 'SW-MER' });     // custom event
 - Using the pixel instead? The same helpers exist on `window._testa`
   (`_testa.trackPurchase({…})`, …), queue-safe before the pixel loads; the
   positional `_testa.trackPurchase(value, currency, orderId)` still works.
+- **Upgrading from 1.5.0 (release note).** v2 experiments need this SDK version
+  on every surface that writes the `_testa_exp` cookie. A 1.5.0 middleware /
+  provider still reads the new cookie correctly (assignments, exclusions and the
+  `sessionExp` expiry keep their meaning), but when it **rewrites** the cookie
+  it drops the new experiment-session fields (5–6). Assignments survive; the
+  pixel then starts a new experiment session, so session counts inflate and
+  new-vs-returning skews. v1 experiments are unaffected.
+- **Keep `/track` same-origin.** The pixel falls back to `sendBeacon` on
+  `pagehide`, and browsers refuse a cross-origin `sendBeacon` with a JSON body.
+  With `/track` on another origin (or a pixel `apiUrl` pointing elsewhere),
+  events still queued when the visitor leaves are delayed until the next page
+  view, or lost if there is none. The SDK helpers post with
+  `fetch(…, { keepalive: true })`; cross-origin endpoints need CORS (the edge
+  worker allows any origin).
 
 ## Analytics events
 

@@ -587,7 +587,7 @@ middleware). Errors: §5.5.
 
 ```
 PUT    /api/v1/experiments/{experiment_id}/subscription
-DELETE /api/v1/experiments/{experiment_id}/subscription
+DELETE /api/v1/experiments/{experiment_id}/subscription?project_id=42      # R3, §3.9
 ```
 
 ```jsonc
@@ -676,7 +676,7 @@ decide whether to ask again.
 ### 3.4 Daily summary (core rows)
 
 ```
-GET /api/v1/experiments/{experiment_id}/daily-summary[?since_run_id=r_8f2c]
+GET /api/v1/experiments/{experiment_id}/daily-summary?project_id=42[&since_run_id=r_8f2c]   # project_id: R3, §3.9
 ```
 
 ```jsonc
@@ -717,13 +717,14 @@ or new vs returning.
 
 ```
 POST /api/v1/experiments/{experiment_id}/queries     → 202 { query_id, status, retry_after }
-GET  /api/v1/experiments/{experiment_id}/queries/{query_id}
+GET  /api/v1/experiments/{experiment_id}/queries/{query_id}?project_id=42   # R3, §3.9
 ```
 
 ```jsonc
 // POST body
 {
   "view": "summary",                     // summary | products | distributions | health (§6.5 params go alongside)
+  "project_id": 42,                      // R3 (§3.9)
   "from": "2026-10-01", "to": "2026-10-15",
   "metrics": ["purchase", "add_payment_info"],
   "dimension": "device_type",            // optional, one dimension (§3.6); top 10 + "(other)"
@@ -830,6 +831,23 @@ Today `leads` come from MySQL (`/api/leads`). The new endpoint counts
 dual-compute for legacy goal types and compare, then switch each project once
 within tolerance (e.g. <1% lead diff). The new ecommerce metrics have no MySQL
 equivalent and use the platform from day one.
+
+### 3.9 Contract additions during implementation (shipped)
+
+These were added while building Part 3 (crobot requests R1–R4 in
+`tasks/phase-5/logs/CROBOT-REQUESTS.md`, plus platform findings). All are
+**additive**; the full reference is `docs/reference/api-endpoints.md`.
+
+| Addition | What | Shipped |
+|---|---|---|
+| R1 `platform_version` | `ProjectConfig.experiments[].platform_version: 'v1' \| 'v2'` (absent = v1); the config build keeps crobot's value; analytics answer 409 `version_mismatch` for non-v2 | P0 `c3e2c04`, P4-fix1 `b9681b3` |
+| R2 `units_upsell` | New daily-row key: `converted` = visitors with an upsell order, `count` = units in upsell orders, `sum` = upsell item revenue; `units` stays initial orders only. Units sold = `units.count + units_upsell.count` | P4-fix2 `b4e856d` |
+| R3 project scoping | Experiment ids are unique per project only: **every experiment-scoped call carries `project_id`** — body on `PUT …/subscription` and `POST …/queries`, `?project_id=` on `DELETE …/subscription`, `GET …/daily-summary`, `GET …/queries/:id`. Missing / invalid → 400 `invalid_body` (`field: "project_id"`); an experiment not in that project's config → 404 `experiment_not_found` (before `not_subscribed` / `query_not_found`). Query ids, run state, locks and rate limits are per project; webhook bodies carry `project_id` | P4-fix3 `f572432` |
+| R4 `distributions.capped` | With `cap_outliers: true` the distributions result gains `capped: { threshold, by_variation }` (pooled p99 of initial-order values, report currency; count of initial orders above it); absent otherwise | P7-fix1 `6099edb` |
+| `quality.unconvertible_orders` | Orders in a currency with no known rate are left out of money sums and counted here; present only when > 0 | P2 `c5d021a` |
+| Error codes | `invalid_body` joined `SyncErrorCode` (R3; also the stats endpoint's body errors). `POST /api/v1/stats` adds a route-local `too_large` (> 50 metrics, > 10 variations, body > 256 KiB). Unhandled errors answer 500 `internal_error` | P3 `db54724`, P4-fix3 `f572432` |
+| Config alias | Crobot publishes configs by project UUID; the collector also indexes each by its numeric `project_id`, which is what the sync API resolves | P4-fix1 `b9681b3` |
+| Webhook body | `event` discriminator in the body: `{ event: 'summary-ready', project_id, experiment_id, run_id, computed_at, data_through }`, `{ event: 'query-ready', project_id, experiment_id, query_id, computed_at }` | P4 `c678dbf`, R3 |
 
 ---
 
@@ -986,36 +1004,38 @@ The existing `os` and `browser` columns stay, for compatibility.
 `max_session_idx` is `SimpleAggregateFunction(max, UInt16)`.
 `screen_resolution` and `visitor_type` are derived at query time.
 
-**`mv_exposures`:**
+**`mv_exposures`:** (source columns are qualified `events.x`: unqualified, ClickHouse 24.10 resolves names like
+`variation_id` to the output alias, an aggregate state, inside other aggregates and in `WHERE`, and rejects the view with
+code 184. Shipped as migration `017_mv_exposures.sql`, P0 `80bb9eb`.)
 
 ```sql
 CREATE MATERIALIZED VIEW IF NOT EXISTS mv_exposures TO exposures AS
 SELECT
-  project_id,
-  assumeNotNull(experiment_id)                     AS experiment_id,
-  visitor_id,
-  min(client_ts)                                   AS first_exposed_at,
-  argMinState(assumeNotNull(variation_id), client_ts) AS variation_id,
-  uniqExactState(assumeNotNull(variation_id))      AS variations_seen,
-  uniqExactState(exp_session_starts[indexOf(exp_ids, assumeNotNull(experiment_id))]) AS sessions,   -- distinct session starts, not experiment_view count (it re-fires on SPA navigation)
-  max(exp_session_idx[indexOf(exp_ids, assumeNotNull(experiment_id))])            AS max_session_idx,
-  argMinState(channel, client_ts)                  AS channel,
-  argMinState(referrer_domain, client_ts)          AS referrer_domain,
-  argMinState(entry_utm_source, client_ts)         AS utm_source,
-  argMinState(entry_utm_medium, client_ts)         AS utm_medium,
-  argMinState(entry_utm_campaign, client_ts)       AS utm_campaign,
-  argMinState(entry_utm_term, client_ts)           AS utm_term,
-  argMinState(entry_utm_content, client_ts)        AS utm_content,
-  argMinState(country, client_ts)                  AS country,
-  argMinState(region, client_ts)                   AS region,
-  argMinState(city, client_ts)                     AS city,
-  argMinState(device_type, client_ts)              AS device_type,
-  argMinState(os_name, client_ts)                  AS os_name,
-  argMinState(browser_name, client_ts)             AS browser_name,
-  argMinState(toLowCardinality(concat(toString(screen_w), 'x', toString(screen_h))), client_ts) AS screen_resolution
+    events.project_id AS project_id,
+    assumeNotNull(events.experiment_id)                     AS experiment_id,
+    events.visitor_id AS visitor_id,
+    min(events.client_ts)                                   AS first_exposed_at,
+    argMinState(assumeNotNull(events.variation_id), events.client_ts) AS variation_id,
+    uniqExactState(assumeNotNull(events.variation_id))      AS variations_seen,
+    uniqExactState(events.exp_session_starts[indexOf(events.exp_ids, assumeNotNull(events.experiment_id))]) AS sessions,
+    max(events.exp_session_idx[indexOf(events.exp_ids, assumeNotNull(events.experiment_id))])            AS max_session_idx,
+    argMinState(events.channel, events.client_ts)                  AS channel,
+    argMinState(events.referrer_domain, events.client_ts)          AS referrer_domain,
+    argMinState(events.entry_utm_source, events.client_ts)         AS utm_source,
+    argMinState(events.entry_utm_medium, events.client_ts)         AS utm_medium,
+    argMinState(events.entry_utm_campaign, events.client_ts)       AS utm_campaign,
+    argMinState(events.entry_utm_term, events.client_ts)           AS utm_term,
+    argMinState(events.entry_utm_content, events.client_ts)        AS utm_content,
+    argMinState(events.country, events.client_ts)                  AS country,
+    argMinState(events.region, events.client_ts)                   AS region,
+    argMinState(events.city, events.client_ts)                     AS city,
+    argMinState(events.device_type, events.client_ts)              AS device_type,
+    argMinState(events.os_name, events.client_ts)                  AS os_name,
+    argMinState(events.browser_name, events.client_ts)             AS browser_name,
+    argMinState(toLowCardinality(concat(toString(events.screen_w), 'x', toString(events.screen_h))), events.client_ts) AS screen_resolution
 FROM events
-WHERE event_name = 'experiment_view' AND is_bot = 0 AND experiment_id IS NOT NULL AND variation_id IS NOT NULL
-GROUP BY project_id, experiment_id, visitor_id;
+WHERE events.event_name = 'experiment_view' AND events.is_bot = 0 AND events.experiment_id IS NOT NULL AND events.variation_id IS NOT NULL
+GROUP BY events.project_id, events.experiment_id, events.visitor_id;
 ```
 
 `visitor_type` = `if(max(max_session_idx) >= 2, 'returning', 'new')` (the MV only sees `experiment_view`, and a new session can start on a page without one, so the query also takes the max `session_idx` over the visitor's attributed events): **returning = came back to this experiment in a new experiment session** (decided by the user; it can change from new to returning later, and it's a post-exposure split, so it's never used to declare winners).
@@ -1149,7 +1169,7 @@ Full version: `docs/prds/006-validation.md` (fixtures F1–F3, flows, `pnpm prd0
 | Repo | Work |
 |---|---|
 | **testa-platform** (this) | shared-types, migrations, edge, consumer, pixel, `@testa-soft/next`, modeler + sync API, query views, stats endpoint, FX, docs: tasks 5.1–5.19; parallel sessions per `tasks/phase-5/SESSIONS.md` |
-| **crobot** | subscription calls, `metric_summary` sync jobs + webhook receiver, on-demand query jobs, results UI (from your wireframes), goal-type mapping to `goal:<id>` / `event:<name>`, project stats settings (95% / 0.5%), keep old stats service for legacy goals. Executed in the crobot repo from `tasks/prd-analytics-v2.md` + `tasks/analytics-v2/SESSIONS.md`. |
+| **crobot** | subscription calls, `metric_summary` sync jobs + webhook receiver, on-demand query jobs, results UI (from your wireframes), goal-type mapping to `goal:<id>` / `event:<name>`, project stats settings (95% / 0.5%), keep old stats service for legacy goals. Executed in the crobot repo from `tasks/prd-analytics-v2.md` + the task files `tasks/analytics-v2/C0`–`C10`. |
 
 ### 5.8 Superseded
 
@@ -1226,8 +1246,8 @@ crobot sends summed inputs to `POST /api/v1/stats` (task 5.11).
 
 | Wireframe | Computed as |
 |---|---|
-| "Significant" + blue / "Better" | `chance_to_beat_control ≥ confidence` (default 0.95); for lower-is-better metrics, `≤ 1 − confidence` |
-| "Significant" + orange / "Worse" | the opposite tail |
+| "Significant" + blue / "Better" | `chance_to_beat_control ≥ confidence` (default 0.95), **for both directions**: with `direction: 'lower'` the endpoint already flips `chance_to_beat_control` (§4.3; P3 `d7cb1ae`, `db54724`), so "beats control" always means "better" |
+| "Significant" + orange / "Worse" | `chance_to_beat_control ≤ 1 − confidence` (both directions, same reason) |
 | "Insignificant" / "Inconclusive" | neither |
 | "Baseline" | control row |
 | "95% CI of uplift" | Bayesian credible interval of relative lift at `confidence` (`lift_ci`) |
@@ -1370,3 +1390,10 @@ tab and the Summary "Tracking: 2 warnings" card.
 - [ ] **Reporting currency:** per project (default) or per experiment?
 - [ ] **Trend chart:** a point per first-exposure date (cohort) is what rows give; confirm that reading.
 - [ ] **Priors:** flat now; informed by project history later?
+
+**Raised during implementation (human queue, not resolved here):**
+
+- [ ] **Health event counts vs golden:** the health view counts raw attributed events, duplicates included (as 006-validation F1 states: "control 2 (v1 incl. duplicate)"), but the oracle `generate.py health()` counts the purchase-deduped list, so `f1/modeled/health.json` shows control purchase events **1** where the implementation returns **2** (demo purchase counts are short by the duplicates too). The health test patches the golden's purchase entry; goldens and 006-validation are untouched. Which is intended — fix the oracle + regenerate, or count deduped events?
+- [ ] **Page rules for variation apply:** the 4.0 pixel runtime does not evaluate experiment page rules (`rules[]`) when *applying* variations — every active experiment applies on every page. PRD-006 only needs the v2 `experiment_view` gated on the page rule, which is what shipped (P1 `c5848e0`). Should variation application be page-gated too?
+- [ ] **`_pixel_health` emission:** the pixel counts delivery health but never sends the periodic `_pixel_health` event; only the PRD-006 `dropped_no_session` report (once per page on pagehide, v2 only, P1 `116d676`) is sent. Build the hourly emit?
+- [ ] **Cross-origin `/track`:** pagehide events are lost when `/track` is on another origin (browsers refuse a cross-origin JSON `sendBeacon`). Documented as "serve `/track` same-origin"; switch the beacon body to a CORS-safelisted type instead?
