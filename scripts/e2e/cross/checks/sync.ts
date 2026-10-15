@@ -345,7 +345,15 @@ export const syncChecks: readonly CheckDef[] = [
     async run(ctx) {
       const res = await e2eArtisan(ctx.cfg, 'subscribe', ctx.cfg.ids.v1Experiment);
       if (res.pending) return pending('CB', String(res.error));
-      if (res.ok) return fail('crobot subscribed a v1 experiment');
+      // The invoker's ok flag alone is not proof: a silent no-op also returns ok.
+      // The platform must hold no subscription for the v1 experiment either way.
+      const leaked = await chQuery<{ n: string }>(
+        ctx.cfg.clickhouse,
+        `SELECT count() AS n FROM metric_subscriptions FINAL WHERE project_id = ${ctx.cfg.ids.projectId} AND experiment_id = ${ctx.cfg.ids.v1Experiment}`,
+      );
+      if (Number(leaked[0]?.n ?? 0) > 0)
+        return fail('platform holds a subscription for the v1 experiment');
+      if (res.ok) return fail('crobot reported success subscribing a v1 experiment');
       return /version|v1|v2/i.test(String(res.error))
         ? pass(String(res.error))
         : fail(`refused, but not for the version: ${res.error}`);
