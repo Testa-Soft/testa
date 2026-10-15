@@ -940,6 +940,7 @@ if __name__ == "__main__":
     ds = daily_summary(M)
     dump(f"{HERE}/demo/modeled/daily_summary.json", ds)
     dump(f"{HERE}/demo/modeled/daily_summary.device_type.json", daily_summary(M, dimension="device_type"))
+    dump(f"{HERE}/demo/modeled/daily_summary.visitor_type.json", daily_summary(M, dimension="visitor_type"))
     dump(f"{HERE}/demo/modeled/daily_summary.capped.json", daily_summary(M, keys=["purchase", "revenue"], capped=True))
     # crobot storage sample: the same rows as crobot keeps them in `metric_summary`
     dump(f"{HERE}/demo/backend/crobot_metric_summary.sample.json",
