@@ -137,6 +137,7 @@ export function hydrate(): void {
   guardedInit('live_api', installLiveApi);
   guardedInit('spa_listener', installSpaListener);
   guardedInit('network', installNetwork);
+  guardedInit('pixel_health', installHealthFlush);
   guardedInit('debug_polls', startPendingCountPoll);
 
   // First experiment cycle. Drain queue first so any pre-runtime calls
@@ -416,6 +417,30 @@ function stampOrDrop(name: string, ts: number): ExpSession[] | null {
   }
   expSessions.touch(exp, ts);
   return exp;
+}
+
+let _reportedNoSessionDrops = 0;
+let _healthFlushInstalled = false;
+
+/**
+ * PRD §5.3: events dropped for lack of a session "are counted in
+ * `_pixel_health.props.dropped_no_session`". On the v2 pipeline, report the
+ * drops since the last report once per page (on pagehide), shipped
+ * synchronously like the redirect path so it survives the unload.
+ */
+export function reportDroppedNoSession(): void {
+  if (v2ExperimentIds().size === 0) return;
+  const snap = healthSnapshot(0);
+  const delta = (snap.dropped_no_session ?? 0) - _reportedNoSessionDrops;
+  if (delta <= 0) return;
+  _reportedNoSessionDrops += delta;
+  trackSyncForRedirect('_pixel_health', { ...snap, dropped_no_session: delta });
+}
+
+function installHealthFlush(): void {
+  if (_healthFlushInstalled || typeof addEventListener !== 'function') return;
+  _healthFlushInstalled = true;
+  addEventListener('pagehide', reportDroppedNoSession);
 }
 
 // ─── strict-mode held-event replay ────────────────────────────────────────
@@ -1039,6 +1064,7 @@ function guardedInit(phase: string, fn: () => void): void {
 /** Test reset hook. Forgets `_alreadyHydrated`, clears in-memory state. */
 export function __resetForTests(): void {
   _pendingEvents = [];
+  _reportedNoSessionDrops = 0;
   _heldEvents = [];
   _consentReplayUnsub?.();
   _consentReplayUnsub = null;

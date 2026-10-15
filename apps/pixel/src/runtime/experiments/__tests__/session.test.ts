@@ -133,6 +133,13 @@ describe('pixel lifecycle on the v2 pipeline', () => {
     track('size_guide_opened');
     expect(sent()).toEqual([]);
     expect(snapshot(0).dropped_no_session).toBe(2);
+
+    // Reported to the backend on pagehide as _pixel_health (PRD §5.3), once.
+    dispatchEvent(new Event('pagehide'));
+    dispatchEvent(new Event('pagehide'));
+    const health = named('_pixel_health');
+    expect(health).toHaveLength(1);
+    expect(health[0]?.props?.dropped_no_session).toBe(2);
   });
 
   it('a returning visitor after 2 days: same variation, new sessionStart, sessionIdx 2, experiment_view fired', () => {
