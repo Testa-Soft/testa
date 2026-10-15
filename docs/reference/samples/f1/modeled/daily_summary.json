@@ -135,6 +135,17 @@
     {
       "date": "2026-10-01",
       "variation_id": 100,
+      "metric_key": "units_upsell",
+      "visitors": 1,
+      "converted": 0,
+      "count": 0,
+      "sum": 0.0,
+      "sum_sq": 0.0,
+      "sum_sq_visitor": 0.0
+    },
+    {
+      "date": "2026-10-01",
+      "variation_id": 100,
       "metric_key": "units_added",
       "visitors": 1,
       "converted": 1,
@@ -373,6 +384,17 @@
       "sum": 125.0,
       "sum_sq": 5225.0,
       "sum_sq_visitor": 8425.0
+    },
+    {
+      "date": "2026-10-01",
+      "variation_id": 101,
+      "metric_key": "units_upsell",
+      "visitors": 2,
+      "converted": 1,
+      "count": 1,
+      "sum": 20.0,
+      "sum_sq": 400.0,
+      "sum_sq_visitor": 400.0
     },
     {
       "date": "2026-10-01",
@@ -619,6 +641,17 @@
     {
       "date": "2026-10-02",
       "variation_id": 100,
+      "metric_key": "units_upsell",
+      "visitors": 2,
+      "converted": 0,
+      "count": 0,
+      "sum": 0.0,
+      "sum_sq": 0.0,
+      "sum_sq_visitor": 0.0
+    },
+    {
+      "date": "2026-10-02",
+      "variation_id": 100,
       "metric_key": "units_added",
       "visitors": 2,
       "converted": 0,
@@ -851,6 +884,17 @@
       "date": "2026-10-02",
       "variation_id": 101,
       "metric_key": "units",
+      "visitors": 1,
+      "converted": 0,
+      "count": 0,
+      "sum": 0.0,
+      "sum_sq": 0.0,
+      "sum_sq_visitor": 0.0
+    },
+    {
+      "date": "2026-10-02",
+      "variation_id": 101,
+      "metric_key": "units_upsell",
       "visitors": 1,
       "converted": 0,
       "count": 0,
