@@ -13,6 +13,14 @@ export function parseId(raw: unknown, notFound: SyncApiError): number {
   return Number(s);
 }
 
+/**
+ * R3: the numeric `project_id` every experiment-scoped call carries (body or
+ * `?project_id=`). Missing / not a positive integer → 400 `invalid_body`.
+ */
+export function parseProjectId(raw: unknown): number {
+  return parseId(raw, new SyncApiError('invalid_body', 400, 'project_id'));
+}
+
 export function asObject(raw: unknown, onError: SyncApiError): Record<string, unknown> {
   if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) throw onError;
   return raw as Record<string, unknown>;
@@ -30,10 +38,7 @@ export interface SubscriptionBody {
 /** `PUT …/subscription` body (PRD §3.1). */
 export function validateSubscription(raw: unknown): SubscriptionBody {
   const body = asObject(raw, new SyncApiError('invalid_status', 400, 'body'));
-  const projectId = parseId(
-    body.project_id,
-    new SyncApiError('experiment_not_found', 404, 'project_id'),
-  );
+  const projectId = parseProjectId(body.project_id);
   if (body.status !== 'running' && body.status !== 'stopped') {
     throw new SyncApiError('invalid_status', 400, 'status');
   }

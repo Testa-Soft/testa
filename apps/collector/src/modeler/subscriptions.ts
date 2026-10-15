@@ -1,7 +1,8 @@
 /**
  * `metric_subscriptions` access (PRD-006 §3.1): what crobot wants modeled per
  * experiment. ReplacingMergeTree on `updated_at`, read with FINAL. Experiment
- * ids are global (crobot ids), so reads by experiment id alone are safe.
+ * ids (crobot identifiers) are unique per project only (R3): every lookup is by
+ * `(project_id, experiment_id)`, the table's sorting key.
  */
 import type { MetricKey } from '@testa-platform/shared-types';
 import type { QueryRunner } from '../analytics/attribution.ts';
@@ -56,11 +57,14 @@ function fromRow(r: Row): Subscription {
 
 export async function readSubscription(
   query: QueryRunner,
+  projectId: number,
   experimentId: number,
 ): Promise<Subscription | null> {
   const rows = await query<Row>(
-    `${SELECT} WHERE experiment_id = {experiment_id:UInt64} ORDER BY updated_at DESC LIMIT 1`,
-    { experiment_id: experimentId },
+    `${SELECT}
+     WHERE project_id = {project_id:UInt64} AND experiment_id = {experiment_id:UInt64}
+     ORDER BY updated_at DESC LIMIT 1`,
+    { project_id: projectId, experiment_id: experimentId },
   );
   const row = rows[0];
   return row ? fromRow(row) : null;

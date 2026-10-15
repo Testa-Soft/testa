@@ -22,10 +22,10 @@ afterAll(() => {
 
 const ROUTES: [string, string][] = [
   ['PUT', '/api/v1/experiments/1717/subscription'],
-  ['DELETE', '/api/v1/experiments/1717/subscription'],
-  ['GET', '/api/v1/experiments/1717/daily-summary?since_run_id=r_1'],
+  ['DELETE', '/api/v1/experiments/1717/subscription?project_id=42'],
+  ['GET', '/api/v1/experiments/1717/daily-summary?project_id=42&since_run_id=r_1'],
   ['POST', '/api/v1/experiments/1717/queries'],
-  ['GET', `/api/v1/experiments/1717/queries/${'a'.repeat(64)}`],
+  ['GET', `/api/v1/experiments/1717/queries/${'a'.repeat(64)}?project_id=42`],
 ];
 
 describe('sync API wiring (real app)', () => {
@@ -100,9 +100,36 @@ describe('sync API wiring (real app)', () => {
     const summary = await fetch(`${base}/api/v1/experiments/abc/daily-summary`, { headers: auth });
     expect(summary.status).toBe(404);
     expect(await summary.json()).toEqual({ error: 'not_subscribed' });
-    const query = await fetch(`${base}/api/v1/experiments/1717/queries/nope`, { headers: auth });
+    const query = await fetch(`${base}/api/v1/experiments/1717/queries/nope?project_id=42`, {
+      headers: auth,
+    });
     expect(query.status).toBe(404);
     expect(await query.json()).toEqual({ error: 'query_not_found' });
+  });
+
+  it.each([
+    ['DELETE', '/api/v1/experiments/1717/subscription'],
+    ['GET', '/api/v1/experiments/1717/daily-summary'],
+    ['GET', '/api/v1/experiments/1717/daily-summary?project_id=-1'],
+    ['GET', `/api/v1/experiments/1717/queries/${'a'.repeat(64)}`],
+  ])('R3: %s %s without a valid project_id → 400 invalid_body', async (method, path) => {
+    const res = await fetch(base + path, { method, headers: auth });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: 'invalid_body', field: 'project_id' });
+  });
+
+  it.each([
+    [{ status: 'running' }, 'PUT', 'subscription'],
+    [{ project_id: 'abc', status: 'running' }, 'PUT', 'subscription'],
+    [{ view: 'summary', metrics: ['purchase'] }, 'POST', 'queries'],
+  ])('R3: body %p on %s %s → 400 invalid_body', async (body, method, rest) => {
+    const res = await fetch(`${base}/api/v1/experiments/1717/${rest}`, {
+      method,
+      headers: auth,
+      body: JSON.stringify(body),
+    });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: 'invalid_body', field: 'project_id' });
   });
 
   it('the old /api/v1/metrics/:metric stub is gone', async () => {

@@ -3,11 +3,14 @@
  * `X-Service-Token` middleware. Reads never compute: they only read
  * `metric_subscriptions`, `metric_daily` and the modeler's Redis state.
  *
- *   PUT    /:experimentId/subscription            → 200 {status, next_run_at}
- *   DELETE /:experimentId/subscription            → 200 {status, next_run_at: null}
- *   GET    /:experimentId/daily-summary[?since_run_id=]  → 200 DailySummaryResponse
- *   POST   /:experimentId/queries                 → 200 QueryResponse (cached) | 202 QueryAccepted
- *   GET    /:experimentId/queries/:queryId        → 200 QueryResponse | 404 | 410
+ *   PUT    /:experimentId/subscription                 (body project_id) → 200 {status, next_run_at}
+ *   DELETE /:experimentId/subscription?project_id=                       → 200 {status, next_run_at: null}
+ *   GET    /:experimentId/daily-summary?project_id=[&since_run_id=]      → 200 DailySummaryResponse
+ *   POST   /:experimentId/queries                      (body project_id) → 200 QueryResponse (cached) | 202 QueryAccepted
+ *   GET    /:experimentId/queries/:queryId?project_id=                   → 200 QueryResponse | 404 | 410
+ * Experiment ids are unique per project only (R3): `project_id` is required
+ * everywhere (400 `invalid_body` field `project_id`); a project that doesn't
+ * own the experiment → 404 `experiment_not_found`.
  * Errors: `{ "error": code, "field"? }` with the §5.5 status codes.
  */
 import { type Context, Hono } from 'hono';
@@ -17,7 +20,7 @@ import { type SyncContext, defaultSyncContext } from './context.ts';
 import { getDailySummary } from './daily-summary.ts';
 import { getQuery, postQuery } from './queries.ts';
 import { deleteSubscription, putSubscription } from './subscription.ts';
-import { parseId } from './validate.ts';
+import { parseId, parseProjectId } from './validate.ts';
 
 export interface SyncRouterDeps {
   serviceToken: string;
@@ -64,13 +67,15 @@ export function makeSyncRouter(deps: SyncRouterDeps): Hono {
 
   router.delete('/:experimentId/subscription', async (c) => {
     const id = parseId(c.req.param('experimentId'), notSubscribed);
-    return c.json(await deleteSubscription(ctx(), id), 200);
+    const projectId = parseProjectId(c.req.query('project_id'));
+    return c.json(await deleteSubscription(ctx(), projectId, id), 200);
   });
 
   router.get('/:experimentId/daily-summary', async (c) => {
     const id = parseId(c.req.param('experimentId'), notSubscribed);
+    const projectId = parseProjectId(c.req.query('project_id'));
     const since = c.req.query('since_run_id');
-    return withRetryAfter(c, await getDailySummary(ctx(), id, since || undefined));
+    return withRetryAfter(c, await getDailySummary(ctx(), projectId, id, since || undefined));
   });
 
   router.post('/:experimentId/queries', async (c) => {
@@ -82,7 +87,8 @@ export function makeSyncRouter(deps: SyncRouterDeps): Hono {
 
   router.get('/:experimentId/queries/:queryId', async (c) => {
     const id = parseId(c.req.param('experimentId'), new SyncApiError('query_not_found', 404));
-    return withRetryAfter(c, await getQuery(ctx(), id, c.req.param('queryId')));
+    const projectId = parseProjectId(c.req.query('project_id'));
+    return withRetryAfter(c, await getQuery(ctx(), projectId, id, c.req.param('queryId')));
   });
 
   return router;

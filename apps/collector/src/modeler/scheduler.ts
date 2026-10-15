@@ -12,6 +12,12 @@ import { chToIso } from './refresh.ts';
 import { readRunState, writeRunState } from './run-state.ts';
 import { type Subscription, listSchedulable } from './subscriptions.ts';
 
+/** An experiment is identified by both ids (R3: experiment ids repeat across projects). */
+export interface ExperimentRef {
+  projectId: number;
+  experimentId: number;
+}
+
 async function newestByProject(
   ctx: ModelerContext,
   projectIds: number[],
@@ -34,7 +40,7 @@ async function inFlight(ctx: ModelerContext, sub: Subscription): Promise<boolean
   const [pos, delayed, locked] = await Promise.all([
     position(ctx.redis, ctx.keys, job),
     isDelayed(ctx.redis, ctx.keys, job),
-    ctx.redis.exists(ctx.keys.lock(sub.experimentId)),
+    ctx.redis.exists(ctx.keys.lock(sub.projectId, sub.experimentId)),
   ]);
   return pos !== null || delayed || locked > 0;
 }
@@ -47,10 +53,11 @@ export async function requestRefresh(
   priority: Priority,
 ): Promise<void> {
   const nowMs = ctx.now();
-  const state = await readRunState(ctx.redis, ctx.keys.run(experimentId));
+  const runKey = ctx.keys.run(projectId, experimentId);
+  const state = await readRunState(ctx.redis, runKey);
   await enqueue(ctx.redis, ctx.keys, { kind: 'refresh', projectId, experimentId }, priority, nowMs);
   if (state.status !== 'running') {
-    await writeRunState(ctx.redis, ctx.keys.run(experimentId), {
+    await writeRunState(ctx.redis, runKey, {
       status: 'queued',
       queued_at: new Date(nowMs).toISOString(),
       attempt: 0,
@@ -58,15 +65,15 @@ export async function requestRefresh(
   }
 }
 
-/** One scheduler pass; returns the experiment ids it enqueued. */
-export async function tick(ctx: ModelerContext): Promise<number[]> {
+/** One scheduler pass; returns the experiments it enqueued. */
+export async function tick(ctx: ModelerContext): Promise<ExperimentRef[]> {
   const subs = await listSchedulable(ctx.query);
   const newest = await newestByProject(ctx, [...new Set(subs.map((s) => s.projectId))]);
   const nowMs = ctx.now();
-  const enqueued: number[] = [];
+  const enqueued: ExperimentRef[] = [];
   for (const sub of subs) {
     if (await inFlight(ctx, sub)) continue;
-    const state = await readRunState(ctx.redis, ctx.keys.run(sub.experimentId));
+    const state = await readRunState(ctx.redis, ctx.keys.run(sub.projectId, sub.experimentId));
     let priority: Priority | null = null;
     if (sub.status === 'stopped') {
       if (state.final_for !== sub.updatedAt) priority = PRIORITY.high;
@@ -82,7 +89,7 @@ export async function tick(ctx: ModelerContext): Promise<number[]> {
     }
     if (priority !== null) {
       await requestRefresh(ctx, sub.projectId, sub.experimentId, priority);
-      enqueued.push(sub.experimentId);
+      enqueued.push({ projectId: sub.projectId, experimentId: sub.experimentId });
     }
   }
   return enqueued;

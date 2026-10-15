@@ -26,16 +26,31 @@ export const CROBOT_CORE_METRICS = [
   'checkout_purchase',
 ] as const;
 
-/** crobot variations.id → platform variation id (E2EAnalyticsSeeder). */
-const CROBOT_VARIATION_PK: Readonly<Record<number, number>> = {
-  6001: 100,
-  6002: 101,
-  6003: 200,
-  6004: 201,
-  6005: 100,
-  6006: 101,
-  6007: 102,
+/** Per experiment identifier: crobot variations.id → platform variation id (E2EAnalyticsSeeder). */
+const SEEDED_VARIATIONS: Readonly<Record<number, Readonly<Record<number, number>>>> = {
+  1717: { 6001: 100, 6002: 101 },
+  1802: { 6003: 200, 6004: 201 },
+  1903: { 6005: 100, 6006: 101, 6007: 102 },
 };
+
+/** crobot variations.id → platform variation id, over every seeded experiment. */
+const CROBOT_VARIATION_PK: Readonly<Record<number, number>> = Object.assign(
+  {},
+  ...Object.values(SEEDED_VARIATIONS),
+);
+
+/**
+ * crobot variations.id of a platform variation identifier within one
+ * experiment (identifiers repeat across experiments: 100/101 are in 1717 and 1903).
+ */
+export function crobotVariationPk(experimentId: number, identifier: number): number {
+  const entry = Object.entries(SEEDED_VARIATIONS[experimentId] ?? {}).find(
+    ([, id]) => id === identifier,
+  );
+  if (entry === undefined)
+    throw new Error(`no seeded crobot variation for ${experimentId}/${identifier}`);
+  return Number(entry[0]);
+}
 
 /** crobot experiments.id for a platform experiment id (E2EAnalyticsSeeder). */
 export const CROBOT_EXPERIMENT_PK: Readonly<Record<number, number>> = {

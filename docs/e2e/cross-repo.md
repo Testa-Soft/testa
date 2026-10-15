@@ -132,6 +132,7 @@ yet). "P5" rows are platform-internal flows owned by `pnpm prd006:validate`
 | DoD | Item | Proven by | Status |
 |---|---|---|---|
 | X1 | platform F1 live + crobot §9 against the live stack, screenshots | `pnpm e2e:cross --strict` — every check above, `ui.*` screenshots | pending (P0, P3, P4, P7, P8, CA, CB, CC, CD) |
+| R3 | experiment identifiers are unique per project only: a second project (43) reusing identifier 1717 with its own data stays isolated over HTTP (subscription, rows, DELETE); `project_id` required on every experiment-scoped call (400 `invalid_body` / 404 `experiment_not_found`) | `contract.tenant-isolation` (fixture `shared/tenant-wire.ts`) | P4-fix3 (+ crobot routes webhooks by `(project_id, identifier)`) |
 
 ### X0 itself
 
@@ -148,7 +149,7 @@ yet). "P5" rows are platform-internal flows owned by `pnpm prd006:validate`
 | P0 | migrations 013+ (`exp_*`, `entry_*`, `channel`, `os_name`, `browser_name`, `purchase_type`, `parent_order_id`, `event_items`, `metric_subscriptions`); service-token middleware on `/api/v1/experiments/*` and `/api/v1/stats` reading `SERVICE_TOKEN` (the harness also sets `METRICS_SERVICE_TOKEN`); `buildTestaConfig` passing `experiments[].platform_version` through; **config lookup for the sync API must work with what crobot publishes — the file is keyed by the project UUID while subscriptions carry the numeric `project_id`** |
 | P2 | consumer maps wire `exp` `[id, var, start, idx]` → `exp_ids` / `exp_var_ids` / `exp_session_starts` / `exp_session_idx` and `items[]` → `event_items`; FX reads `fx_rates_history` (seeded USD-base: USD→EUR 0.9) |
 | P3 | `POST /api/v1/stats` per §4.5 |
-| P4 | `src/modeler/main.ts` as a long-running process honouring `CLICKHOUSE_DATABASE`, `REDIS_URL` (DB index), `MODELER_INTERVAL_SEC`, `CROBOT_WEBHOOK_URL`, `CROBOT_WEBHOOK_SECRET`; a subscription change triggers an immediate run; sync routes per Part 3 / §5.5 |
+| P4 | `src/modeler/main.ts` as a long-running process honouring `CLICKHOUSE_DATABASE`, `REDIS_URL` (DB index), `MODELER_INTERVAL_SEC`, `CROBOT_WEBHOOK_URL`, `CROBOT_WEBHOOK_SECRET`; a subscription change triggers an immediate run; sync routes per Part 3 / §5.5; **R3: `project_id` on every experiment-scoped call (PUT/POST body; `?project_id=` on GET daily-summary, GET queries/{id}, DELETE subscription), webhooks carry `project_id`** |
 | P7 / P8 | `products`, `distributions`, `health` view results shaped like `docs/reference/samples/f1/modeled/{products,distributions,health}.json` (`by_variation` keyed by variation id) |
 | CA | `platform_version` columns + config publish field; client/guards refuse v1 |
 | CB | `config('services.testa_analytics')` (`url`, `token`, `webhook_secret`, `mock`); tables `metric_summary`, `analytics_query_results` (`view`, `status`, `payload`), `analytics_sync_state` (`status`, `run_id`, `computed_at`), all keyed by crobot `experiments.id`; `AnalyticsSubscriptionService::subscribe(Experiment)` (or `send`/`sync`), `SyncMetricSummaryJob` constructible from an `Experiment` or `int $experimentId`; webhook route `POST api/webhooks/analytics/{event}` registered before the workflow route |

@@ -217,11 +217,13 @@ describe.skipIf(!liveRedis)(`modeler (live ClickHouse db=${database} + Redis)`, 
     const { projectId, experimentId } = await f1Experiment();
     await subscribe(projectId, experimentId);
 
-    expect(await tick(ctx)).toContain(experimentId);
-    expect((await readRunState(redis, ctx.keys.run(experimentId))).status).toBe('queued');
+    expect(await tick(ctx)).toContainEqual({ projectId, experimentId });
+    expect((await readRunState(redis, ctx.keys.run(projectId, experimentId))).status).toBe(
+      'queued',
+    );
     expect(await drain(ctx)).toBeGreaterThanOrEqual(1);
 
-    const state = await readRunState(redis, ctx.keys.run(experimentId));
+    const state = await readRunState(redis, ctx.keys.run(projectId, experimentId));
     expect(state.status).toBe('ready');
     expect(state.last_ready_run_id).toMatch(/^r_[0-9A-Z]{26}$/);
     expect(state.quality).toEqual(F1.quality);
@@ -230,7 +232,7 @@ describe.skipIf(!liveRedis)(`modeler (live ClickHouse db=${database} + Redis)`, 
       sortRows(F1.rows),
     );
 
-    expect(await tick(ctx)).not.toContain(experimentId);
+    expect(await tick(ctx)).not.toContainEqual({ projectId, experimentId });
 
     await insertRows('events', [
       {
@@ -247,9 +249,9 @@ describe.skipIf(!liveRedis)(`modeler (live ClickHouse db=${database} + Redis)`, 
         exp_session_starts: [1790848800],
       },
     ]);
-    expect(await tick(ctx)).toContain(experimentId);
+    expect(await tick(ctx)).toContainEqual({ projectId, experimentId });
     await drain(ctx);
-    const next = await readRunState(redis, ctx.keys.run(experimentId));
+    const next = await readRunState(redis, ctx.keys.run(projectId, experimentId));
     expect(next.status).toBe('ready');
     expect(next.last_ready_run_id).not.toBe(state.last_ready_run_id);
     await ctx.webhook.drain();
@@ -257,7 +259,12 @@ describe.skipIf(!liveRedis)(`modeler (live ClickHouse db=${database} + Redis)`, 
       .filter((h) => h.path === '/api/webhooks/analytics/summary-ready')
       .map((h) => JSON.parse(h.body) as WebhookPayload);
     expect(
-      ready.some((p) => p.event === 'summary-ready' && p.run_id === next.last_ready_run_id),
+      ready.some(
+        (p) =>
+          p.event === 'summary-ready' &&
+          p.run_id === next.last_ready_run_id &&
+          p.project_id === projectId,
+      ),
     ).toBe(true);
   });
 
@@ -267,12 +274,14 @@ describe.skipIf(!liveRedis)(`modeler (live ClickHouse db=${database} + Redis)`, 
     await subscribe(projectId, experimentId);
     const job = { kind: 'refresh' as const, projectId, experimentId };
 
-    await acquireLock(redis, ctx.keys.lock(experimentId), 'someone-else', 60);
+    await acquireLock(redis, ctx.keys.lock(projectId, experimentId), 'someone-else', 60);
     await enqueue(redis, ctx.keys, job, PRIORITY.high, Date.now());
     await drain(ctx);
-    expect((await readRunState(redis, ctx.keys.run(experimentId))).last_ready_run_id).toBe('');
+    expect(
+      (await readRunState(redis, ctx.keys.run(projectId, experimentId))).last_ready_run_id,
+    ).toBe('');
     expect(await redis.zcard(ctx.keys.delayed)).toBeGreaterThanOrEqual(1);
-    await redis.del(ctx.keys.lock(experimentId));
+    await redis.del(ctx.keys.lock(projectId, experimentId));
     await redis.zrem(ctx.keys.delayed, `refresh:${projectId}:${experimentId}`);
 
     // Enqueue twice (deduped) and race 4 workers: exactly one run lands.
@@ -293,7 +302,7 @@ describe.skipIf(!liveRedis)(`modeler (live ClickHouse db=${database} + Redis)`, 
     await subscribe(projectId, experimentId);
     await tick(good);
     await drain(good);
-    const before = await readRunState(redis, good.keys.run(experimentId));
+    const before = await readRunState(redis, good.keys.run(projectId, experimentId));
     expect(before.status).toBe('ready');
 
     let calls = 0;
@@ -315,7 +324,7 @@ describe.skipIf(!liveRedis)(`modeler (live ClickHouse db=${database} + Redis)`, 
       Date.now(),
     );
     await drain(broken);
-    const after = await readRunState(redis, broken.keys.run(experimentId));
+    const after = await readRunState(redis, broken.keys.run(projectId, experimentId));
     expect(after.status).toBe('failed');
     expect(after.error).toContain('injected failure');
     expect(calls).toBe(4);
@@ -333,6 +342,7 @@ describe.skipIf(!liveRedis)(`modeler (live ClickHouse db=${database} + Redis)`, 
     failNextHooks = 1;
     sender.send({
       event: 'summary-ready',
+      project_id: 1,
       experiment_id: 1,
       run_id: runId,
       computed_at: '2026-10-15T09:30:12.000Z',
@@ -383,15 +393,15 @@ describe.skipIf(!liveRedis)(`modeler (live ClickHouse db=${database} + Redis)`, 
     const { projectId, experimentId } = await f1Experiment();
     const updatedAt = await subscribe(projectId, experimentId, 'stopped');
     const summary = await runOnce(ctx);
-    expect(summary.enqueued).toContain(experimentId);
-    expect(summary.failed).not.toContain(experimentId);
-    const state = await readRunState(redis, ctx.keys.run(experimentId));
+    expect(summary.enqueued).toContainEqual({ projectId, experimentId });
+    expect(summary.failed).not.toContainEqual({ projectId, experimentId });
+    const state = await readRunState(redis, ctx.keys.run(projectId, experimentId));
     expect(state.final_for).toBe(updatedAt);
     const [{ finals }] = (await run<{ finals: string }>(
       'SELECT countIf(is_final = 1) AS finals FROM metric_daily WHERE project_id = {p:UInt64} AND run_id = {r:String}',
       { p: projectId, r: state.last_ready_run_id },
     )) as [{ finals: string }];
     expect(Number(finals)).toBe(F1.rows.length);
-    expect((await runOnce(ctx)).enqueued).not.toContain(experimentId);
+    expect((await runOnce(ctx)).enqueued).not.toContainEqual({ projectId, experimentId });
   });
 });

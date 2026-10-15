@@ -59,8 +59,8 @@ export const randomExperimentId = (): number =>
 
 /**
  * Insert a sample set's raw events + items under `projectId`, optionally
- * renaming experiment 1717 to `experimentId` (experiment ids are global, so
- * suites that share a database need their own).
+ * renaming experiment 1717 to `experimentId` (suites sharing a database use
+ * their own ids so their scheduler passes don't touch each other).
  */
 export async function seedSample(
   set: 'f1' | 'demo',

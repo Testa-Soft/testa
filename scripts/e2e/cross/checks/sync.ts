@@ -18,6 +18,7 @@ import {
   CROBOT_EXPERIMENT_PK,
   crobotAction,
   crobotState,
+  crobotVariationPk,
   jsonCol,
 } from './sync-support.ts';
 
@@ -55,7 +56,7 @@ export const syncChecks: readonly CheckDef[] = [
       }
       const rows = await chQuery<Record<string, unknown>>(
         ctx.cfg.clickhouse,
-        `SELECT * FROM metric_subscriptions FINAL WHERE experiment_id = ${F1} LIMIT 1`,
+        `SELECT * FROM metric_subscriptions FINAL WHERE project_id = ${ctx.cfg.ids.projectId} AND experiment_id = ${F1} LIMIT 1`,
       );
       const sub = rows[0];
       if (sub === undefined)
@@ -221,6 +222,7 @@ export const syncChecks: readonly CheckDef[] = [
     async run(ctx) {
       const url = `${ctx.cfg.crobot.url}/api/webhooks/analytics/summary-ready`;
       const body = {
+        project_id: ctx.cfg.ids.projectId,
         experiment_id: F1,
         run_id: 'r_x0_probe',
         computed_at: new Date().toISOString(),
@@ -310,8 +312,11 @@ export const syncChecks: readonly CheckDef[] = [
       const stats = JSON.stringify(
         jsonCol(state.queryResults.find((r) => r.view === 'stats')?.payload) ?? null,
       );
+      // crobot keys stats by its own variations.id (seed: 1903 / identifier 101 → 6006).
+      const pk = crobotVariationPk(f3, 101);
       const beat = Number(
-        /"101":\{[^}]*"chance_to_beat_control":([0-9.]+)/.exec(stats)?.[1] ?? Number.NaN,
+        new RegExp(`"${pk}":\\{[^}]*"chance_to_beat_control":([0-9.]+)`).exec(stats)?.[1] ??
+          Number.NaN,
       );
       const res = await crobotApi(
         ctx.cfg,
@@ -322,7 +327,7 @@ export const syncChecks: readonly CheckDef[] = [
         return pending('CC', 'goal-table view not routed (C3)');
       return new Diff()
         .truthy(
-          `stats 101 chance_to_beat_control ${beat} in [0.902, 0.912]`,
+          `stats 101 (crobot variation ${pk}) chance_to_beat_control ${beat} in [0.902, 0.912]`,
           beat >= 0.902 && beat <= 0.912,
         )
         .truthy('goal-table labels the purchase goal Inconclusive', /inconclusive/i.test(res.text))

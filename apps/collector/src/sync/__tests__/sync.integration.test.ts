@@ -192,13 +192,15 @@ describe.skipIf(!liveRedis)('sync API (live ClickHouse + Redis, real HTTP)', () 
 
   it('status transitions: not_ready → running → ready → unchanged → queued/running with old rows → failed with old rows', async () => {
     const { projectId, experimentId } = await setup();
-    expect((await call('GET', `/${experimentId}/daily-summary`)).status).toBe(404);
+    expect(
+      (await call('GET', `/${experimentId}/daily-summary?project_id=${projectId}`)).status,
+    ).toBe(404);
 
     const put = await call('PUT', `/${experimentId}/subscription`, subscription(projectId));
     expect(put.status).toBe(200);
     expect(put.body).toEqual({ status: 'not_ready', next_run_at: expect.any(String) });
 
-    const notReady = await call('GET', `/${experimentId}/daily-summary`);
+    const notReady = await call('GET', `/${experimentId}/daily-summary?project_id=${projectId}`);
     expect(notReady.status).toBe(200);
     expect(notReady.body).toMatchObject({ status: 'not_ready', run_id: null, rows: [] });
     expect(Number(notReady.retryAfter)).toBe(notReady.body.retry_after);
@@ -211,14 +213,18 @@ describe.skipIf(!liveRedis)('sync API (live ClickHouse + Redis, real HTTP)', () 
     });
     const running = drain(gated);
     await waitFor(
-      async () => (await call('GET', `/${experimentId}/daily-summary`)).body.status === 'running',
+      async () =>
+        (await call('GET', `/${experimentId}/daily-summary?project_id=${projectId}`)).body
+          .status === 'running',
     );
-    expect((await call('GET', `/${experimentId}/daily-summary`)).body.rows).toEqual([]);
+    expect(
+      (await call('GET', `/${experimentId}/daily-summary?project_id=${projectId}`)).body.rows,
+    ).toEqual([]);
     release();
     gate = null;
     await running;
 
-    const ready = await call('GET', `/${experimentId}/daily-summary`);
+    const ready = await call('GET', `/${experimentId}/daily-summary?project_id=${projectId}`);
     expect(ready.body.status).toBe('ready');
     expect(ready.body.run_id).toMatch(/^r_/);
     expect(ready.body.quality).toEqual(F1.quality);
@@ -233,7 +239,10 @@ describe.skipIf(!liveRedis)('sync API (live ClickHouse + Redis, real HTTP)', () 
     expect([upsellUnits(100), upsellUnits(101)]).toEqual([0, 1]);
     const firstRun = ready.body.run_id as string;
 
-    const unchanged = await call('GET', `/${experimentId}/daily-summary?since_run_id=${firstRun}`);
+    const unchanged = await call(
+      'GET',
+      `/${experimentId}/daily-summary?project_id=${projectId}&since_run_id=${firstRun}`,
+    );
     expect(unchanged.body).toMatchObject({
       status: 'ready',
       run_id: firstRun,
@@ -243,7 +252,7 @@ describe.skipIf(!liveRedis)('sync API (live ClickHouse + Redis, real HTTP)', () 
 
     // New refresh queued → queued, old rows still served.
     await requestRefresh(gated, projectId, experimentId, PRIORITY.high);
-    const queued = await call('GET', `/${experimentId}/daily-summary`);
+    const queued = await call('GET', `/${experimentId}/daily-summary?project_id=${projectId}`);
     expect(queued.body.status).toBe('queued');
     expect(queued.body.run_id).toBe(firstRun);
     expect(queued.body.rows.length).toBe(F1.rows.length);
@@ -253,15 +262,18 @@ describe.skipIf(!liveRedis)('sync API (live ClickHouse + Redis, real HTTP)', () 
     });
     const second = drain(gated);
     await waitFor(
-      async () => (await call('GET', `/${experimentId}/daily-summary`)).body.status === 'running',
+      async () =>
+        (await call('GET', `/${experimentId}/daily-summary?project_id=${projectId}`)).body
+          .status === 'running',
     );
-    const runningOld = await call('GET', `/${experimentId}/daily-summary`);
+    const runningOld = await call('GET', `/${experimentId}/daily-summary?project_id=${projectId}`);
     expect(runningOld.body.run_id).toBe(firstRun);
     expect(runningOld.body.rows.length).toBe(F1.rows.length);
     release();
     gate = null;
     await second;
-    const secondRun = (await call('GET', `/${experimentId}/daily-summary`)).body.run_id;
+    const secondRun = (await call('GET', `/${experimentId}/daily-summary?project_id=${projectId}`))
+      .body.run_id;
     expect(secondRun).not.toBe(firstRun);
 
     // Failing refresh (after retries) → failed, last good run still served.
@@ -271,7 +283,7 @@ describe.skipIf(!liveRedis)('sync API (live ClickHouse + Redis, real HTTP)', () 
     });
     await requestRefresh(broken, projectId, experimentId, PRIORITY.high);
     await drain(broken);
-    const failed = await call('GET', `/${experimentId}/daily-summary`);
+    const failed = await call('GET', `/${experimentId}/daily-summary?project_id=${projectId}`);
     expect(failed.body.status).toBe('failed');
     expect(failed.body.run_id).toBe(secondRun);
     expect(failed.body.rows.length).toBe(F1.rows.length);
@@ -285,7 +297,7 @@ describe.skipIf(!liveRedis)('sync API (live ClickHouse + Redis, real HTTP)', () 
       subscription(projectId, { metrics: ['purchase', 'revenue'] }),
     );
     await drain(gated);
-    const { body } = await call('GET', `/${experimentId}/daily-summary`);
+    const { body } = await call('GET', `/${experimentId}/daily-summary?project_id=${projectId}`);
     for (const k of [
       'status',
       'run_id',
@@ -357,7 +369,9 @@ describe.skipIf(!liveRedis)('sync API (live ClickHouse + Redis, real HTTP)', () 
       status: 400,
       body: { error: 'invalid_range' },
     });
-    expect(await call('DELETE', `/${experimentId}/subscription`)).toMatchObject({
+    expect(
+      await call('DELETE', `/${experimentId}/subscription?project_id=${projectId}`),
+    ).toMatchObject({
       status: 404,
       body: { error: 'not_subscribed' },
     });
@@ -367,16 +381,22 @@ describe.skipIf(!liveRedis)('sync API (live ClickHouse + Redis, real HTTP)', () 
       (await call('PUT', `/${experimentId}/subscription`, subscription(projectId))).status,
     ).toBe(200);
     await drain(gated);
-    expect((await call('GET', `/${experimentId}/daily-summary`)).body).toMatchObject({
+    expect(
+      (await call('GET', `/${experimentId}/daily-summary?project_id=${projectId}`)).body,
+    ).toMatchObject({
       status: 'ready',
       rows: [],
     });
 
-    expect(await call('DELETE', `/${experimentId}/subscription`)).toMatchObject({
+    expect(
+      await call('DELETE', `/${experimentId}/subscription?project_id=${projectId}`),
+    ).toMatchObject({
       status: 200,
       body: { next_run_at: null },
     });
-    expect(await call('GET', `/${experimentId}/daily-summary`)).toMatchObject({
+    expect(
+      await call('GET', `/${experimentId}/daily-summary?project_id=${projectId}`),
+    ).toMatchObject({
       status: 404,
       body: { error: 'not_subscribed' },
     });
@@ -397,7 +417,7 @@ describe.skipIf(!liveRedis)('sync API (live ClickHouse + Redis, real HTTP)', () 
     const score = Number(await redis.zscore(keys.queue, `refresh:${projectId}:${experimentId}`));
     expect(Math.floor(score / 1e13)).toBe(PRIORITY.high);
     await drain(gated);
-    const { body } = await call('GET', `/${experimentId}/daily-summary`);
+    const { body } = await call('GET', `/${experimentId}/daily-summary?project_id=${projectId}`);
     expect(new Set(body.rows.map((r: { metric_key: string }) => r.metric_key))).toEqual(
       new Set(['purchase']),
     );
@@ -426,7 +446,7 @@ describe.skipIf(!liveRedis)('sync API (live ClickHouse + Redis, real HTTP)', () 
     const id = accepted.body.query_id as string;
     expect((await call('POST', `/${experimentId}/queries`, body)).body.query_id).toBe(id);
 
-    const pending = await call('GET', `/${experimentId}/queries/${id}`);
+    const pending = await call('GET', `/${experimentId}/queries/${id}?project_id=${projectId}`);
     expect(pending.body).toMatchObject({
       query_id: id,
       view: 'summary',
@@ -436,7 +456,7 @@ describe.skipIf(!liveRedis)('sync API (live ClickHouse + Redis, real HTTP)', () 
     });
 
     await drain(gated);
-    const ready = await call('GET', `/${experimentId}/queries/${id}`);
+    const ready = await call('GET', `/${experimentId}/queries/${id}?project_id=${projectId}`);
     expect(ready.status).toBe(200);
     expect(ready.body).toMatchObject({
       status: 'ready',
@@ -458,12 +478,16 @@ describe.skipIf(!liveRedis)('sync API (live ClickHouse + Redis, real HTTP)', () 
     const refreshed = await call('POST', `/${experimentId}/queries`, { ...body, refresh: true });
     expect(refreshed).toMatchObject({ status: 202, body: { query_id: id, status: 'queued' } });
 
-    expect(await call('GET', `/${experimentId}/queries/${'0'.repeat(64)}`)).toMatchObject({
+    expect(
+      await call('GET', `/${experimentId}/queries/${'0'.repeat(64)}?project_id=${projectId}`),
+    ).toMatchObject({
       status: 404,
       body: { error: 'query_not_found' },
     });
     await redis.del(modelerKeys(PREFIX).query(id));
-    expect(await call('GET', `/${experimentId}/queries/${id}`)).toMatchObject({
+    expect(
+      await call('GET', `/${experimentId}/queries/${id}?project_id=${projectId}`),
+    ).toMatchObject({
       status: 410,
       body: { error: 'expired' },
     });
@@ -521,12 +545,12 @@ describe.skipIf(!liveRedis)('sync API (live ClickHouse + Redis, real HTTP)', () 
       subscription(projectId, { to: '2026-10-14' }),
     );
     await drain(gated);
-    const first = await call('GET', `/${experimentId}/daily-summary`);
+    const first = await call('GET', `/${experimentId}/daily-summary?project_id=${projectId}`);
     expect(first.body.rows.length).toBe(14 * 3 * KEYS.length);
     const times: number[] = [];
     for (let i = 0; i < 40; i++) {
       const t0 = performance.now();
-      await call('GET', `/${experimentId}/daily-summary`);
+      await call('GET', `/${experimentId}/daily-summary?project_id=${projectId}`);
       times.push(performance.now() - t0);
     }
     times.sort((a, b) => a - b);

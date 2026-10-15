@@ -193,7 +193,7 @@ describe.skipIf(!liveRedis)(
       expect(put).toMatchObject({ status: 200, body: { status: 'not_ready' } });
 
       await drain(ctx);
-      const summary = await sync('GET', `/${v2Id}/daily-summary`);
+      const summary = await sync('GET', `/${v2Id}/daily-summary?project_id=${projectId}`);
       expect(summary.status).toBe(200);
       expect(summary.body.status).toBe('ready');
       expect(summary.body.rows).toHaveLength(F1.rows.length);
@@ -208,9 +208,10 @@ describe.skipIf(!liveRedis)(
       });
       expect(query.status).toBe(202);
       await drain(ctx);
-      expect((await sync('GET', `/${v2Id}/queries/${query.body.query_id}`)).body.status).toBe(
-        'ready',
-      );
+      expect(
+        (await sync('GET', `/${v2Id}/queries/${query.body.query_id}?project_id=${projectId}`)).body
+          .status,
+      ).toBe('ready');
     });
   },
 );

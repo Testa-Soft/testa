@@ -1,15 +1,15 @@
 /**
- * `GET /api/v1/experiments/:id/daily-summary[?since_run_id=]` (PRD-006 §3.4).
+ * `GET /api/v1/experiments/:id/daily-summary?project_id=[&since_run_id=]`
+ * (PRD-006 §3.4; `project_id` required, R3).
  * Never computes: run state from Redis + the last ready run's rows from
  * `metric_daily`. `since_run_id` equal to the current run → `unchanged: true`.
  */
 import type { DailyRow, DailySummaryResponse, MetricKey } from '@testa-platform/shared-types';
 import { SyncApiError } from '../analytics/errors.ts';
-import { requireV2Experiment } from '../analytics/guards.ts';
-import { configForProject } from '../modeler/project-config.ts';
 import { readRunState } from '../modeler/run-state.ts';
 import { readSubscription } from '../modeler/subscriptions.ts';
 import { type SyncContext, refreshTiming, summaryStatus } from './context.ts';
+import { requireOwned, requireOwnedV2 } from './ownership.ts';
 
 interface StoredRow {
   d: string;
@@ -51,14 +51,18 @@ async function runRows(
 
 export async function getDailySummary(
   ctx: SyncContext,
+  projectId: number,
   experimentId: number,
   sinceRunId: string | undefined,
 ): Promise<DailySummaryResponse> {
-  const sub = await readSubscription(ctx.query, experimentId);
-  if (!sub || sub.status === 'deleted') throw new SyncApiError('not_subscribed', 404);
-  requireV2Experiment(await configForProject(ctx.configStore, sub.projectId), experimentId);
+  const sub = await readSubscription(ctx.query, projectId, experimentId);
+  if (!sub || sub.status === 'deleted') {
+    await requireOwned(ctx, projectId, experimentId);
+    throw new SyncApiError('not_subscribed', 404);
+  }
+  await requireOwnedV2(ctx, projectId, experimentId);
 
-  const state = await readRunState(ctx.redis, ctx.keys.run(experimentId));
+  const state = await readRunState(ctx.redis, ctx.keys.run(projectId, experimentId));
   const status = summaryStatus(state);
   const finalDone = sub.status === 'stopped' && state.final_for === sub.updatedAt;
   const timing = await refreshTiming(ctx, sub.projectId, experimentId, state, { finalDone });

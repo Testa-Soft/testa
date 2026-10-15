@@ -2,6 +2,13 @@
  * Sync API contract between crobot and testa-platform (PRD-006 Part 3, §5.5).
  * Crobot subscribes an experiment, the platform models it into additive daily
  * rows on its own queue, crobot pulls them. Extras are async on-demand queries.
+ *
+ * Experiment ids (crobot `identifier`s) are unique per project only (R3), so
+ * every experiment-scoped call carries the numeric `project_id` — in the body
+ * of PUT subscription / POST queries, as `?project_id=` on DELETE subscription,
+ * GET daily-summary and GET queries/{query_id}. Missing or invalid → 400
+ * `invalid_body` (field `project_id`); a project that doesn't own the
+ * experiment → 404 `experiment_not_found`.
  */
 import type {
   DistributionsParams,
@@ -102,6 +109,8 @@ export type SyncStatus = 'ready' | 'queued' | 'running' | 'not_ready' | 'failed'
 
 /** PRD-006 §5.5 error codes (`{ error, field? }` body). */
 export type SyncErrorCode =
+  /** Malformed request (e.g. missing / invalid `project_id`, R3); `field` names it. */
+  | 'invalid_body'
   | 'unknown_metric'
   | 'unknown_dimension'
   | 'unknown_view'
@@ -169,7 +178,7 @@ export interface SummaryMeta {
 export type SummaryResult = SummaryMeta &
   ({ dimension: null; rows: DailyRow[] } | { dimension: DimensionKey; rows: DimensionRow[] });
 
-/** `GET /api/v1/experiments/{id}/daily-summary[?since_run_id=]` (PRD-006 §3.4). */
+/** `GET /api/v1/experiments/{id}/daily-summary?project_id=[&since_run_id=]` (PRD-006 §3.4, R3). */
 export interface DailySummaryResponse extends RunEnvelope, SummaryMeta {
   dimension: null;
   /** Full range every time; `[]` when `not_ready` or `unchanged`. */
@@ -260,7 +269,7 @@ export interface HealthQueryResponse extends QueryResponseBase {
   result: HealthResult | null;
 }
 
-/** `GET /api/v1/experiments/{id}/queries/{query_id}`: `rows` for summary, `result` otherwise. */
+/** `GET /api/v1/experiments/{id}/queries/{query_id}?project_id=`: `rows` for summary, `result` otherwise. */
 export type QueryResponse =
   | SummaryQueryResponse
   | ProductsQueryResponse
@@ -275,6 +284,8 @@ export type QueryResponse =
 export type WebhookPayload =
   | {
       event: 'summary-ready';
+      /** R3: experiment ids are unique per project only; route by (project_id, experiment_id). */
+      project_id: number;
       experiment_id: number;
       run_id: string;
       computed_at: string;
@@ -282,6 +293,7 @@ export type WebhookPayload =
     }
   | {
       event: 'query-ready';
+      project_id: number;
       experiment_id: number;
       query_id: string;
       computed_at: string;

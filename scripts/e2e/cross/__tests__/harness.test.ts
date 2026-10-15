@@ -11,12 +11,24 @@ import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { compareRows } from '../checks/contract-sync.ts';
-import { F1_DAILY_PURCHASE, F1_DASHBOARD, F1_PER_VARIATION, F1_QUALITY } from '../expected/f1.ts';
+import { crobotVariationPk } from '../checks/sync-support.ts';
+import {
+  F1_DAILY_PURCHASE,
+  F1_DASHBOARD,
+  F1_METRICS,
+  F1_PER_VARIATION,
+  F1_QUALITY,
+} from '../expected/f1.ts';
 import { harnessRoot } from '../lib/args.ts';
 import { deriveMetrics, sumByVariation } from '../lib/derive.ts';
 import type { DailyRow } from '../lib/schemas.ts';
 import { loadF1WireEvents } from '../shared/f1-wire.ts';
 import { F3_COUNTS, buildF3WireEvents } from '../shared/f3-wire.ts';
+import {
+  TENANT_COUNTS,
+  buildTenantWireEvents,
+  tenantProjectSource,
+} from '../shared/tenant-wire.ts';
 
 const golden = JSON.parse(
   readFileSync(join(harnessRoot, 'docs/reference/samples/f1/modeled/daily_summary.json'), 'utf8'),
@@ -51,6 +63,10 @@ describe('F1 golden → harness derivation', () => {
         converted: r.converted,
       }));
     expect(purchase).toEqual([...F1_DAILY_PURCHASE]);
+  });
+
+  test('F1_METRICS (what the harness subscribes) is exactly the golden key set (R2 units_upsell included)', () => {
+    expect(new Set<string>(F1_METRICS)).toEqual(new Set(golden.rows.map((r) => r.metric_key)));
   });
 
   test('compareRows: identical → no diff; a changed count and an extra row are reported', () => {
@@ -98,5 +114,40 @@ describe('wire fixtures', () => {
       expect(buys.length).toBe(purchasers);
     }
     expect(new Set(events.map((e) => e.event_id)).size).toBe(events.length);
+  });
+});
+
+describe('R3 tenant fixture + crobot id mapping', () => {
+  test('tenant project: exact visitors / purchasers, its own project id, unique event ids', () => {
+    const events = buildTenantWireEvents(43, 1717);
+    for (const { variation, visitors, purchasers } of TENANT_COUNTS) {
+      const views = events.filter(
+        (e) => e.event_name === 'experiment_view' && e.variation_id === variation,
+      );
+      const buys = events.filter(
+        (e) => e.event_name === 'purchase' && (e.exp as number[][])[0]?.[1] === variation,
+      );
+      expect(views.length).toBe(visitors);
+      expect(buys.length).toBe(purchasers);
+    }
+    expect(events.every((e) => e.project_id === 43)).toBe(true);
+    expect(new Set(events.map((e) => e.event_id)).size).toBe(events.length);
+    // Never the F1 project's event ids (same identifier, different project).
+    const f1Ids = new Set(loadF1WireEvents(harnessRoot).events.map((e) => e.event_id));
+    expect(events.some((e) => f1Ids.has(e.event_id))).toBe(false);
+  });
+
+  test('tenant config source reuses the identifier as a v2 experiment', () => {
+    expect(tenantProjectSource(43, 1717)).toMatchObject({
+      id: 43,
+      experiments: [{ identifier: 1717, platform_version: 'v2' }],
+    });
+  });
+
+  test('crobot variation PK is per experiment (101 is 6002 in 1717, 6006 in 1903)', () => {
+    expect(crobotVariationPk(1717, 101)).toBe(6002);
+    expect(crobotVariationPk(1903, 101)).toBe(6006);
+    expect(crobotVariationPk(1802, 200)).toBe(6003);
+    expect(() => crobotVariationPk(1903, 999)).toThrow();
   });
 });
