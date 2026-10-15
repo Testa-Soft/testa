@@ -5,9 +5,10 @@
  * A purchase with 2 items must land as 1 events row (exp tuples unzipped) and
  * 2 event_items rows.
  *
- * Needs its own stream (never the shared default `events`):
+ * Redis: the shared test DB (REDIS_TEST_DB) under a key prefix unique to this
+ * run (stream, group and dedup keys included); only those keys are removed.
  *   CLICKHOUSE_URL=http://localhost:8123 CLICKHOUSE_DATABASE=prd006_p2 \
- *   REDIS_URL=redis://localhost:6380 REDIS_STREAM_KEY=prd006:p2:events bun test pipeline
+ *   REDIS_URL=redis://localhost:6380 bun test pipeline
  */
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
 import { randomUUID } from 'node:crypto';
@@ -15,7 +16,8 @@ import { createClient } from '@clickhouse/client';
 import type { EnrichedEvent } from '@testa-platform/shared-types';
 import type { Server } from 'bun';
 import { Hono } from 'hono';
-import IORedis, { type Redis } from 'ioredis';
+import type { Redis } from 'ioredis';
+import { type PrefixedTestRedis, openPrefixedTestRedis } from '../../__test-utils__/redis.ts';
 import { config } from '../../config.ts';
 import { command, insertEventItems, insertEvents, query } from '../../db/clickhouse.ts';
 import { migrate } from '../../db/migrate.ts';
@@ -25,9 +27,9 @@ import { Consumer } from '../consumer.ts';
 
 const live =
   Boolean(process.env.CLICKHOUSE_URL && process.env.REDIS_URL) &&
-  config.clickhouse.database !== 'default' &&
-  config.redis.streamKey !== 'events';
+  config.clickhouse.database !== 'default';
 
+let redisTest: PrefixedTestRedis;
 let redis: Redis;
 let server: Server;
 let base: string;
@@ -85,7 +87,8 @@ describe.skipIf(!live)(
       await admin.command({ query: `CREATE DATABASE IF NOT EXISTS ${config.clickhouse.database}` });
       await admin.close();
       await migrate();
-      redis = new IORedis(process.env.REDIS_URL as string, { maxRetriesPerRequest: 1 });
+      redisTest = openPrefixedTestRedis('pipeline');
+      redis = redisTest.client;
       const app = new Hono();
       app.post('/_ingest', makeIngestHandler({ getRedis: () => redis }));
       server = Bun.serve({ port: 0, fetch: app.fetch });
@@ -93,8 +96,7 @@ describe.skipIf(!live)(
     });
 
     afterAll(async () => {
-      await redis.xgroup('DESTROY', config.redis.streamKey, GROUP).catch(() => undefined);
-      await redis.quit();
+      await redisTest.close(); // removes this run's stream / group / dedup keys only
       server.stop(true);
     });
 

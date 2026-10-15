@@ -22,6 +22,7 @@ import type {
 import type { Server } from 'bun';
 import { Hono } from 'hono';
 import IORedis, { type Redis } from 'ioredis';
+import { REDIS_TEST_DB, REDIS_TEST_URL, deleteByPrefix } from '../../__test-utils__/redis.ts';
 import { fileConfigStore } from '../../config/store.ts';
 import { insertRows } from '../../db/clickhouse.ts';
 import {
@@ -109,7 +110,8 @@ const metricKeysOf = (rows: { metric_key: string }[]) => new Set(rows.map((r) =>
 
 describe.skipIf(!liveRedis)('R3 tenant isolation: same experiment id in two projects', () => {
   beforeAll(async () => {
-    redis = new IORedis(process.env.REDIS_URL ?? 'redis://localhost:6380', {
+    redis = new IORedis(REDIS_TEST_URL, {
+      db: REDIS_TEST_DB,
       maxRetriesPerRequest: 1,
     });
     hookServer = Bun.serve({
@@ -168,8 +170,7 @@ describe.skipIf(!liveRedis)('R3 tenant isolation: same experiment id in two proj
         updatedAt: chDateTime(new Date(Date.now() + 1000)),
       });
     }
-    const keys = await redis.keys(`${PREFIX}*`);
-    if (keys.length > 0) await redis.del(...keys);
+    await deleteByPrefix(redis, PREFIX);
     await redis.quit();
     api.stop(true);
     hookServer.stop(true);
