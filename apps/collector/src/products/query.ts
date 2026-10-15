@@ -14,7 +14,7 @@ import {
   type QueryRunner,
   buildAttributedEvents,
 } from '../analytics/attribution.ts';
-import { withFx } from '../modeler/fx.ts';
+import { withFx } from '../fx/sql.ts';
 
 export type OrderKey = [number, number];
 

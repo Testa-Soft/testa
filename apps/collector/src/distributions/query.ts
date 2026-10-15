@@ -11,8 +11,8 @@ import {
   type QueryRunner,
   buildAttributedEvents,
 } from '../analytics/attribution.ts';
+import { withFx } from '../fx/sql.ts';
 import { buildCapQuery } from '../modeler/daily-rows-sql.ts';
-import { withFx } from '../modeler/fx.ts';
 
 export interface DistributionEvent {
   variation_id: number;
