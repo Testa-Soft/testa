@@ -3,8 +3,9 @@
  * the BatchBuffer DurableObject for collector hand-off.
  *
  * Pipeline:
- *   1. Parse body as PixelEvent[] (tolerant — drops malformed entries, fails the
- *      whole request only if the envelope itself is unparseable).
+ *   1. Parse body as PixelEvent[] and validate/normalise each entry (PRD-006
+ *      Zod rules; drops invalid entries, fails the whole request only if the
+ *      envelope itself is unparseable).
  *   2. Read or mint `_testa_uuid` cookie.
  *   3. For each event:
  *        - Use the cookie's visitor_id when the event omits one (rare; pixel
@@ -25,6 +26,7 @@ import { botInputsFromRequest, botSignal } from '../bot.ts';
 import { getOrCreateVisitorId } from '../cookies.ts';
 import { enrich, inputsFromRequest } from '../enrich.ts';
 import type { Env } from '../types.ts';
+import { validateEvent } from '../validate.ts';
 
 export const track = new Hono<{ Bindings: Env }>();
 
@@ -130,32 +132,15 @@ function routingKey(ev: EnrichedEvent): string {
 }
 
 /**
- * Hand-rolled validation. Cheap (no zod runtime in the worker bundle) and
- * tolerant — drops malformed entries instead of failing the whole batch.
+ * Validate + normalise each entry (Zod, `validate.ts`). Tolerant: drops
+ * invalid entries instead of failing the whole batch.
  */
 function parsePixelEvents(raw: unknown): PixelEvent[] {
   if (!Array.isArray(raw)) return [];
   const out: PixelEvent[] = [];
   for (const entry of raw) {
-    const parsed = parseOne(entry);
-    if (parsed) out.push(parsed);
+    const result = validateEvent(entry);
+    if (result.ok) out.push(result.event);
   }
   return out;
-}
-
-function parseOne(raw: unknown): PixelEvent | null {
-  if (!raw || typeof raw !== 'object') return null;
-  const r = raw as Record<string, unknown>;
-  if (typeof r.event_id !== 'string' || r.event_id.length === 0) return null;
-  if (typeof r.event_name !== 'string' || r.event_name.length === 0) return null;
-  if (typeof r.client_ts !== 'number' || !Number.isFinite(r.client_ts)) return null;
-  if (typeof r.project_id !== 'number' || !Number.isFinite(r.project_id)) return null;
-  if (typeof r.visitor_id !== 'string') return null;
-  if (typeof r.session_id !== 'string') return null;
-  if (typeof r.url !== 'string') return null;
-  if (typeof r.tracker_version !== 'string') return null;
-  if (typeof r.consent_state !== 'string') return null;
-  if (typeof r.viewport_w !== 'number') return null;
-  if (typeof r.viewport_h !== 'number') return null;
-  return r as unknown as PixelEvent;
 }

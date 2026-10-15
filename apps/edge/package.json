@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Cloudflare Worker — serves pixel from KV, accepts /track, sets first-party cookies",
+  "description": "Cloudflare Worker \u2014 serves pixel from KV, accepts /track, sets first-party cookies",
   "main": "src/index.ts",
   "scripts": {
     "build": "wrangler deploy --dry-run --outdir dist",
@@ -16,7 +16,8 @@
   },
   "dependencies": {
     "hono": "4.6.10",
-    "ua-parser-js": "1.0.39"
+    "ua-parser-js": "1.0.39",
+    "zod": "3.23.8"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "0.5.30",
