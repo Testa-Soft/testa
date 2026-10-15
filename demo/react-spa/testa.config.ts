@@ -37,8 +37,69 @@ export const demoConfig: ProjectConfig = {
   integration_version: '4.0',
   consent_mode: 'aware',
   published_at: '2026-08-18T00:00:00.000Z',
-  config_hash: 'react-demo-2',
+  config_hash: 'react-demo-3',
   experiments: [
+    {
+      // HTML test — mirrors crobot experiment #10. 50/50, so use the demo's
+      // "new visitor" button to land in each arm.
+      experiment_id: 10,
+      title: 'Calculator — headline + social proof banner',
+      status: 'active',
+      traffic_allocation: 100,
+      rules: [{ match_type: 'contains', url_pattern: '/calculator' }],
+      goals: [{ goal_id: 1, name: 'CTA click', type: 'click', action: '#cta' }],
+      variations: [
+        { variation_id: 0, name: 'Control', weight: 50, changes: [] },
+        {
+          variation_id: 1,
+          name: 'Variant',
+          weight: 50,
+          changes: [
+            {
+              type: 'change_html',
+              selector: '#hero',
+              content:
+                'Calculate your <span class="testa-rx-accent">lost revenue</span> in 30 seconds',
+            },
+            {
+              type: 'prepend_html',
+              selector: 'main',
+              content: '<div class="testa-rx-banner">★ Trusted by 1,200+ growth teams</div>',
+            },
+            {
+              type: 'css',
+              content:
+                '.testa-rx-accent{color:#c2185b}.testa-rx-banner{display:inline-block;margin-bottom:12px;padding:6px 12px;border-radius:999px;background:#fce4ec;color:#880e4f;font:600 13px/1.4 system-ui,sans-serif}',
+            },
+          ],
+        },
+      ],
+    },
+    {
+      // Split-URL test — /pricing → /pricing-b for the variant, 50/50.
+      experiment_id: 11,
+      title: 'Pricing page split URL',
+      status: 'active',
+      traffic_allocation: 100,
+      rules: [{ match_type: 'exact', url_pattern: 'http://localhost:3200/pricing' }],
+      goals: [],
+      variations: [
+        { variation_id: 0, name: 'Control', weight: 50, changes: [] },
+        {
+          variation_id: 1,
+          name: 'Variant',
+          weight: 50,
+          changes: [
+            {
+              type: 'redirect',
+              from_url: 'http://localhost:3200/pricing',
+              to_url: 'http://localhost:3200/pricing-b',
+              url_match_type: 'exact',
+            },
+          ],
+        },
+      ],
+    },
     {
       // PAGE-SCOPED change_html — regression fixture for (a) the soft-nav leak
       // (variant h1 only on /features, never elsewhere) and (b) the React-

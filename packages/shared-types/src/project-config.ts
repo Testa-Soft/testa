@@ -127,6 +127,13 @@ export type VariationChange =
   | { type: 'change_html'; selector: string; content: string }
   /** crobot `css` — inject `content` verbatim as a stylesheet (`<style>`). */
   | { type: 'css'; content: string; global?: boolean }
+  /**
+   * crobot `js` — execute `content` as a script, once, after this variation's
+   * DOM changes have been applied. The shield re-applies markup after a
+   * framework re-render but does NOT re-run the script, so authored code must
+   * be idempotent and prefer delegated listeners on `document`.
+   */
+  | { type: 'js'; content: string }
   /** crobot `hide_element` — `display:none` on matched elements. */
   | { type: 'hide_element'; selector: string }
   /** crobot `append_html` — `insertAdjacentHTML('beforeend', content)`. */

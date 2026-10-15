@@ -17,6 +17,11 @@ createRoot(document.getElementById('root') as HTMLElement).render(
       {...(useProdConfig
         ? { projectId: PROD_PROJECT_ID, host: PROD_CONFIG_HOST }
         : { config: demoConfig })}
+      // `VITE_TESTA_PREVIEW_API=http://localhost` resolves ?testa_preview tokens
+      // minted by a local crobot (e.g. the testa MCP's preview tool).
+      {...(import.meta.env.VITE_TESTA_PREVIEW_API
+        ? { previewApiUrl: import.meta.env.VITE_TESTA_PREVIEW_API }
+        : {})}
       tracking={false}
       secureCookies={false}
     >

@@ -41,6 +41,7 @@ export {
   applyChangeHtml,
   applyCss,
   applyHide,
+  applyJs,
   applyMove,
   applyPrepend,
 } from './apply/index.ts';

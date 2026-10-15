@@ -13,6 +13,20 @@ import { type EachMatchingOptions, eachMatching } from './dom.ts';
 
 export type ChangeHtmlChange = Extract<VariationChange, { type: 'change_html' }>;
 
+/**
+ * The top-level nodes we injected, held weakly so they can be collected with
+ * the document. This is how the keeper tells "the framework wiped our content"
+ * from "the variation's own `js` change edited inside it". Comparing innerHTML
+ * to the authored string cannot distinguish the two: an authored script that
+ * animates a counter or rotates a word produces drift on every tick, and
+ * re-asserting it fights the script forever — on a real page that is a write /
+ * revert storm that locks up the tab.
+ *
+ * A WeakSet rather than a marker attribute: nothing we do should be visible in
+ * the customer's DOM, where it could collide with their styles or assertions.
+ */
+const injected = new WeakSet<Element>();
+
 export function applyChangeHtml(
   change: ChangeHtmlChange,
   opts: EachMatchingOptions = {},
@@ -29,7 +43,7 @@ export function applyChangeHtml(
     change.selector,
     (el) => {
       if (!originals.has(el)) originals.set(el, el.innerHTML);
-      el.innerHTML = sanitized;
+      write(el, sanitized);
     },
     opts,
   );
@@ -50,10 +64,10 @@ export function applyChangeHtml(
     keeper = new MutationObserver(() => {
       for (const el of originals.keys()) {
         if (!el.isConnected) continue;
-        if (el.innerHTML === sanitized) continue;
+        if (stillApplied(el, sanitized)) continue;
         if (guard && !guard()) continue; // off-page: the app's content stands
         originals.set(el, el.innerHTML);
-        el.innerHTML = sanitized;
+        write(el, sanitized);
       }
     });
     keeper.observe(document.documentElement, {
@@ -69,10 +83,33 @@ export function applyChangeHtml(
     for (const [el, original] of originals) {
       // Restore ONLY if our content is still there — if React re-rendered the
       // node meanwhile, the change is already gone and we must not stomp it.
-      if (el.innerHTML === sanitized) el.innerHTML = original;
+      if (stillApplied(el, sanitized)) el.innerHTML = original;
     }
     originals.clear();
   };
+}
+
+/** Write the authored markup and remember the nodes it produced as ours. */
+function write(el: Element, sanitized: string): void {
+  el.innerHTML = sanitized;
+  for (const child of Array.from(el.children)) injected.add(child);
+}
+
+/**
+ * Whether the element still holds the content we injected.
+ *
+ * Markup content is identified by the nodes we created still being there: that
+ * survives any edit made INSIDE our subtree and stops holding the moment the
+ * framework re-renders the element's children. Text-only content has no element
+ * to mark, so it falls back to comparing against the authored string — which is
+ * exactly right for a copy change, where any drift is the framework's doing.
+ */
+function stillApplied(el: Element, sanitized: string): boolean {
+  for (const child of Array.from(el.children)) {
+    if (injected.has(child)) return true;
+  }
+
+  return el.innerHTML === sanitized;
 }
 
 /**

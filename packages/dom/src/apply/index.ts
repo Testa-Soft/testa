@@ -18,6 +18,7 @@ import { type CssChange, applyCss } from './css.ts';
 import { type HideChange, applyHide } from './hide.ts';
 import { type ChangeHtmlChange, applyChangeHtml } from './html.ts';
 import { type AppendChange, type PrependChange, applyAppend, applyPrepend } from './insert.ts';
+import { type JsChange, applyJs } from './js.ts';
 import { type MoveChange, applyMove } from './move.ts';
 
 export type Teardown = () => void;
@@ -44,16 +45,23 @@ export function applyVariation(
   opts: ApplyVariationOptions = {},
 ): Teardown[] {
   const teardowns: Teardown[] = [];
-  for (const change of changes) {
+  // `js` changes run after every DOM change, whatever order they were authored
+  // in: a script that queries the markup this variation injects must not depend
+  // on the author having listed the changes in the right order.
+  for (const change of [...changes].sort(jsLast)) {
     try {
       const teardown = applyOne(variationId, change, opts);
       if (teardown) teardowns.push(teardown);
     } catch (err) {
-      // biome-ignore lint/suspicious/noConsole: applier failure must be visible but non-fatal
       console.error('[testa] applier threw:', err);
     }
   }
   return teardowns;
+}
+
+/** Stable comparator that sinks `js` changes to the end, preserving order otherwise. */
+function jsLast(a: VariationChange, b: VariationChange): number {
+  return Number(a.type === 'js') - Number(b.type === 'js');
 }
 
 function applyOne(
@@ -67,6 +75,11 @@ function applyOne(
       // Global <style> tag: gate at apply time (no watcher), removable teardown.
       if (opts.guard && !opts.guard()) return null;
       return applyCss(variationId, change as CssChange);
+
+    case 'js':
+      // Executes code, so it honours the page gate directly rather than
+      // through a DOM watcher.
+      return applyJs(variationId, change as JsChange, guardOpts);
 
     case 'change_html':
       return applyChangeHtml(change as ChangeHtmlChange, guardOpts);
@@ -92,6 +105,7 @@ function applyOne(
 
 export { applyCss } from './css.ts';
 export { applyChangeHtml, stripScriptTags } from './html.ts';
+export { applyJs } from './js.ts';
 export { applyHide } from './hide.ts';
 export { applyAppend, applyPrepend } from './insert.ts';
 export { applyMove } from './move.ts';
