@@ -13,6 +13,7 @@ import type { ProjectConfig } from '@testa-platform/shared-types';
 import type { Server } from 'bun';
 import { Hono } from 'hono';
 import IORedis, { type Redis } from 'ioredis';
+import { REDIS_TEST_DB, REDIS_TEST_URL, deleteByPrefix } from '../../__test-utils__/redis.ts';
 import { fileConfigStore } from '../../config/store.ts';
 import { insertRows } from '../../db/clickhouse.ts';
 import {
@@ -52,7 +53,8 @@ export interface QueryHarness {
 export async function openHarness(name: string): Promise<QueryHarness> {
   const prefix = `prd006:p7:${name}-${randomUUID()}:`;
   const configDir = mkdtempSync(join(tmpdir(), `${name}-config-`));
-  const redis: Redis = new IORedis(process.env.REDIS_URL ?? 'redis://localhost:6380', {
+  const redis: Redis = new IORedis(REDIS_TEST_URL, {
+    db: REDIS_TEST_DB,
     maxRetriesPerRequest: 1,
   });
   const ctx: SyncContext = {
@@ -126,8 +128,7 @@ export async function openHarness(name: string): Promise<QueryHarness> {
       return ready.body.result as T;
     },
     async close() {
-      const keys = await redis.keys(`${prefix}*`);
-      if (keys.length > 0) await redis.del(...keys);
+      await deleteByPrefix(redis, prefix);
       await redis.quit();
       server.stop(true);
       rmSync(configDir, { recursive: true, force: true });

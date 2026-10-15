@@ -15,6 +15,7 @@ import type { MetricKey, ProjectConfig, SummaryResult } from '@testa-platform/sh
 import type { Server } from 'bun';
 import { Hono } from 'hono';
 import IORedis, { type Redis } from 'ioredis';
+import { REDIS_TEST_DB, REDIS_TEST_URL, deleteByPrefix } from '../../__test-utils__/redis.ts';
 import { fileConfigStore } from '../../config/store.ts';
 import { insertRows } from '../../db/clickhouse.ts';
 import {
@@ -155,7 +156,8 @@ const sortRows = (rows: Record<string, unknown>[]) =>
 
 describe.skipIf(!liveRedis)('sync API (live ClickHouse + Redis, real HTTP)', () => {
   beforeAll(async () => {
-    redis = new IORedis(process.env.REDIS_URL ?? 'redis://localhost:6380', {
+    redis = new IORedis(REDIS_TEST_URL, {
+      db: REDIS_TEST_DB,
       maxRetriesPerRequest: 1,
     });
     gated = ctxWith(async (sql, params) => {
@@ -183,8 +185,7 @@ describe.skipIf(!liveRedis)('sync API (live ClickHouse + Redis, real HTTP)', () 
         updatedAt: chDateTime(new Date(Date.now() + 1000)),
       });
     }
-    const keys = await redis.keys(`${PREFIX}*`);
-    if (keys.length > 0) await redis.del(...keys);
+    await deleteByPrefix(redis, PREFIX);
     await redis.quit();
     server.stop(true);
     rmSync(configDir, { recursive: true, force: true });

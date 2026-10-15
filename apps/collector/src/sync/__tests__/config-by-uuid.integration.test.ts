@@ -17,6 +17,7 @@ import type { MetricKey, SummaryResult } from '@testa-platform/shared-types';
 import type { Server } from 'bun';
 import { Hono } from 'hono';
 import IORedis, { type Redis } from 'ioredis';
+import { REDIS_TEST_DB, REDIS_TEST_URL, deleteByPrefix } from '../../__test-utils__/redis.ts';
 import { makeConfigGetHandler, makeConfigPutHandler } from '../../config/route.ts';
 import { fileConfigStore } from '../../config/store.ts';
 import { insertRows } from '../../db/clickhouse.ts';
@@ -98,7 +99,8 @@ describe.skipIf(!liveRedis)(
   'config published by UUID, resolved by numeric project_id (real HTTP)',
   () => {
     beforeAll(async () => {
-      redis = new IORedis(process.env.REDIS_URL ?? 'redis://localhost:6380', {
+      redis = new IORedis(REDIS_TEST_URL, {
+        db: REDIS_TEST_DB,
         maxRetriesPerRequest: 1,
       });
       const store = fileConfigStore(configDir);
@@ -150,8 +152,7 @@ describe.skipIf(!liveRedis)(
         metrics: KEYS,
         updatedAt: chDateTime(new Date(Date.now() + 1000)),
       });
-      const keys = await redis.keys(`${PREFIX}*`);
-      if (keys.length > 0) await redis.del(...keys);
+      await deleteByPrefix(redis, PREFIX);
       await redis.quit();
       server.stop(true);
       rmSync(configDir, { recursive: true, force: true });

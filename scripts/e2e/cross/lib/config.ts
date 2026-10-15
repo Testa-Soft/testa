@@ -72,7 +72,7 @@ export interface HarnessConfig {
 const COLLECTOR_PORT = 8091;
 const EDGE_PORT = 8792;
 const CROBOT_PORT = 8188;
-const REDIS_DB = 13; // collector tests FLUSHDB DBs 7–11; P5 uses 12
+const REDIS_DB = 13; // reserved for X0 (reset at stack start). Collector live tests share REDIS_TEST_DB (default 7) under per-file key prefixes and never FLUSHDB; P5 uses 12
 
 function generateSecrets(): Secrets {
   const hex = (n: number): string => randomBytes(n).toString('hex');
