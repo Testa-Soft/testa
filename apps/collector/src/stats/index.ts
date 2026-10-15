@@ -1,8 +1,13 @@
 /**
- * Bayesian stats module (PRD-006 Part 4). Interface stub created in P0
- * (task 5.1); P3 (tasks 5.10–5.11) replaces the bodies and keeps these
- * signatures. Pure: no I/O.
+ * Bayesian stats module (PRD-006 Part 4, task 5.10). Signatures fixed by P0
+ * (task 5.1). Pure and deterministic: no I/O, Float64Array draws.
  */
+import { drawPosterior, isInsufficient } from './models.ts';
+import { createRng } from './rng.ts';
+import { createSamplers } from './samplers.ts';
+import { summarize } from './summarize.ts';
+
+export { sampleSizeTwoProportion, srmChiSquare } from './planning.ts';
 
 export type StatModel = 'beta' | 'normal';
 
@@ -21,8 +26,17 @@ export interface StatsRequest {
   model: StatModel;
   control: number;
   draws: number;
+  /**
+   * Seed prefix `${experimentId}|${metric}|${groupKey}` (PRD-006 §5.5).
+   * {@link computeStats} appends `|${variation}|${n}|${x}|${sum},${sumSq}` per
+   * variation (absent inputs as ''), so each variation's draws depend only on
+   * its own inputs. The modeler passes real ids; the stateless
+   * `POST /api/v1/stats` passes `|${metric}|` (empty experiment and group).
+   */
   seedKey: string;
+  /** Credible-interval level for `lift_ci`, default 0.95. */
   confidence?: number;
+  /** `lower`: smaller is better (abandonment); flips beat / best / loss. */
   direction?: 'higher' | 'lower';
   variations: VariationInput[];
 }
@@ -36,24 +50,44 @@ export interface VariationStats {
   insufficient_data?: true;
 }
 
-const NOT_IMPLEMENTED = 'not implemented: P3';
+export const DEFAULT_CONFIDENCE = 0.95;
 
-export function computeStats(_req: StatsRequest): Map<number, VariationStats> {
-  throw new Error(NOT_IMPLEMENTED);
+/** Per-variation seed string; see {@link StatsRequest.seedKey}. */
+export function variationSeed(seedKey: string, v: VariationInput): string {
+  return `${seedKey}|${v.variation}|${v.n}|${v.x ?? ''}|${v.sum ?? ''},${v.sumSq ?? ''}`;
 }
 
-export function sampleSizeTwoProportion(_a: {
-  baseline: number;
-  mde: number;
-  alpha: number;
-  power: number;
-}): number {
-  throw new Error(NOT_IMPLEMENTED);
-}
+/**
+ * Posterior summary per variation id. A variation is `insufficient_data` when
+ * it, or control, is below the §5.1 minimums; its numbers are still returned.
+ */
+export function computeStats(req: StatsRequest): Map<number, VariationStats> {
+  const controlIndex = req.variations.findIndex((v) => v.variation === req.control);
+  if (controlIndex < 0)
+    throw new RangeError(`computeStats: control ${req.control} not in variations`);
+  if (!Number.isInteger(req.draws) || req.draws < 1)
+    throw new RangeError('computeStats: draws must be a positive integer');
 
-export function srmChiSquare(
-  _observed: number[],
-  _weights: number[],
-): { chi2: number; p_value: number } {
-  throw new Error(NOT_IMPLEMENTED);
+  const draws = req.variations.map((v) =>
+    drawPosterior(
+      req.model,
+      v,
+      req.draws,
+      createSamplers(createRng(variationSeed(req.seedKey, v))),
+    ),
+  );
+  const stats = summarize({
+    draws,
+    controlIndex,
+    direction: req.direction ?? 'higher',
+    confidence: req.confidence ?? DEFAULT_CONFIDENCE,
+  });
+  const controlShort = isInsufficient(req.model, req.variations[controlIndex] as VariationInput);
+  return new Map(
+    req.variations.map((v, i) => {
+      const s = stats[i] as VariationStats;
+      const short = isInsufficient(req.model, v) || controlShort;
+      return [v.variation, short ? { ...s, insufficient_data: true as const } : s];
+    }),
+  );
 }
