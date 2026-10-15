@@ -6,6 +6,7 @@
 import type { SubscriptionResponse } from '@testa-platform/shared-types';
 import { SyncApiError } from '../analytics/errors.ts';
 import { requireV2Experiment } from '../analytics/guards.ts';
+import { configForProject } from '../modeler/project-config.ts';
 import { PRIORITY } from '../modeler/queue.ts';
 import { readRunState } from '../modeler/run-state.ts';
 import { requestRefresh } from '../modeler/scheduler.ts';
@@ -36,7 +37,7 @@ export async function putSubscription(
   raw: unknown,
 ): Promise<SubscriptionResponse> {
   const body = validateSubscription(raw);
-  requireV2Experiment(await ctx.configStore.get(String(body.projectId)), experimentId);
+  requireV2Experiment(await configForProject(ctx.configStore, body.projectId), experimentId);
 
   const prev = await readSubscription(ctx.query, experimentId);
   const next: Subscription = {

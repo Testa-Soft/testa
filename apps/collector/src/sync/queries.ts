@@ -15,6 +15,7 @@ import type {
 import { SyncApiError } from '../analytics/errors.ts';
 import { requireV2Experiment } from '../analytics/guards.ts';
 import { VIEW_NAMES, getView } from '../analytics/views.ts';
+import { configForProject } from '../modeler/project-config.ts';
 import { type StoredQuery, queryId, readQuery, submitQuery } from '../modeler/query-jobs.ts';
 import { clampRetry, retryAfter } from '../modeler/queue.ts';
 import { readSubscription } from '../modeler/subscriptions.ts';
@@ -51,7 +52,7 @@ async function validateQuery(
     body.project_id,
     new SyncApiError('experiment_not_found', 404, 'project_id'),
   );
-  requireV2Experiment(await ctx.configStore.get(String(projectId)), experimentId);
+  requireV2Experiment(await configForProject(ctx.configStore, projectId), experimentId);
   if (body.refresh !== undefined && typeof body.refresh !== 'boolean') {
     throw new SyncApiError('unknown_view', 400, 'refresh');
   }

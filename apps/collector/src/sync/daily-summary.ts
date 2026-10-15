@@ -6,6 +6,7 @@
 import type { DailyRow, DailySummaryResponse, MetricKey } from '@testa-platform/shared-types';
 import { SyncApiError } from '../analytics/errors.ts';
 import { requireV2Experiment } from '../analytics/guards.ts';
+import { configForProject } from '../modeler/project-config.ts';
 import { readRunState } from '../modeler/run-state.ts';
 import { readSubscription } from '../modeler/subscriptions.ts';
 import { type SyncContext, refreshTiming, summaryStatus } from './context.ts';
@@ -55,7 +56,7 @@ export async function getDailySummary(
 ): Promise<DailySummaryResponse> {
   const sub = await readSubscription(ctx.query, experimentId);
   if (!sub || sub.status === 'deleted') throw new SyncApiError('not_subscribed', 404);
-  requireV2Experiment(await ctx.configStore.get(String(sub.projectId)), experimentId);
+  requireV2Experiment(await configForProject(ctx.configStore, sub.projectId), experimentId);
 
   const state = await readRunState(ctx.redis, ctx.keys.run(experimentId));
   const status = summaryStatus(state);
