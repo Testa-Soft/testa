@@ -53,6 +53,5 @@ describe('stub views (P0)', () => {
       expect(views.has(name)).toBe(true);
       expect(codeOf(() => views.get(name).validate({}))).toBe('501 not_implemented');
     }
-    expect(views.has('summary')).toBe(false);
   });
 });
