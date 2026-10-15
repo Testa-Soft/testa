@@ -53,6 +53,7 @@ export const BUILTIN_KEY_SQL: Record<BuiltinMetricKey, KeySql> = {
   sign_up: plain('su_n'),
   page_view: plain('pv_n'),
   units: { c: flag('init_n > 0'), n: 'units_n', s: 'units_sum', q: 'units_sq' },
+  units_upsell: { c: flag('ups_n > 0'), n: 'ups_units_n', s: 'ups_units_sum', q: 'ups_units_sq' },
   units_added: plain('added_n'),
   units_bought_from_cart: plain('b2c_n'),
   coupon: plain('coupon_n'),

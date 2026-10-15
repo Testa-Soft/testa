@@ -25,6 +25,8 @@ export const BUILTIN_METRIC_KEYS = [
   'sign_up',
   'page_view',
   'units',
+  /** Units bought in upsell orders (R2); `units` stays initial orders only. */
+  'units_upsell',
   'units_added',
   'units_bought_from_cart',
   'coupon',

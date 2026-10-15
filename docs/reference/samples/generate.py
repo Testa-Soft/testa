@@ -837,7 +837,7 @@ if __name__ == "__main__":
 # and derives ratios (AOV = Σsum/Σcount of `purchase`, CR = Σconverted/Σvisitors, …).
 
 SUMMARY_KEYS = ["purchase", "upsell", "revenue", "add_to_cart", "begin_checkout", "add_shipping_info", "add_payment_info",
-                "generate_lead", "sign_up", "page_view", "units", "units_added", "units_bought_from_cart", "coupon",
+                "generate_lead", "sign_up", "page_view", "units", "units_upsell", "units_added", "units_bought_from_cart", "coupon",
                 "lead", "lead_purchase", "repeat_purchase", "cart_purchase", "checkout_purchase", "session",
                 "event:size_guide_opened", "goal:12"]
 
@@ -865,6 +865,8 @@ def summary_values(M, vid, capped=False):
         s0 = e["exp_session_starts"][e["exp_ids"].index(M["exp_id"])]
         sess[s0] = max(sess.get(s0, 0), parse_ts(e["client_ts"]).timestamp() - s0)
     unit_vals = [(it["price"] or 0) * FX[e["currency"]] for e in init for it in M["items"][e["event_id"]] for _ in range(it["quantity"])]
+    # R2: units bought in upsell orders (units keeps its meaning: initial orders only).
+    ups_unit_vals = [(it["price"] or 0) * FX[e["currency"]] for e in ups for it in M["items"][e["event_id"]] for _ in range(it["quantity"])]
     def ev(name, vals=None):
         lst = by[name]; vals = vals if vals is not None else [e["value_native"] * FX[e["currency"]] if e["currency"] else 0 for e in lst]
         return (1 if lst else 0, len(lst), sum(vals), vals)
@@ -876,6 +878,7 @@ def summary_values(M, vid, capped=False):
         "add_shipping_info": ev("add_shipping_info", []), "add_payment_info": ev("add_payment_info", []),
         "generate_lead": ev("generate_lead", []), "sign_up": ev("sign_up", []), "page_view": ev("page_view", []),
         "units": (1 if init else 0, len(unit_vals), sum(unit_vals), unit_vals),
+        "units_upsell": (1 if ups else 0, len(ups_unit_vals), sum(ups_unit_vals), ups_unit_vals),
         "units_added": (1 if carted else 0, sum(carted.values()), 0.0, []),
         "units_bought_from_cart": (1 if any(min(bought[p], carted[p]) for p in carted) else 0, sum(min(bought[p], carted[p]) for p in carted), 0.0, []),
         "coupon": (1 if any(e["props"].get("coupon") for e in init) else 0, sum(1 for e in init if e["props"].get("coupon")), 0.0, []),

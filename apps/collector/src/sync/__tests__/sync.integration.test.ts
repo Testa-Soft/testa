@@ -225,6 +225,12 @@ describe.skipIf(!liveRedis)('sync API (live ClickHouse + Redis, real HTTP)', () 
     expect(sortRows(ready.body.rows)).toEqual(
       sortRows(F1.rows as unknown as Record<string, unknown>[]),
     );
+    // R2: upsell units (validation F1 V2: units sold 4 = 1 + 2 + 1 upsell).
+    const upsellUnits = (v: number): number =>
+      (ready.body.rows as { variation_id: number; metric_key: string; count: number }[])
+        .filter((r) => r.variation_id === v && r.metric_key === 'units_upsell')
+        .reduce((n, r) => n + r.count, 0);
+    expect([upsellUnits(100), upsellUnits(101)]).toEqual([0, 1]);
     const firstRun = ready.body.run_id as string;
 
     const unchanged = await call('GET', `/${experimentId}/daily-summary?since_run_id=${firstRun}`);
@@ -507,7 +513,7 @@ describe.skipIf(!liveRedis)('sync API (live ClickHouse + Redis, real HTTP)', () 
     expect(statuses.slice(0, 58).every((s) => s === 202)).toBe(true);
   });
 
-  it('p95 under 200 ms for a 14-day × 3-variation × 22-key daily summary', async () => {
+  it('p95 under 200 ms for a 14-day × 3-variation × 23-key daily summary', async () => {
     const { projectId, experimentId } = await setup('demo');
     await call(
       'PUT',
@@ -516,7 +522,7 @@ describe.skipIf(!liveRedis)('sync API (live ClickHouse + Redis, real HTTP)', () 
     );
     await drain(gated);
     const first = await call('GET', `/${experimentId}/daily-summary`);
-    expect(first.body.rows.length).toBe(14 * 3 * 22);
+    expect(first.body.rows.length).toBe(14 * 3 * KEYS.length);
     const times: number[] = [];
     for (let i = 0; i < 40; i++) {
       const t0 = performance.now();

@@ -7,7 +7,7 @@
  * Per-visitor layers, all over the shared attributed-events select (5.18):
  *   V  events  → order / step / custom-event / goal counts, money (FX'd, capped)
  *   S  sessions → per experiment session: max(client_ts) − session_start (§5.4)
- *   I  items    → units bought / added, buy-to-cart (min per visitor × product)
+ *   I  items    → units bought (initial / upsell) / added, buy-to-cart (min per visitor × product)
  */
 import type { DimensionKey } from '@testa-platform/shared-types';
 import {
@@ -116,16 +116,20 @@ function visitorItems(money: string): string {
   return `
     SELECT visitor_id,
            sum(u_n) AS units_n, sum(u_sum) AS units_sum, sum(u_sq) AS units_sq,
+           sum(uu_n) AS ups_units_n, sum(uu_sum) AS ups_units_sum, sum(uu_sq) AS ups_units_sq,
            sum(carted) AS added_n, sum(least(bought, carted)) AS b2c_n
     FROM (
       SELECT a.visitor_id AS visitor_id, it.product_id AS product_id,
              sumIf(it.quantity, a.is_init) AS u_n,
              sumIf(toFloat64(it.price) * a.fx * it.quantity, a.is_init) AS u_sum,
              sumIf(pow(toFloat64(it.price) * a.fx, 2) * it.quantity, a.is_init) AS u_sq,
+             sumIf(it.quantity, a.is_ups) AS uu_n,
+             sumIf(toFloat64(it.price) * a.fx * it.quantity, a.is_ups) AS uu_sum,
+             sumIf(pow(toFloat64(it.price) * a.fx, 2) * it.quantity, a.is_ups) AS uu_sq,
              sumIf(it.quantity, a.event_name = 'purchase') AS bought,
              sumIf(it.quantity, a.event_name = 'add_to_cart') AS carted
       FROM (
-        SELECT event_id, visitor_id, event_name, fx, ${IS_INIT} AS is_init
+        SELECT event_id, visitor_id, event_name, fx, ${IS_INIT} AS is_init, ${IS_UPS} AS is_ups
         FROM (${money}) AS mi
         WHERE event_name IN ('purchase', 'add_to_cart')
       ) AS a

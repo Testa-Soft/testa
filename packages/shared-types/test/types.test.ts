@@ -23,8 +23,9 @@ describe('MetricKey', () => {
     accepts<MetricKey>('goal:abc');
     // @ts-expect-error prefix without separator
     accepts<MetricKey>('eventfoo');
-    expect(BUILTIN_METRIC_KEYS).toHaveLength(20);
-    expect(new Set(BUILTIN_METRIC_KEYS).size).toBe(20);
+    expect(BUILTIN_METRIC_KEYS).toHaveLength(21);
+    expect(new Set(BUILTIN_METRIC_KEYS).size).toBe(21);
+    accepts<MetricKey>('units_upsell');
   });
 });
 
