@@ -52,14 +52,33 @@ export function readGolden<T>(set: 'f1' | 'demo', file: string): T {
   return JSON.parse(readFileSync(`${SAMPLES}/${set}/modeled/${file}`, 'utf8')) as T;
 }
 
-/** Insert a sample set's raw events + items under `projectId`. */
-export async function seedSample(set: 'f1' | 'demo', projectId: number): Promise<void> {
+const FIXTURE_EXPERIMENT = 1717;
+
+export const randomExperimentId = (): number =>
+  600_000_000 + Math.floor(Math.random() * 99_000_000);
+
+/**
+ * Insert a sample set's raw events + items under `projectId`, optionally
+ * renaming experiment 1717 to `experimentId` (experiment ids are global, so
+ * suites that share a database need their own).
+ */
+export async function seedSample(
+  set: 'f1' | 'demo',
+  projectId: number,
+  experimentId: number = FIXTURE_EXPERIMENT,
+): Promise<void> {
   const ext = set === 'demo' ? '.jsonl.gz' : '.jsonl';
-  const withProject = (r: Record<string, unknown>) => ({ ...r, project_id: projectId });
-  await insertRows('events', readJsonl(`${SAMPLES}/${set}/raw/events${ext}`).map(withProject));
+  const remap = (id: unknown) => (id === FIXTURE_EXPERIMENT ? experimentId : id);
+  const rewrite = (r: Record<string, unknown>) => ({
+    ...r,
+    project_id: projectId,
+    ...(r.experiment_id === undefined ? {} : { experiment_id: remap(r.experiment_id) }),
+    ...(Array.isArray(r.exp_ids) ? { exp_ids: r.exp_ids.map(remap) } : {}),
+  });
+  await insertRows('events', readJsonl(`${SAMPLES}/${set}/raw/events${ext}`).map(rewrite));
   await insertRows(
     'event_items',
-    readJsonl(`${SAMPLES}/${set}/raw/event_items${ext}`).map(withProject),
+    readJsonl(`${SAMPLES}/${set}/raw/event_items${ext}`).map(rewrite),
   );
 }
 
