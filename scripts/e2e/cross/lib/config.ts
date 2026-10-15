@@ -3,7 +3,7 @@
  *
  * Isolation (PACKAGES.md "Shared local resources"):
  *   - ClickHouse  tp-clickhouse :8123, database `prd006_x0` only (dropped + re-migrated per run)
- *   - Redis       tp-redis :6380, DB index 9 (reserved for X0) + stream key prefix `prd006:x0:`
+ *   - Redis       tp-redis :6380, DB index 13 (reserved for X0; collector tests flush 7–11, P5 uses 12) + stream key prefix `prd006:x0:`
  *   - Collector   bun on the host, :8091 (8090 belongs to the tp-collector container)
  *   - Edge        wrangler dev, :8792 (inspector :9339)
  *   - Crobot      compose project `crobot-e2e` (crb-e2e-web :8188, crb-e2e-worker), MySQL `crobot_e2e`
@@ -72,7 +72,7 @@ export interface HarnessConfig {
 const COLLECTOR_PORT = 8091;
 const EDGE_PORT = 8792;
 const CROBOT_PORT = 8188;
-const REDIS_DB = 9;
+const REDIS_DB = 13; // collector tests FLUSHDB DBs 7–11; P5 uses 12
 
 function generateSecrets(): Secrets {
   const hex = (n: number): string => randomBytes(n).toString('hex');
