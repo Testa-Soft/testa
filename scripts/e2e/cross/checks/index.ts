@@ -3,6 +3,7 @@
 import type { CheckDef } from '../lib/check.ts';
 import { contractIngestChecks } from './contract-ingest.ts';
 import { contractSyncChecks } from './contract-sync.ts';
+import { contractTenantChecks } from './contract-tenant.ts';
 import { contractViewChecks } from './contract-views.ts';
 import { infraChecks } from './infra.ts';
 import { lifecycleChecks } from './lifecycle.ts';
@@ -15,6 +16,7 @@ export const ALL_CHECKS: readonly CheckDef[] = [
   ...smokeChecks,
   ...contractIngestChecks,
   ...contractSyncChecks,
+  ...contractTenantChecks,
   ...contractViewChecks,
   ...syncChecks,
   ...uiChecks,

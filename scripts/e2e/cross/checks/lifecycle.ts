@@ -9,8 +9,8 @@ import { sumByVariation } from '../lib/derive.ts';
 import { field } from '../lib/http.ts';
 import {
   assertBuilt,
-  expPath,
   platformApi,
+  scopedPath,
   subscriptionBody,
   waitForReadySummary,
 } from '../lib/platform-api.ts';
@@ -70,9 +70,15 @@ export const lifecycleChecks: readonly CheckDef[] = [
     needs: ['contract.1802-lifecycle'],
     async run(ctx) {
       const id = ctx.cfg.ids.f1Second;
-      const del = await platformApi(ctx, { method: 'DELETE', path: expPath(id, 'subscription') });
+      const del = await platformApi(ctx, {
+        method: 'DELETE',
+        path: scopedPath(ctx, id, 'subscription'),
+      });
       assertBuilt(del, 'P4', 'DELETE subscription');
-      const after = await platformApi(ctx, { method: 'GET', path: expPath(id, 'daily-summary') });
+      const after = await platformApi(ctx, {
+        method: 'GET',
+        path: scopedPath(ctx, id, 'daily-summary'),
+      });
       return new Diff()
         .truthy(`DELETE 2xx (got ${del.status})`, del.status >= 200 && del.status < 300)
         .eq('after delete', [404, 'not_subscribed'], [after.status, field(after.json, 'error')])

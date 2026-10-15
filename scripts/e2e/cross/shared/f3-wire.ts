@@ -30,7 +30,7 @@ interface Envelope {
   readonly [key: string]: unknown;
 }
 
-function envelope(visitor: string, ts: number, projectId: number): Envelope {
+export function envelope(visitor: string, ts: number, projectId: number): Envelope {
   return {
     client_ts: ts,
     server_ts: ts + 150,

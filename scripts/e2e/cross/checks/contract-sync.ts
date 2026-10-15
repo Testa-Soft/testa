@@ -21,6 +21,8 @@ import {
   assertBuilt,
   expPath,
   platformApi,
+  queryBody,
+  scopedPath,
   subscriptionBody,
   waitForReadySummary,
 } from '../lib/platform-api.ts';
@@ -99,7 +101,7 @@ export async function putSubscription(
   return res;
 }
 
-function loadGolden(ctx: Ctx): readonly DailyRow[] {
+export function loadGolden(ctx: Ctx): readonly DailyRow[] {
   const file = join(
     ctx.cfg.args.platformDir,
     'docs',
@@ -152,7 +154,7 @@ export const contractSyncChecks: readonly CheckDef[] = [
     dod: ['V8', 'PRD-006 §5.5'],
     needs: ['infra.collector'],
     async run(ctx) {
-      const path = expPath(ctx.cfg.ids.f1, 'daily-summary');
+      const path = scopedPath(ctx, ctx.cfg.ids.f1, 'daily-summary');
       const none = await platformApi(ctx, { method: 'GET', path, token: null });
       assertBuilt(none, 'P0', 'GET daily-summary');
       const wrong = await platformApi(ctx, {
@@ -281,7 +283,7 @@ export const contractSyncChecks: readonly CheckDef[] = [
       const runId = summaryOf(ctx).run_id;
       const res = await platformApi(ctx, {
         method: 'GET',
-        path: `${expPath(ctx.cfg.ids.f1, 'daily-summary')}?since_run_id=${encodeURIComponent(String(runId))}`,
+        path: scopedPath(ctx, ctx.cfg.ids.f1, 'daily-summary', { since_run_id: String(runId) }),
       });
       const parsed = dailySummaryUnchanged.safeParse(res.json);
       if (res.status !== 200 || !parsed.success) {
@@ -310,13 +312,16 @@ export const contractSyncChecks: readonly CheckDef[] = [
     needs: ['contract.f1-ingest', 'smoke.config-publish'],
     async run(ctx) {
       const id = ctx.cfg.ids.f1Second;
-      const first = await platformApi(ctx, { method: 'GET', path: expPath(id, 'daily-summary') });
+      const first = await platformApi(ctx, {
+        method: 'GET',
+        path: scopedPath(ctx, id, 'daily-summary'),
+      });
       assertBuilt(first, 'P4', 'GET daily-summary');
       const before = field(first.json, 'error');
       await putSubscription(ctx, id, subscriptionBody(ctx, ['purchase', 'revenue']));
       const afterPut = await platformApi(ctx, {
         method: 'GET',
-        path: expPath(id, 'daily-summary'),
+        path: scopedPath(ctx, id, 'daily-summary'),
       });
       const initialStatus = field(afterPut.json, 'status');
       const summary = await waitForReadySummary(ctx, id);
@@ -376,19 +381,26 @@ export const contractSyncChecks: readonly CheckDef[] = [
           'unknown_view',
           'POST',
           'queries',
-          { view: 'nope', from: '2026-10-01', to: '2026-10-03', metrics: ['purchase'] },
+          queryBody(ctx, {
+            view: 'nope',
+            from: '2026-10-01',
+            to: '2026-10-03',
+            metrics: ['purchase'],
+          }),
         ],
+        // Needs the body's project_id: without it the platform answers 400
+        // invalid_body (R3; before R3 it was 404 experiment_not_found).
         [
           'unknown_dimension',
           'POST',
           'queries',
-          {
+          queryBody(ctx, {
             view: 'summary',
             from: '2026-10-01',
             to: '2026-10-03',
             metrics: ['purchase'],
             dimension: 'ip_address',
-          },
+          }),
         ],
       ];
       const d = new Diff();
@@ -421,11 +433,11 @@ export const contractSyncChecks: readonly CheckDef[] = [
       assertBuilt(unknown, 'P4', 'PUT subscription');
       const notSub = await platformApi(ctx, {
         method: 'GET',
-        path: expPath(ctx.cfg.ids.f3, 'daily-summary'),
+        path: scopedPath(ctx, ctx.cfg.ids.f3, 'daily-summary'),
       });
       const noQuery = await platformApi(ctx, {
         method: 'GET',
-        path: expPath(ctx.cfg.ids.f1, `queries/${'0'.repeat(64)}`),
+        path: scopedPath(ctx, ctx.cfg.ids.f1, `queries/${'0'.repeat(64)}`),
       });
       const code = (r: HttpResponse): unknown => field(r.json, 'error');
       return new Diff()

@@ -22,6 +22,7 @@ export const F1_METRICS = [
   'sign_up',
   'page_view',
   'units',
+  'units_upsell',
   'units_added',
   'units_bought_from_cart',
   'coupon',

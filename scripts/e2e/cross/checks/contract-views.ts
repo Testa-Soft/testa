@@ -15,7 +15,7 @@ import {
 import { F3_EXPECTED, F3_STATS_REQUEST } from '../expected/f3.ts';
 import { type CheckDef, type Ctx, Diff, PendingError, fail } from '../lib/check.ts';
 import { field, waitFor } from '../lib/http.ts';
-import { assertBuilt, expPath, platformApi } from '../lib/platform-api.ts';
+import { assertBuilt, expPath, platformApi, queryBody, scopedPath } from '../lib/platform-api.ts';
 import { queryAccepted, queryResult, schemaIssues, statsResponse } from '../lib/schemas.ts';
 
 type QueryBody = Readonly<Record<string, unknown>>;
@@ -27,7 +27,11 @@ async function runQuery(
   owner: string,
 ): Promise<Record<string, unknown>> {
   const id = ctx.cfg.ids.f1;
-  const post = await platformApi(ctx, { method: 'POST', path: expPath(id, 'queries'), body });
+  const post = await platformApi(ctx, {
+    method: 'POST',
+    path: expPath(id, 'queries'),
+    body: queryBody(ctx, body),
+  });
   assertBuilt(post, owner, `POST queries view=${String(body.view)}`);
   if (post.status !== 202 && post.status !== 200)
     throw new Error(`POST queries → ${post.status}: ${post.text.slice(0, 200)}`);
@@ -39,7 +43,7 @@ async function runQuery(
     async () => {
       const res = await platformApi(ctx, {
         method: 'GET',
-        path: expPath(id, `queries/${queryId}`),
+        path: scopedPath(ctx, id, `queries/${queryId}`),
       });
       assertBuilt(res, owner, 'GET queries/{id}');
       const parsed = queryResult.safeParse(res.json);
@@ -117,13 +121,13 @@ export const contractViewChecks: readonly CheckDef[] = [
     dod: ['V16', 'PRD-006 §3.5'],
     needs: ['contract.query-payment-type'],
     async run(ctx) {
-      const body = {
+      const body = queryBody(ctx, {
         view: 'summary',
         ...range,
         metrics: ['add_payment_info', 'purchase'],
         dimension: 'payment_type',
         refresh: false,
-      };
+      });
       const path = expPath(ctx.cfg.ids.f1, 'queries');
       const a = await platformApi(ctx, { method: 'POST', path, body });
       const b = await platformApi(ctx, { method: 'POST', path, body: { ...body, refresh: false } });

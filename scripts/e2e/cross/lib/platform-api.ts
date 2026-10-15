@@ -41,6 +41,28 @@ export function assertBuilt(res: HttpResponse, owner: string, what: string): voi
 export const expPath = (experimentId: number, rest: string): string =>
   `/api/v1/experiments/${experimentId}/${rest}`;
 
+/**
+ * R3: experiment ids are unique per project only, so GET daily-summary,
+ * GET queries/{id} and DELETE subscription carry `?project_id=` (defaults to
+ * the harness project). PUT subscription / POST queries carry it in the body.
+ */
+export function scopedPath(
+  ctx: Ctx,
+  experimentId: number,
+  rest: string,
+  query: Readonly<Record<string, string>> = {},
+  projectId: number = ctx.cfg.ids.projectId,
+): string {
+  const qs = new URLSearchParams({ project_id: String(projectId), ...query });
+  return `${expPath(experimentId, rest)}?${qs.toString()}`;
+}
+
+/** POST …/queries body with the harness project's `project_id` (R3). */
+export const queryBody = (
+  ctx: Ctx,
+  body: Readonly<Record<string, unknown>>,
+): Record<string, unknown> => ({ project_id: ctx.cfg.ids.projectId, ...body });
+
 /** Subscription body (§3.1) for the harness's own platform-only checks. */
 export function subscriptionBody(
   ctx: Ctx,
@@ -67,13 +89,14 @@ export async function waitForReadySummary(
   experimentId: number,
   timeoutMs = 180_000,
   predicate: (s: DailySummary) => boolean = () => true,
+  projectId: number = ctx.cfg.ids.projectId,
 ): Promise<DailySummary> {
   return waitFor(
     `daily-summary ready for ${experimentId}`,
     async () => {
       const res = await platformApi(ctx, {
         method: 'GET',
-        path: expPath(experimentId, 'daily-summary'),
+        path: scopedPath(ctx, experimentId, 'daily-summary', {}, projectId),
       });
       assertBuilt(res, 'P4', 'GET daily-summary');
       if (res.status !== 200)
