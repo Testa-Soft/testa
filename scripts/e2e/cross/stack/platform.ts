@@ -1,6 +1,6 @@
 /**
  * testa-platform side of the live stack: ClickHouse database `prd006_x0`
- * (dropped, re-created and migrated every run), Redis DB 9, and host
+ * (dropped, re-created and migrated every run), Redis DB 13, and host
  * processes from `--platform-dir`: collector API :8091, consumer, modeler
  * (when the checkout has one), edge worker via `wrangler dev` :8792.
  *
