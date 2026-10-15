@@ -72,3 +72,16 @@ export { PUBLIC_HOST_HEADER, PUBLIC_PROTO_HEADER } from './constants.ts';
 // per request, as a console line + the `x-testa-debug` response header.
 export { DEBUG_HEADER } from './debug.ts';
 export type { DebugTrace } from './debug.ts';
+
+// PRD-006 typed tracking helpers (task 5.7) — client-side; posts to the edge `/track`.
+export {
+  DEFAULT_EVENTS_ENDPOINT,
+  track,
+  trackAddToCart,
+  trackBeginCheckout,
+  trackLead,
+  trackPaymentInfo,
+  trackPurchase,
+  trackShippingInfo,
+  trackSignUp,
+} from './track.ts';

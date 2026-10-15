@@ -2,6 +2,8 @@ import { type PlaywrightTestConfig, defineConfig, devices } from '@playwright/te
 
 const config: PlaywrightTestConfig = {
   testDir: './e2e',
+  // The PRD-006 full-stack run has its own config (playwright.fullstack.config.ts).
+  testIgnore: ['**/fullstack/**'],
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,

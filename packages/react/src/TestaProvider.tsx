@@ -53,6 +53,7 @@ import { DocumentCookieStore } from './cookie-store.ts';
 import { initTesta } from './init.ts';
 import { configNeedsShield, readShieldHint, writeShieldHint } from './shield-hint.ts';
 import { installSpaNav } from './spa-nav.ts';
+import { startPrd006Tracking } from './track.ts';
 import { buildAssignmentMap } from './use-variant.ts';
 
 export interface TestaProviderProps {
@@ -73,6 +74,11 @@ export interface TestaProviderProps {
   secureCookies?: boolean;
   /** Cookie `Domain` for cross-subdomain sharing (e.g. `.acme.com`). */
   cookieDomain?: string;
+  /**
+   * PRD-006: edge worker `/track` URL that `track*` helpers and v2
+   * `experiment_view` events post to. Default same-origin `/track`.
+   */
+  eventsEndpoint?: string;
   /**
    * Anti-flicker shield control. Default `true` — the provider auto-raises the
    * shield on mount when the persisted hint says the project has something to
@@ -164,6 +170,15 @@ export function TestaProvider(props: TestaProviderProps): JSX.Element {
       teardowns = [];
       const allowRedirect = firstCycle;
       firstCycle = false;
+      // PRD-006 (v2 experiments only): re-init experiment sessions and send
+      // experiment_view on variation_applied — wired before initTesta emits.
+      teardowns.push(
+        startPrd006Tracking({
+          config,
+          store,
+          ...(props.eventsEndpoint ? { endpoint: props.eventsEndpoint } : {}),
+        }),
+      );
       const result = await initTesta({
         config,
         currentUrl: typeof window !== 'undefined' ? window.location.href : '',
@@ -190,7 +205,7 @@ export function TestaProvider(props: TestaProviderProps): JSX.Element {
         }
         return;
       }
-      teardowns = result.teardowns;
+      teardowns = [...teardowns, ...result.teardowns];
       setValue({ config, assignments: buildAssignmentMap(store.get(ASSIGNMENT_COOKIE)) });
       setSettled(true); // shield revealed post-commit (pre-paint effect below), after the variant paints
     };

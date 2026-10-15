@@ -3,13 +3,14 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Testa client SDK — loader stub + runtime (experiment engine + tracking)",
+  "description": "Testa client SDK \u2014 loader stub + runtime (experiment engine + tracking)",
   "scripts": {
     "build": "node esbuild.config.mjs",
     "dev": "node esbuild.config.mjs --watch",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
+    "test:e2e:fullstack": "playwright test -c playwright.fullstack.config.ts",
     "typecheck": "tsc --noEmit",
     "check:size": "node esbuild.config.mjs && node scripts/check-bundle-size.mjs",
     "clean": "rm -rf dist .turbo coverage playwright-report test-results"

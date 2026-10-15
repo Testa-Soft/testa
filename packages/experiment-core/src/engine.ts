@@ -248,7 +248,7 @@ export function runExperiments(ctx: EngineContext, store: CookieStore): EngineRe
     }
 
     // Enrolled: stamp / slide the session window (conversion-attribution clock).
-    refreshSession(store, id, result.variationId, expiresSec);
+    refreshSession(store, id, result.variationId, expiresSec, nowSec);
 
     // e. Resolve redirect (if the applied variation is a redirect) + emit event.
     const variation = experiment.variations.find((v) => v.variation_id === result.variationId);
