@@ -24,6 +24,7 @@ import {
   type ExpState,
   parsePacked,
   serializePacked,
+  sessionFieldsOf,
 } from './packed-cookie.ts';
 import { SEED, xxhash32 } from './xxhash.ts';
 
@@ -130,6 +131,7 @@ export function assign(
     variation: variation.variation_id,
     excluded: false,
     sessionExp: cached?.sessionExp ?? 0,
+    ...sessionFieldsOf(cached),
   });
   return { variationId: variation.variation_id, isExcluded: false, fromCookie: false };
 }
@@ -161,7 +163,10 @@ export function applyAssignment(
   const variation = Number(variationId);
   if (!Number.isFinite(expId) || !Number.isFinite(variation)) return;
   const map = parsePacked(store.get(ASSIGNMENT_COOKIE));
-  map.set(expId, { variation, excluded: false, sessionExp: 0 });
+  const existing = map.get(expId);
+  // Same variation (e.g. a cross-domain round trip): keep the session history.
+  const keep = existing?.variation === variation ? sessionFieldsOf(existing) : {};
+  map.set(expId, { variation, excluded: false, sessionExp: 0, ...keep });
   store.set(ASSIGNMENT_COOKIE, serializePacked(map), { maxAgeSec: ASSIGNMENT_TTL_SEC });
 }
 

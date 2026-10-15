@@ -37,6 +37,7 @@ export {
   EXCLUDED_VARIATION_ID,
   parsePacked,
   serializePacked,
+  sessionFieldsOf,
 } from './packed-cookie.ts';
 export type { ExpState, PackedExpMap } from './packed-cookie.ts';
 

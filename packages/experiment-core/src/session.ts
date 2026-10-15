@@ -22,6 +22,7 @@ import {
   type ExpState,
   parsePacked,
   serializePacked,
+  sessionFieldsOf,
 } from './packed-cookie.ts';
 
 /**
@@ -42,9 +43,17 @@ export function isAssigned(state: ExpState | undefined): boolean {
   return !!state && !state.excluded && state.variation >= 0;
 }
 
+/** Values above this are legacy millisecond timestamps, not epoch seconds. */
+const MS_THRESHOLD = 1e11;
+
+/**
+ * Write one entry, keeping its PRD-006 session fields (sessionStart /
+ * sessionIdx, owned by the pixel / client `track`): server-side rewrites must
+ * never reset a visitor's experiment-session history.
+ */
 function write(store: CookieStore, expId: number, state: ExpState): void {
   const map = parsePacked(store.get(ASSIGNMENT_COOKIE));
-  map.set(expId, state);
+  map.set(expId, { ...sessionFieldsOf(map.get(expId)), ...state });
   store.set(ASSIGNMENT_COOKIE, serializePacked(map), { maxAgeSec: ASSIGNMENT_TTL_SEC });
 }
 
@@ -69,7 +78,11 @@ export function refreshSession(
   variation: number,
   expiresSec: number,
 ): void {
-  write(store, expId, { variation, excluded: false, sessionExp: expiresSec });
+  // Never shorten a window the client slid further (PRD-006: 60 min from the
+  // last event) — e.g. a 30-min server refresh after client activity.
+  const current = parsePacked(store.get(ASSIGNMENT_COOKIE)).get(expId)?.sessionExp ?? 0;
+  const live = current > 0 && current < MS_THRESHOLD ? current : 0;
+  write(store, expId, { variation, excluded: false, sessionExp: Math.max(live, expiresSec) });
 }
 
 /**

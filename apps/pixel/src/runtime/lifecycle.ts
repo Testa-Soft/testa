@@ -20,13 +20,14 @@
 
 import type {
   AudienceCondition,
+  ExpSession,
   ExperimentConfig,
   PixelEvent,
   ProjectConfig,
 } from '@testa-platform/shared-types';
 import type { ConsentState } from '@testa-platform/shared-types';
 import { type Teardown, applyVariation } from '@testa-soft/dom';
-import { shuffleForVisitor } from '@testa-soft/experiment-core';
+import { matchesPageRule, shuffleForVisitor } from '@testa-soft/experiment-core';
 import type { TestaDebugSnapshot } from '../loader/queue.ts';
 import { TRACKER_VERSION } from '../version.ts';
 import * as consentMod from './consent.ts';
@@ -43,6 +44,7 @@ import {
   type GoalController,
   createGoalController,
 } from './experiments/goals.ts';
+import * as expSessions from './experiments/session.ts';
 import {
   type AssignResult,
   type Experiment,
@@ -51,7 +53,7 @@ import {
 } from './experiments/traffic.ts';
 import { pushLeadToDataLayer } from './legacy/data-layer.ts';
 import { fireEvent, installLegacy, publishLoaded, publishUuid } from './legacy/index.ts';
-import { snapshot as healthSnapshot } from './network/health.ts';
+import { snapshot as healthSnapshot, recordDroppedNoSession } from './network/health.ts';
 import { initOutbox, count as outboxCount, enqueue as outboxEnqueue } from './network/outbox.ts';
 import { installTransport, notifyEnqueue, shipEventSync } from './network/transport.ts';
 import { uuidv7 } from './network/uuid7.ts';
@@ -70,6 +72,8 @@ interface PendingEvent {
   name: string;
   props: Record<string, unknown>;
   ts: number;
+  /** The wire payload as sent (absent for synthetic debug entries). Test/inspection hook. */
+  event?: PixelEvent;
 }
 
 interface CfPrefill {
@@ -360,9 +364,11 @@ export function trackCustomerEvent(name: string, props?: Record<string, unknown>
  */
 function trackSyncForRedirect(name: string, props: Record<string, unknown>): void {
   const ts = Date.now();
-  const event = buildPixelEvent(name, props, ts);
+  const exp = stampOrDrop(name, ts);
+  if (exp === null) return;
+  const event = buildPixelEvent(name, props, ts, exp);
   const payload = JSON.stringify(event);
-  _pendingEvents.push({ name, props, ts });
+  _pendingEvents.push({ name, props, ts, event });
   // Synchronous beacon — must run BEFORE location.replace().
   shipEventSync(payload);
   // Outbox backup — survives if beacon was rejected.
@@ -370,12 +376,46 @@ function trackSyncForRedirect(name: string, props: Record<string, unknown>): voi
 }
 
 function emitTracked(name: string, props: Record<string, unknown> | undefined, ts: number): void {
-  const event = buildPixelEvent(name, props ?? {}, ts);
+  const exp = stampOrDrop(name, ts);
+  if (exp === null) return;
+  const event = buildPixelEvent(name, props ?? {}, ts, exp);
   const payload = JSON.stringify(event);
-  _pendingEvents.push({ name, props: props ?? {}, ts });
+  _pendingEvents.push({ name, props: props ?? {}, ts, event });
   void outboxEnqueue({ event_id: event.event_id, payload }).then(() => {
     notifyEnqueue();
   });
+}
+
+// ─── PRD-006 experiment sessions (v2 experiments only) ────────────────────
+
+/** Events sent even with no active experiment session (PRD §5.3). */
+const SESSIONLESS_EVENTS = new Set(['experiment_view', '_pixel_health']);
+
+/** Active experiments the project runs on the PRD-006 pipeline (`platform_version: 'v2'`). */
+function v2ExperimentIds(project: ProjectConfig | undefined = readProject()): Set<number> {
+  const ids = new Set<number>();
+  for (const e of project?.experiments ?? []) {
+    if (e.status === 'active' && e.platform_version === 'v2') ids.add(e.experiment_id);
+  }
+  return ids;
+}
+
+/**
+ * `exp` for an event about to be sent, or `null` to drop it. A project with no
+ * v2 experiment is untouched (`[]`, nothing dropped). Otherwise the event gets
+ * the active v2 sessions, slides them, and is dropped (and counted) when none
+ * is active — except experiment_view / _pixel_health.
+ */
+function stampOrDrop(name: string, ts: number): ExpSession[] | null {
+  const v2 = v2ExperimentIds();
+  if (v2.size === 0) return [];
+  const exp = expSessions.activeExp(v2, ts);
+  if (exp.length === 0 && !SESSIONLESS_EVENTS.has(name)) {
+    recordDroppedNoSession();
+    return null;
+  }
+  expSessions.touch(exp, ts);
+  return exp;
 }
 
 // ─── strict-mode held-event replay ────────────────────────────────────────
@@ -428,7 +468,12 @@ function installConsentReplay(): void {
  * fields so the collector can index them without poking into the props bag;
  * everything else stays in `props`.
  */
-function buildPixelEvent(name: string, props: Record<string, unknown>, ts: number): PixelEvent {
+function buildPixelEvent(
+  name: string,
+  props: Record<string, unknown>,
+  ts: number,
+  exp: ExpSession[],
+): PixelEvent {
   const project = readProject();
   const visitorId = cookies.getUuid() ?? generateEphemeralVisitorId();
   const sessionId = getOrCreateSessionId();
@@ -452,8 +497,9 @@ function buildPixelEvent(name: string, props: Record<string, unknown>, ts: numbe
     viewport_h: typeof window !== 'undefined' ? window.innerHeight || 0 : 0,
     screen_w: typeof screen !== 'undefined' ? screen.width || 0 : 0,
     screen_h: typeof screen !== 'undefined' ? screen.height || 0 : 0,
-    // TODO 5.5/5.6: stamp the active experiment sessions from the packed cookie.
-    exp: [],
+    exp,
+    // PRD-006: in_experiment = notEmpty(exp), for projects on the v2 pipeline.
+    ...(v2ExperimentIds().size > 0 ? { in_experiment: exp.length > 0 ? 1 : 0 } : {}),
     ...(typeof document !== 'undefined' && document.referrer
       ? { referrer: document.referrer }
       : {}),
@@ -571,6 +617,9 @@ let _crossDomainUninstall: (() => void) | null = null;
 
 /** True when the experiment's session cookie is still within its sliding TTL. */
 function isSessionActive(experimentId: number | string): boolean {
+  if (v2ExperimentIds().has(Number(experimentId))) {
+    return expSessions.isActive(expSessions.readSession(Number(experimentId)), Date.now());
+  }
   const ts = cookies.getSession(experimentId);
   return ts !== null && Date.now() - ts < cookies.SESSION_LENGTH_SEC * 1000;
 }
@@ -672,8 +721,11 @@ export function runExperimentCycle(): void {
 
   // Fire session_start (new session only) + page_view for this URL. These are
   // the raw events goals match against at query time; page_view also re-fires
-  // on every SPA navigation.
-  fireLifecycleEvents();
+  // on every SPA navigation. On the PRD-006 pipeline they fire AFTER the
+  // experiment loop instead, so they land inside the experiment session (§5.3).
+  const v2 = v2ExperimentIds(project);
+  if (v2.size === 0) fireLifecycleEvents();
+  const pageUrl = typeof location !== 'undefined' ? location.href : '';
 
   const ctx = buildEvalContext();
   const stats = { matched: 0, excluded: 0 };
@@ -701,8 +753,11 @@ export function runExperimentCycle(): void {
 
     stats.matched += 1;
 
-    // Bump session cookie + record exposure.
-    cookies.bumpSession(expConfig.experiment_id);
+    // Session + exposure. v2: PRD-006 experiment session (re-init when expired,
+    // §6.1); v1: the legacy session bump.
+    const isV2 = v2.has(expConfig.experiment_id);
+    if (isV2) expSessions.ensureSession(expConfig.experiment_id, result.variationId, Date.now());
+    else cookies.bumpSession(expConfig.experiment_id);
     recordExposure(exp);
 
     const variation = expConfig.variations.find((v) => v.variation_id === result.variationId);
@@ -733,12 +788,17 @@ export function runExperimentCycle(): void {
       !consentMod.consent.isHeld() &&
       typeof location !== 'undefined';
 
-    if (willRedirect) {
+    // experiment_view to the edge: v2 experiments only when the page matches
+    // the experiment (re-init on any page keeps the session, §6.1); v1
+    // experiments of a project on the v2 pipeline send none (R1). Projects
+    // without v2 experiments are unchanged.
+    const sendView = v2.size === 0 || (isV2 && matchesPageRule(pageUrl, expConfig.rules ?? []));
+    if (sendView && willRedirect) {
       trackSyncForRedirect('experiment_view', {
         experiment_id: expConfig.experiment_id,
         variation_id: result.variationId,
       });
-    } else {
+    } else if (sendView) {
       track('experiment_view', {
         experiment_id: expConfig.experiment_id,
         variation_id: result.variationId,
@@ -786,6 +846,8 @@ export function runExperimentCycle(): void {
       variation: result.variationId,
     });
   }
+
+  if (v2.size > 0) fireLifecycleEvents();
 
   // Wire click + page_view goals for every assigned experiment. Click goals
   // attach listeners only to their configured selectors (no click autocapture);

@@ -23,6 +23,8 @@ interface HealthCounters {
   dropped: number;
   /** Retry attempts after 5xx / network failures. */
   retried: number;
+  /** PRD-006: events not sent because no v2 experiment session was active. */
+  dropped_no_session: number;
 }
 
 const _counters: HealthCounters = {
@@ -30,6 +32,7 @@ const _counters: HealthCounters = {
   sent: 0,
   dropped: 0,
   retried: 0,
+  dropped_no_session: 0,
 };
 
 export function recordQueued(n = 1): void {
@@ -48,6 +51,10 @@ export function recordRetried(n = 1): void {
   _counters.retried += n;
 }
 
+export function recordDroppedNoSession(n = 1): void {
+  _counters.dropped_no_session += n;
+}
+
 /**
  * Snapshot the counters as the props payload for a `_pixel_health` event.
  * `oldest_age_ms` comes from the outbox (caller passes it in — keeps this
@@ -59,6 +66,7 @@ export function snapshot(oldest_age_ms: number): Record<string, number> {
     sent: _counters.sent,
     dropped: _counters.dropped,
     retried: _counters.retried,
+    dropped_no_session: _counters.dropped_no_session,
     oldest_age_ms,
   };
 }
@@ -68,4 +76,5 @@ export function __resetForTests(): void {
   _counters.sent = 0;
   _counters.dropped = 0;
   _counters.retried = 0;
+  _counters.dropped_no_session = 0;
 }

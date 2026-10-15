@@ -67,11 +67,11 @@ export const mutexName = (groupName: string): string => `${MUTEX_COOKIE}_${group
 // cookie `_testa_exp` (`expId.variation.excluded.sessionExp` per experiment).
 // This is what makes the pixel and the Next.js middleware share cookie state.
 
-function readPacked(): Map<number, ExpState> {
+export function readPacked(): Map<number, ExpState> {
   return parsePacked(readValue(ASSIGNMENT_COOKIE));
 }
 
-function writePacked(map: Map<number, ExpState>): void {
+export function writePacked(map: Map<number, ExpState>): void {
   writeValue(ASSIGNMENT_COOKIE, serializePacked(map), { maxAgeSec: ASSIGNMENT_TTL_SEC });
 }
 
