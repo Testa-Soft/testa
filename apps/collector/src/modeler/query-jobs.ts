@@ -1,6 +1,6 @@
 /**
  * On-demand query jobs (PRD-006 §3.5): `query_id` = sha256 of the canonical
- * body minus `refresh` (scoped to the experiment), stored in Redis hash
+ * body minus `refresh` (scoped to project + experiment), stored in Redis hash
  * `modeler:query:{id}`; the result lives `MODELER_QUERY_TTL_SEC` (1 h) and a
  * longer marker lets a read tell "expired" (410) from "never existed" (404).
  */
@@ -129,7 +129,7 @@ export async function runQueryJob(ctx: ModelerContext, id: string): Promise<'rea
   const { request } = stored;
   const config = await configForProject(ctx.configStore, request.project_id);
   const experiment = requireV2Experiment(config, stored.experimentId);
-  const sub = await readSubscription(ctx.query, stored.experimentId);
+  const sub = await readSubscription(ctx.query, request.project_id, stored.experimentId);
   const view = getView(request.view);
   const { view: _v, project_id: _p, refresh: _r, ...rawParams } = request;
   const params = view.validate(rawParams);
@@ -158,6 +158,7 @@ export async function runQueryJob(ctx: ModelerContext, id: string): Promise<'rea
     .exec();
   ctx.webhook.send({
     event: 'query-ready',
+    project_id: request.project_id,
     experiment_id: stored.experimentId,
     query_id: id,
     computed_at: computedAt,

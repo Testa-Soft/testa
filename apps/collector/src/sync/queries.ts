@@ -1,7 +1,9 @@
 /**
- * On-demand queries (PRD-006 §3.5):
- *   POST /api/v1/experiments/:id/queries          → 200 ready (cached, refresh=false) | 202 accepted
- *   GET  /api/v1/experiments/:id/queries/:queryId → status + rows (summary) / result (other views)
+ * On-demand queries (PRD-006 §3.5), scoped to `(project_id, experiment_id)` (R3):
+ *   POST /api/v1/experiments/:id/queries                     → 200 ready (cached, refresh=false) | 202 accepted
+ *   GET  /api/v1/experiments/:id/queries/:queryId?project_id= → status + rows (summary) / result (other views)
+ * Body checks (400) run before the ownership / version lookups (404 / 409),
+ * as on PUT subscription.
  * Limits (§5.5): 60 POSTs/min and 200 pending queries per project → 429.
  */
 import type {
@@ -13,14 +15,13 @@ import type {
   ViewName,
 } from '@testa-platform/shared-types';
 import { SyncApiError } from '../analytics/errors.ts';
-import { requireV2Experiment } from '../analytics/guards.ts';
 import { VIEW_NAMES, getView } from '../analytics/views.ts';
-import { configForProject } from '../modeler/project-config.ts';
 import { type StoredQuery, queryId, readQuery, submitQuery } from '../modeler/query-jobs.ts';
 import { clampRetry, retryAfter } from '../modeler/queue.ts';
 import { readSubscription } from '../modeler/subscriptions.ts';
 import type { SyncContext } from './context.ts';
-import { asObject, parseId } from './validate.ts';
+import { requireOwned, requireOwnedV2 } from './ownership.ts';
+import { asObject, parseProjectId } from './validate.ts';
 
 export const QUERY_RATE_PER_MIN = 60;
 export const MAX_PENDING_QUERIES = 200;
@@ -48,18 +49,15 @@ async function validateQuery(
 ): Promise<QueryRequest> {
   const body = asObject(raw, new SyncApiError('unknown_view', 400, 'body'));
   if (!isView(body.view)) throw new SyncApiError('unknown_view', 400, 'view');
-  const projectId = parseId(
-    body.project_id,
-    new SyncApiError('experiment_not_found', 404, 'project_id'),
-  );
-  requireV2Experiment(await configForProject(ctx.configStore, projectId), experimentId);
+  const projectId = parseProjectId(body.project_id);
   if (body.refresh !== undefined && typeof body.refresh !== 'boolean') {
     throw new SyncApiError('unknown_view', 400, 'refresh');
   }
   const { view, project_id: _p, refresh, ...rest } = body;
   const params = getView(view).validate(rest) as Record<string, unknown>;
+  await requireOwnedV2(ctx, projectId, experimentId);
   if (params.report_currency === undefined) {
-    const sub = await readSubscription(ctx.query, experimentId);
+    const sub = await readSubscription(ctx.query, projectId, experimentId);
     if (!sub || sub.status === 'deleted')
       throw new SyncApiError('invalid_currency', 400, 'report_currency');
   }
@@ -156,13 +154,15 @@ export async function postQuery(
 
 export async function getQuery(
   ctx: SyncContext,
+  projectId: number,
   experimentId: number,
   id: string,
 ): Promise<QueryResponse> {
   if (!/^[0-9a-f]{64}$/.test(id)) throw new SyncApiError('query_not_found', 404);
   const stored = await readQuery(ctx, id);
   if (stored === 'expired') throw new SyncApiError('expired', 410);
-  if (stored === null || stored.experimentId !== experimentId) {
+  if (stored === null || stored.experimentId !== experimentId || stored.projectId !== projectId) {
+    await requireOwned(ctx, projectId, experimentId);
     throw new SyncApiError('query_not_found', 404);
   }
   return toQueryResponse(ctx, stored);

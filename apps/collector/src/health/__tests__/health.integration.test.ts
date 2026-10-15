@@ -112,7 +112,10 @@ async function healthQuery(projectId: number, experimentId: number, from: string
   const accepted = await call('POST', `/${experimentId}/queries`, body);
   expect(accepted.status).toBe(202);
   await drain(ctx);
-  const ready = await call('GET', `/${experimentId}/queries/${String(accepted.body.query_id)}`);
+  const ready = await call(
+    'GET',
+    `/${experimentId}/queries/${String(accepted.body.query_id)}?project_id=${projectId}`,
+  );
   expect(ready.status).toBe(200);
   expect(ready.body).toMatchObject({ status: 'ready', view: 'health' });
   return ready.body.result as HealthResult;

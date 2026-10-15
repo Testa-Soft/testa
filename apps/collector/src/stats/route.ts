@@ -7,6 +7,7 @@
  * is `|${key}|` (empty experimentId and groupKey, see `StatsRequest.seedKey`).
  * Identical bodies give byte-identical responses.
  */
+import type { SyncErrorCode } from '@testa-platform/shared-types';
 import { z } from 'zod';
 import { type VariationStats, computeStats } from './index.ts';
 
@@ -18,10 +19,11 @@ export const MAX_VARIATIONS = 10;
 export const MAX_BODY_BYTES = 256 * 1024;
 
 /**
- * Stats-only error codes, same `{ error, field }` shape as the sync API's
- * `SyncError`. Local because shared-types is frozen for P3; P6 may promote them.
+ * Stats error codes, same `{ error, field }` shape as the sync API's
+ * `SyncError`. `invalid_body` is the shared sync code (promoted in R3);
+ * `too_large` stays stats-only.
  */
-export type StatsErrorCode = 'invalid_body' | 'too_large';
+export type StatsErrorCode = Extract<SyncErrorCode, 'invalid_body'> | 'too_large';
 
 export interface StatsError {
   error: StatsErrorCode;

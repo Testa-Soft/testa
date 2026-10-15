@@ -34,10 +34,10 @@ async function retryOrFail(
   const delaySec = ctx.settings.retryDelaysSec[attempt - 1];
   const willRetry = delaySec !== undefined;
   ctx.log(
-    `${job.kind} ${'experimentId' in job ? job.experimentId : job.queryId} attempt ${attempt} failed: ${error}${willRetry ? ` (retry in ${delaySec}s)` : ''}`,
+    `${job.kind} ${job.kind === 'refresh' ? `${job.projectId}:${job.experimentId}` : job.queryId} attempt ${attempt} failed: ${error}${willRetry ? ` (retry in ${delaySec}s)` : ''}`,
   );
   if (job.kind === 'refresh') {
-    await writeRunState(ctx.redis, ctx.keys.run(job.experimentId), {
+    await writeRunState(ctx.redis, ctx.keys.run(job.projectId, job.experimentId), {
       status: willRetry ? 'queued' : 'failed',
       error,
       attempt: willRetry ? attempt : 0,
@@ -55,13 +55,13 @@ async function processRefresh(
   job: Extract<Job, { kind: 'refresh' }>,
   priority: Priority,
 ): Promise<void> {
-  const lockKey = ctx.keys.lock(job.experimentId);
+  const lockKey = ctx.keys.lock(job.projectId, job.experimentId);
   const token = randomUUID();
   if (!(await acquireLock(ctx.redis, lockKey, token, ctx.settings.lockTtlSec))) {
     await delay(ctx.redis, ctx.keys, job, priority, ctx.now() + LOCKED_RETRY_MS);
     return;
   }
-  const runKey = ctx.keys.run(job.experimentId);
+  const runKey = ctx.keys.run(job.projectId, job.experimentId);
   const attempt = (await readRunState(ctx.redis, runKey)).attempt + 1;
   await writeRunState(ctx.redis, runKey, { attempt });
   try {

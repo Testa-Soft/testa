@@ -117,7 +117,10 @@ export async function openHarness(name: string): Promise<QueryHarness> {
       const accepted = await call('POST', `/${experimentId}/queries`, body);
       expect(accepted.status).toBe(202);
       await drain(ctx);
-      const ready = await call('GET', `/${experimentId}/queries/${String(accepted.body.query_id)}`);
+      const ready = await call(
+        'GET',
+        `/${experimentId}/queries/${String(accepted.body.query_id)}?project_id=${String(body.project_id)}`,
+      );
       expect(ready.status).toBe(200);
       expect(ready.body).toMatchObject({ status: 'ready', view: body.view });
       return ready.body.result as T;

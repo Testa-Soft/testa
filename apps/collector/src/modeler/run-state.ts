@@ -1,5 +1,5 @@
 /**
- * Per-experiment run state, Redis hash `modeler:run:{experimentId}` (PRD-006
+ * Per-experiment run state, Redis hash `modeler:run:{projectId}:{experimentId}` (PRD-006
  * §3.2). The sync API reads it to answer status / retry_after and to pick the
  * `metric_daily` run to serve (`last_ready_run_id`).
  */

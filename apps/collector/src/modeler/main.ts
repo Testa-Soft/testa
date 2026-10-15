@@ -16,7 +16,7 @@ import { modelerClickHouse } from './ch.ts';
 import type { ModelerContext } from './context.ts';
 import { modelerKeys } from './keys.ts';
 import { readRunState } from './run-state.ts';
-import { tick } from './scheduler.ts';
+import { type ExperimentRef, tick } from './scheduler.ts';
 import { createWebhookSender, noWebhooks } from './webhook.ts';
 import { drain, runWorkers } from './worker.ts';
 
@@ -43,11 +43,13 @@ export function createModelerContext(): ModelerContext & { close: () => Promise<
 
 export async function runOnce(
   ctx: ModelerContext,
-): Promise<{ enqueued: number[]; processed: number; failed: number[] }> {
+): Promise<{ enqueued: ExperimentRef[]; processed: number; failed: ExperimentRef[] }> {
   const enqueued = await tick(ctx);
   const processed = await drain(ctx);
   await ctx.webhook.drain();
-  const states = await Promise.all(enqueued.map((id) => readRunState(ctx.redis, ctx.keys.run(id))));
+  const states = await Promise.all(
+    enqueued.map((e) => readRunState(ctx.redis, ctx.keys.run(e.projectId, e.experimentId))),
+  );
   const failed = enqueued.filter((_, i) => states[i]?.status === 'failed');
   return { enqueued, processed, failed };
 }
@@ -63,8 +65,9 @@ async function runForever(ctx: ModelerContext): Promise<void> {
 
   const scheduleTick = async () => {
     try {
-      const ids = await tick(ctx);
-      if (ids.length > 0) log(`scheduled ${ids.join(', ')}`);
+      const refs = await tick(ctx);
+      if (refs.length > 0)
+        log(`scheduled ${refs.map((e) => `${e.projectId}:${e.experimentId}`).join(', ')}`);
     } catch (err) {
       log(`scheduler error: ${(err as Error).message}`);
     }

@@ -38,9 +38,9 @@ export async function runRefresh(
   projectId: number,
   experimentId: number,
 ): Promise<RefreshOutcome> {
-  const runKey = ctx.keys.run(experimentId);
-  const sub = await readSubscription(ctx.query, experimentId);
-  if (!sub || sub.status === 'deleted' || sub.projectId !== projectId) return 'skipped';
+  const runKey = ctx.keys.run(projectId, experimentId);
+  const sub = await readSubscription(ctx.query, projectId, experimentId);
+  if (!sub || sub.status === 'deleted') return 'skipped';
 
   const startedMs = ctx.now();
   const runId = newRunId(startedMs);
@@ -104,6 +104,7 @@ export async function runRefresh(
   await recordDuration(ctx.redis, ctx.keys, computedMs - startedMs);
   ctx.webhook.send({
     event: 'summary-ready',
+    project_id: projectId,
     experiment_id: experimentId,
     run_id: runId,
     computed_at: computedAt,
