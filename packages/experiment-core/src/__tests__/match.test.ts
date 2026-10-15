@@ -66,5 +66,4 @@ describe('exact match host handling', () => {
       true,
     );
   });
-
 });

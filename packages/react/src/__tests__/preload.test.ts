@@ -108,10 +108,7 @@ describe('preloadConfig', () => {
     // StrictMode's double-invoke and a remount each issue their own request.
     const fetchImpl = okFetch();
     const source = { projectId: 'acme', host: 'https://cfg.example' };
-    await Promise.all([
-      preloadConfig(source, { fetchImpl }),
-      preloadConfig(source, { fetchImpl }),
-    ]);
+    await Promise.all([preloadConfig(source, { fetchImpl }), preloadConfig(source, { fetchImpl })]);
     expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 });

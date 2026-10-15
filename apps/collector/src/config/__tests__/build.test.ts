@@ -123,7 +123,14 @@ describe('buildTestaConfig', () => {
         {
           ...baseExp,
           goals: [
-            { id: 7, title: 'Quiz reached', type: 'page_view', action: '/quiz', match_type: 'contains', rank: 1 },
+            {
+              id: 7,
+              title: 'Quiz reached',
+              type: 'page_view',
+              action: '/quiz',
+              match_type: 'contains',
+              rank: 1,
+            },
             { id: 8, title: 'CTA click', type: 'click', action: '#cta', match_type: null, rank: 2 },
             { id: 9, title: 'Signup', type: 'custom', action: 'signup_done', rank: 3 },
           ],
@@ -131,7 +138,13 @@ describe('buildTestaConfig', () => {
       ],
     });
     expect(cfg.experiments[0]?.goals).toEqual([
-      { goal_id: 7, name: 'Quiz reached', type: 'page_view', action: '/quiz', match_type: 'contains' },
+      {
+        goal_id: 7,
+        name: 'Quiz reached',
+        type: 'page_view',
+        action: '/quiz',
+        match_type: 'contains',
+      },
       { goal_id: 8, name: 'CTA click', type: 'click', action: '#cta' },
       { goal_id: 9, name: 'Signup', type: 'custom', action: 'signup_done' },
     ]);

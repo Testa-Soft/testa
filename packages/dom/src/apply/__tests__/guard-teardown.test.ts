@@ -28,9 +28,15 @@ describe('eachMatching guard', () => {
   it('skips existing matches while the guard is false', () => {
     resetDom();
     document.body.innerHTML = '<h1>original</h1>';
-    const stop = eachMatching('h1', (el) => (el.textContent = 'variant'), {
-      guard: () => false,
-    });
+    const stop = eachMatching(
+      'h1',
+      (el) => {
+        el.textContent = 'variant';
+      },
+      {
+        guard: () => false,
+      },
+    );
     expect(document.querySelector('h1')?.textContent).toBe('original');
     stop();
   });
@@ -39,9 +45,15 @@ describe('eachMatching guard', () => {
     resetDom();
     document.body.innerHTML = '<h1>calculator</h1>';
     let onExperimentPage = true;
-    const stop = eachMatching('h1', (el) => (el.textContent = 'variant'), {
-      guard: () => onExperimentPage,
-    });
+    const stop = eachMatching(
+      'h1',
+      (el) => {
+        el.textContent = 'variant';
+      },
+      {
+        guard: () => onExperimentPage,
+      },
+    );
     expect(document.querySelector('h1')?.textContent).toBe('variant');
 
     // Soft nav: the router swaps the page content in the SAME document.
@@ -55,9 +67,15 @@ describe('eachMatching guard', () => {
 
   it('applies to late matches while the guard stays true', async () => {
     resetDom();
-    const stop = eachMatching('h1', (el) => (el.textContent = 'variant'), {
-      guard: () => true,
-    });
+    const stop = eachMatching(
+      'h1',
+      (el) => {
+        el.textContent = 'variant';
+      },
+      {
+        guard: () => true,
+      },
+    );
     document.body.innerHTML = '<h1>late</h1>';
     await tick();
     expect(document.querySelector('h1')?.textContent).toBe('variant');
@@ -89,7 +107,9 @@ describe('teardown undo', () => {
   it('change_html teardown restores the original innerHTML', () => {
     resetDom();
     document.body.innerHTML = '<h1><em>orig</em></h1>';
-    const teardowns = applyVariation(7, [{ type: 'change_html', selector: 'h1', content: 'variant' }]);
+    const teardowns = applyVariation(7, [
+      { type: 'change_html', selector: 'h1', content: 'variant' },
+    ]);
     expect(document.querySelector('h1')?.textContent).toBe('variant');
     for (const t of teardowns) t();
     expect(document.querySelector('h1')?.innerHTML).toBe('<em>orig</em>');
@@ -98,7 +118,9 @@ describe('teardown undo', () => {
   it('change_html teardown does NOT stomp content React re-rendered meanwhile', () => {
     resetDom();
     document.body.innerHTML = '<h1>orig</h1>';
-    const teardowns = applyVariation(7, [{ type: 'change_html', selector: 'h1', content: 'variant' }]);
+    const teardowns = applyVariation(7, [
+      { type: 'change_html', selector: 'h1', content: 'variant' },
+    ]);
     // React re-rendered the node with fresh content — our change is gone already.
     const h1 = document.querySelector('h1') as HTMLElement;
     h1.innerHTML = 'react-owned';
@@ -129,7 +151,9 @@ describe('teardown undo', () => {
     document.body.innerHTML = '<h1>calculator</h1>';
     // No guard (worst case): observer applies to the next page's h1 before the
     // effect cleanup runs — teardown must restore it.
-    const teardowns = applyVariation(7, [{ type: 'change_html', selector: 'h1', content: 'variant' }]);
+    const teardowns = applyVariation(7, [
+      { type: 'change_html', selector: 'h1', content: 'variant' },
+    ]);
     document.body.innerHTML = '<h1>about page</h1>';
     await tick(); // observer wrongly applies to the new h1
     expect(document.querySelector('h1')?.textContent).toBe('variant');
@@ -142,7 +166,9 @@ describe('change_html keeper (React-clobber re-assert)', () => {
   it('re-asserts the change when the host framework overwrites the content', async () => {
     resetDom();
     document.body.innerHTML = '<h1>Calculator</h1>';
-    const teardowns = applyVariation(7, [{ type: 'change_html', selector: 'h1', content: 'variant' }]);
+    const teardowns = applyVariation(7, [
+      { type: 'change_html', selector: 'h1', content: 'variant' },
+    ]);
     const h1 = document.querySelector('h1') as HTMLElement;
     expect(h1.textContent).toBe('variant');
 
@@ -161,9 +187,13 @@ describe('change_html keeper (React-clobber re-assert)', () => {
     resetDom();
     document.body.innerHTML = '<h1>Calculator</h1>';
     let onPage = true;
-    const teardowns = applyVariation(7, [{ type: 'change_html', selector: 'h1', content: 'variant' }], {
-      guard: () => onPage,
-    });
+    const teardowns = applyVariation(
+      7,
+      [{ type: 'change_html', selector: 'h1', content: 'variant' }],
+      {
+        guard: () => onPage,
+      },
+    );
     const h1 = document.querySelector('h1') as HTMLElement;
     expect(h1.textContent).toBe('variant');
 
@@ -177,10 +207,9 @@ describe('change_html keeper (React-clobber re-assert)', () => {
   it('keeper survives past the 10s new-match window (no timeout on re-assert)', async () => {
     resetDom();
     document.body.innerHTML = '<h1>orig</h1>';
-    const teardowns = applyVariation(
-      7,
-      [{ type: 'change_html', selector: 'h1', content: 'variant' }],
-    );
+    const teardowns = applyVariation(7, [
+      { type: 'change_html', selector: 'h1', content: 'variant' },
+    ]);
     const h1 = document.querySelector('h1') as HTMLElement;
     // Simulate repeated framework rewrites — each must be re-asserted.
     for (let i = 0; i < 3; i++) {

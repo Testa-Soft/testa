@@ -13,8 +13,8 @@
  * actually navigating happy-dom.
  */
 
-import { clearRedirected } from '@testa-soft/experiment-core';
 import type { ProjectConfig } from '@testa-platform/shared-types';
+import { clearRedirected } from '@testa-soft/experiment-core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetPixelState } from '../../__test-utils__/reset.ts';
 import { installQueue } from '../../loader/queue.ts';

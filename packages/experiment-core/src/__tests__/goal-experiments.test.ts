@@ -67,6 +67,8 @@ describe('resolveGoalExperiments', () => {
   });
 
   it('skips paused experiments', () => {
-    expect(resolveGoalExperiments(cfg([QUIZ_GOAL], 'paused'), cookie(1, LIVE), NOW_SEC)).toEqual([]);
+    expect(resolveGoalExperiments(cfg([QUIZ_GOAL], 'paused'), cookie(1, LIVE), NOW_SEC)).toEqual(
+      [],
+    );
   });
 });

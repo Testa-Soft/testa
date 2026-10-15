@@ -35,10 +35,7 @@
       "require": "./dist/router-pages/index.cjs"
     }
   },
-  "files": [
-    "dist",
-    "README.md"
-  ],
+  "files": ["dist", "README.md"],
   "scripts": {
     "build": "rm -rf dist && tsup && node scripts/add-use-client.mjs && node scripts/verify-dist.mjs",
     "typecheck": "tsc --noEmit",

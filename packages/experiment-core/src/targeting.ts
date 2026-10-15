@@ -84,7 +84,7 @@ function applyOperator(
     case 'not_equals':
       return actual !== value;
     case 'contains':
-      return actual !== null && actual.includes(value);
+      return actual?.includes(value) ?? false;
     case 'not_contains':
       return actual === null || !actual.includes(value);
     case 'regex':

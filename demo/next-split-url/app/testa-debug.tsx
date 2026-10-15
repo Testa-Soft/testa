@@ -1,6 +1,6 @@
 'use client';
 
-import { onVariationApplied, type VariationEvent } from '@testa-soft/next';
+import { type VariationEvent, onVariationApplied } from '@testa-soft/next';
 import { useEffect, useState } from 'react';
 
 /**
@@ -64,6 +64,7 @@ export function TestaDebug() {
       </div>
       {events.length === 0 && <div style={{ color: '#888' }}>none yet — visit /pricing or /</div>}
       {events.map((e, i) => (
+        // biome-ignore lint/suspicious/noArrayIndexKey: append-only debug log, never reordered
         <div key={i} style={{ marginTop: 4 }}>
           <span style={{ color: '#fc6' }}>{e.h}</span> exp={e.d.experiment} var={e.d.variation}{' '}
           <span style={{ color: '#888' }}>{e.d.title}</span>
@@ -71,6 +72,7 @@ export function TestaDebug() {
       ))}
       <div style={{ marginTop: 10, color: '#9cf' }}>dataLayer 'Analytica' ({dataLayer.length})</div>
       {dataLayer.map((d, i) => (
+        // biome-ignore lint/suspicious/noArrayIndexKey: append-only debug log, never reordered
         <div key={i} style={{ color: '#bbb', marginTop: 2 }}>
           Exp {String(d.ExperimentId)} → {String(d.VariationName)}
         </div>

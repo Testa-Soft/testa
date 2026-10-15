@@ -29,14 +29,22 @@ function fetchReturning(response: Response): typeof fetch {
 
 describe('handleConfigRequest — geo splice', () => {
   it('splices geo into a 200 JSON body, preserving the config fields', async () => {
-    const res = await handleConfigRequest(new Request(CONFIG_URL), GEO, fetchReturning(originJson()));
+    const res = await handleConfigRequest(
+      new Request(CONFIG_URL),
+      GEO,
+      fetchReturning(originJson()),
+    );
     const body = (await res.json()) as Record<string, unknown>;
     expect(body).toEqual({ ...ORIGIN_CONFIG, geo: GEO });
     expect(res.status).toBe(200);
   });
 
   it('marks the spliced body private, allows CORS, keeps the ETag, drops content-length', async () => {
-    const res = await handleConfigRequest(new Request(CONFIG_URL), GEO, fetchReturning(originJson()));
+    const res = await handleConfigRequest(
+      new Request(CONFIG_URL),
+      GEO,
+      fetchReturning(originJson()),
+    );
     expect(res.headers.get('cache-control')).toBe('private, max-age=30');
     expect(res.headers.get('access-control-allow-origin')).toBe('*');
     expect(res.headers.get('etag')).toBe('"hash-1"');
@@ -60,7 +68,11 @@ describe('handleConfigRequest — pass-through', () => {
 
   it('passes 304 revalidations through untouched', async () => {
     const notModified = new Response(null, { status: 304, headers: { etag: '"hash-1"' } });
-    const res = await handleConfigRequest(new Request(CONFIG_URL), GEO, fetchReturning(notModified));
+    const res = await handleConfigRequest(
+      new Request(CONFIG_URL),
+      GEO,
+      fetchReturning(notModified),
+    );
     expect(res).toBe(notModified);
   });
 

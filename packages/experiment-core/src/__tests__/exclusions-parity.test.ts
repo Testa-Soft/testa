@@ -38,7 +38,12 @@ function mutexConfig(): ProjectConfig {
             variation_id: 1,
             weight: 100,
             changes: [
-              { type: 'redirect', from_url: '/calculator', to_url: 'testa=ab', url_match_type: 'query' },
+              {
+                type: 'redirect',
+                from_url: '/calculator',
+                to_url: 'testa=ab',
+                url_match_type: 'query',
+              },
             ],
           },
         ],
@@ -69,7 +74,13 @@ function mutexConfig(): ProjectConfig {
 
 function run(store: ReturnType<typeof memoryStore>, url = PAGE, visitorId = 'v-1') {
   return runExperiments(
-    { config: mutexConfig(), currentUrl: url, visitorId, now: 1_755_000_000_000, getCookie: (n) => store.get(n) },
+    {
+      config: mutexConfig(),
+      currentUrl: url,
+      visitorId,
+      now: 1_755_000_000_000,
+      getCookie: (n) => store.get(n),
+    },
     store,
   );
 }
@@ -139,14 +150,26 @@ describe('targeting default case — any dimension is a query param by name (3.3
 
     const withParam = memoryStore();
     runExperiments(
-      { config, currentUrl: `${PAGE}?gclid=abc123`, visitorId: 'v-2', now: 1_755_000_000_000, getCookie: (n) => withParam.get(n) },
+      {
+        config,
+        currentUrl: `${PAGE}?gclid=abc123`,
+        visitorId: 'v-2',
+        now: 1_755_000_000_000,
+        getCookie: (n) => withParam.get(n),
+      },
       withParam,
     );
     expect(enrolled(withParam, 1)).toBe(true);
 
     const withoutParam = memoryStore();
     runExperiments(
-      { config, currentUrl: PAGE, visitorId: 'v-2', now: 1_755_000_000_000, getCookie: (n) => withoutParam.get(n) },
+      {
+        config,
+        currentUrl: PAGE,
+        visitorId: 'v-2',
+        now: 1_755_000_000_000,
+        getCookie: (n) => withoutParam.get(n),
+      },
       withoutParam,
     );
     expect(enrolled(withoutParam, 1)).toBe(false);

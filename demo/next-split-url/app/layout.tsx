@@ -1,4 +1,4 @@
-import { TestaProvider, TestaGuard } from '@testa-soft/next/server';
+import { TestaGuard, TestaProvider } from '@testa-soft/next/server';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { PROD_PROJECT_ID, demoConfig, useProdConfig } from '../testa.config.ts';

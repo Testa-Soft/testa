@@ -13,9 +13,7 @@
       "default": "./src/index.ts"
     }
   },
-  "files": [
-    "dist"
-  ],
+  "files": ["dist"],
   "publishConfig": {
     "access": "public",
     "tag": "latest",

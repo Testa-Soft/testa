@@ -48,7 +48,9 @@ function mutexConfig(trafficA = 100): ProjectConfig {
     rules: [{ match_type: 'contains' as const, url_pattern: '/calculator' }],
     goals: [],
     variations: [{ variation_id: 1, weight: 100, changes: [] }],
-    exclusions: [{ dimension: 'experiment', operator: 'equals' as const, value: String(excludesId) }],
+    exclusions: [
+      { dimension: 'experiment', operator: 'equals' as const, value: String(excludesId) },
+    ],
   });
   return {
     project_id: 1,

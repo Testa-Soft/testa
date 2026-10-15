@@ -28,6 +28,7 @@
  *   - Same-page anchor changes (treated as no-op redirects).
  */
 
+import type { VariationChange } from '@testa-platform/shared-types';
 import {
   buildRedirectUrl,
   canonicalize,
@@ -38,7 +39,6 @@ import {
   mergeParams,
   resolveMode,
 } from '@testa-soft/experiment-core';
-import type { VariationChange } from '@testa-platform/shared-types';
 import { cookieStore } from '../cookies.ts';
 import { type RedirectBreadcrumb, logRedirect } from './breadcrumbs.ts';
 

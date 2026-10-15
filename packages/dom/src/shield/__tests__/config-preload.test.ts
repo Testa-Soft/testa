@@ -43,7 +43,9 @@ describe('buildConfigPreloadSnippet', () => {
     evaluate(buildConfigPreloadSnippet({ url: URL_A }));
 
     const requested = fetchSpy.mock.calls[0]?.[0] ?? '';
-    expect(requested).toMatch(/^https:\/\/cfg\.example\/api\/v1\/config\/acme\?_testa_t=[a-z0-9]+$/);
+    expect(requested).toMatch(
+      /^https:\/\/cfg\.example\/api\/v1\/config\/acme\?_testa_t=[a-z0-9]+$/,
+    );
   });
 
   it('appends the token with & when the url already has a query', () => {

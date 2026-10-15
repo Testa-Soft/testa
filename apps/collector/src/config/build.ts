@@ -55,6 +55,7 @@ interface SourceGoal {
   type?: string;
   action?: string | null;
   match_type?: string | null;
+  rank?: number | null;
 }
 
 interface SourceExperiment {

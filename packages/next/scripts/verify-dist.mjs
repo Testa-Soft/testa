@@ -38,9 +38,7 @@ for (const entry of readdirSync(distDir, { recursive: true })) {
   const rel = String(entry);
   if (FORBIDDEN_DIST_PREFIXES.some((re) => re.test(rel))) {
     console.error(
-      `[verify-dist] dist/${rel} — forbidden path: Next's babelIncludeRegexes match ` +
-        `'(@testa-soft/)next/dist/(pages|client|shared/lib)…' as an unanchored substring ` +
-        `and corrupt the module (see tsup.config.ts).`,
+      `[verify-dist] dist/${rel} — forbidden path: Next's babelIncludeRegexes match '(@testa-soft/)next/dist/(pages|client|shared/lib)…' as an unanchored substring and corrupt the module (see tsup.config.ts).`,
     );
     process.exit(1);
   }
@@ -57,9 +55,7 @@ const violations = listBundles(distDir).flatMap((file) => {
 if (violations.length > 0) {
   for (const { file, specifier } of violations) {
     console.error(
-      `[verify-dist] dist/${file}: bare specifier '${specifier}' — Node ESM cannot ` +
-        `resolve it (next has no exports map); import '${specifier}.js' instead ` +
-        `or add it to NEXT_SUBPATH_STUBS in tsup.config.ts.`,
+      `[verify-dist] dist/${file}: bare specifier '${specifier}' — Node ESM cannot resolve it (next has no exports map); import '${specifier}.js' instead or add it to NEXT_SUBPATH_STUBS in tsup.config.ts.`,
     );
   }
   process.exit(1);

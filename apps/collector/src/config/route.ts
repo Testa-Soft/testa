@@ -172,10 +172,7 @@ export function makeConfigGetHandler(deps: ConfigRouteDeps) {
     // browser-facing header to `private` anyway).
     const etag = `"${config.config_hash}"`;
     c.header('ETag', etag);
-    c.header(
-      'Cache-Control',
-      'public, max-age=30, s-maxage=600, stale-while-revalidate=1800',
-    );
+    c.header('Cache-Control', 'public, max-age=30, s-maxage=600, stale-while-revalidate=1800');
     if (c.req.header('if-none-match') === etag) return c.body(null, 304);
 
     return c.json(config, 200);

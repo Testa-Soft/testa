@@ -25,11 +25,12 @@ import type {
   ProjectConfig,
 } from '@testa-platform/shared-types';
 import type { ConsentState } from '@testa-platform/shared-types';
+import { type Teardown, applyVariation } from '@testa-soft/dom';
+import { shuffleForVisitor } from '@testa-soft/experiment-core';
 import type { TestaDebugSnapshot } from '../loader/queue.ts';
 import { TRACKER_VERSION } from '../version.ts';
 import * as consentMod from './consent.ts';
 import * as cookies from './cookies.ts';
-import { type Teardown, applyVariation } from '@testa-soft/dom';
 import {
   type CrossDomainExperiment,
   applyInboundCrossDomain,
@@ -48,7 +49,6 @@ import {
   assign,
   recordExposure,
 } from './experiments/traffic.ts';
-import { shuffleForVisitor } from '@testa-soft/experiment-core';
 import { pushLeadToDataLayer } from './legacy/data-layer.ts';
 import { fireEvent, installLegacy, publishLoaded, publishUuid } from './legacy/index.ts';
 import { snapshot as healthSnapshot } from './network/health.ts';
@@ -679,10 +679,7 @@ export function runExperimentCycle(): void {
   // deterministic per visitor (same reasoning as hash bucketing: no SRM, no
   // cross-pageview flip-flop). With mutual exclusions + 100% traffic on N
   // experiments this splits NEW visitors evenly between them.
-  for (const expConfig of shuffleForVisitor(
-    project.experiments,
-    cookies.getUuid() ?? '',
-  )) {
+  for (const expConfig of shuffleForVisitor(project.experiments, cookies.getUuid() ?? '')) {
     if (expConfig.status !== 'active') continue;
 
     if (expConfig.audience !== undefined && !evaluate(expConfig.audience, ctx)) {

@@ -74,9 +74,7 @@ export const demoConfig: ProjectConfig = {
           variation_id: 2,
           name: 'Variant (H1 rewrite)',
           weight: 100,
-          changes: [
-            { type: 'change_html', selector: 'h1', content: 'Features — variant H1 ✅' },
-          ],
+          changes: [{ type: 'change_html', selector: 'h1', content: 'Features — variant H1 ✅' }],
         },
       ],
     },

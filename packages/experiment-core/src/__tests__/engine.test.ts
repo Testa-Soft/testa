@@ -92,6 +92,7 @@ describe('runExperiments', () => {
 describe('targeting + exclusions (entry gates only)', () => {
   const targeted = () => {
     const config = splitUrlConfig();
+    // biome-ignore lint/style/noNonNullAssertion: splitUrlConfig() always has one experiment
     config.experiments[0]!.targeting = [
       { dimension: 'utm_source', operator: 'contains', value: 'facebook' },
     ];
@@ -121,6 +122,7 @@ describe('targeting + exclusions (entry gates only)', () => {
 
   it('excludes a FRESH visitor when an exclusion condition matches', () => {
     const config = splitUrlConfig();
+    // biome-ignore lint/style/noNonNullAssertion: splitUrlConfig() always has one experiment
     config.experiments[0]!.exclusions = [
       { dimension: 'utm_source', operator: 'contains', value: 'internal' },
     ];
@@ -132,6 +134,7 @@ describe('targeting + exclusions (entry gates only)', () => {
 describe('cross-domain inbound', () => {
   it('applies a carried assignment for a cross_domain experiment', () => {
     const config = splitUrlConfig();
+    // biome-ignore lint/style/noNonNullAssertion: splitUrlConfig() always has one experiment
     config.experiments[0]!.cross_domain = true;
     // base64 of {"u":"vis","exps":[{"e":101,"v":2}]}
     const payload = btoa(JSON.stringify({ u: 'vis', exps: [{ e: 101, v: 2 }] }));

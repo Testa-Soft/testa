@@ -89,15 +89,19 @@ export function applyAssignedExperiments(
   exclusionCtx?: TargetingContext,
 ): Teardown[] {
   const teardowns: Teardown[] = [];
-  for (const assigned of resolveAssignedExperiments(config, cookieValue, currentUrl, exclusionCtx)) {
+  for (const assigned of resolveAssignedExperiments(
+    config,
+    cookieValue,
+    currentUrl,
+    exclusionCtx,
+  )) {
     // The guard re-checks the page rule at the LIVE URL on every DOM touch —
     // the appliers' MutationObservers outlive soft navigations, and without
     // this they'd apply the variant to the next page's matching elements.
     teardowns.push(
       ...applyVariation(assigned.variationId, assigned.changes, {
         guard: () =>
-          typeof window !== 'undefined' &&
-          matchesPageRule(window.location.href, assigned.rules),
+          typeof window !== 'undefined' && matchesPageRule(window.location.href, assigned.rules),
       }),
     );
   }

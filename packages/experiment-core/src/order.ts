@@ -36,8 +36,6 @@ export function shuffleForVisitor<T extends { experiment_id: number }>(
     experiment,
     key: xxhash32(`${visitorId}:${experiment.experiment_id}:order`),
   }));
-  keyed.sort(
-    (a, b) => a.key - b.key || a.experiment.experiment_id - b.experiment.experiment_id,
-  );
+  keyed.sort((a, b) => a.key - b.key || a.experiment.experiment_id - b.experiment.experiment_id);
   return keyed.map((k) => k.experiment);
 }

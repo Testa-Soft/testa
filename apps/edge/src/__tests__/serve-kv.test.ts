@@ -89,9 +89,7 @@ describe('GET /projects/:slug.js — 4.0 happy path', () => {
       env,
     );
     const body = await res.text();
-    expect(body).toContain(
-      'window.cfGeoData = {"country":"LT","region":"VL","city":"Vilnius"};',
-    );
+    expect(body).toContain('window.cfGeoData = {"country":"LT","region":"VL","city":"Vilnius"};');
   });
 
   it('falls back to empty geo strings when request.cf is absent', async () => {

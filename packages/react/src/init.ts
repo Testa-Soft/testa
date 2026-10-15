@@ -183,9 +183,7 @@ export async function initTesta(opts: InitOptions): Promise<InitResult> {
       // production, which is exactly where the explanation is needed. It can
       // never reach a normal visitor — it requires `?testa_preview` in the URL.
       console.warn(
-        `[testa] ?${PREVIEW_FLAG} is set but ?${PREVIEW_TOKEN} is missing — no ` +
-          'draft changes can be fetched, and normal experiments are skipped in ' +
-          'preview mode. Open the preview link from the dashboard.',
+        `[testa] ?${PREVIEW_FLAG} is set but ?${PREVIEW_TOKEN} is missing — no draft changes can be fetched, and normal experiments are skipped in preview mode. Open the preview link from the dashboard.`,
       );
     }
     return { applied: [], teardowns, redirected: false };

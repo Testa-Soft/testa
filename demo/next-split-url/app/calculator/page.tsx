@@ -8,8 +8,8 @@ export default function CalculatorPage() {
     <main>
       <h1 id="hero">Calculator</h1>
       <p>
-        Prod-config target page. Author changes for <code>/calculator</code> in crobot, publish,
-        and they land here within ~30s — soft-nav away and back to verify page-scoping.
+        Prod-config target page. Author changes for <code>/calculator</code> in crobot, publish, and
+        they land here within ~30s — soft-nav away and back to verify page-scoping.
       </p>
     </main>
   );

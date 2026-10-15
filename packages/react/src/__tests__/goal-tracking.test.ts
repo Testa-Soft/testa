@@ -1,4 +1,3 @@
-
 import type { ProjectConfig } from '@testa-platform/shared-types';
 import { resetConversionGuard, resetGoalRegistry } from '@testa-soft/dom';
 import { serializePacked } from '@testa-soft/experiment-core';

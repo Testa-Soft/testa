@@ -133,7 +133,11 @@ export function preloadConfig(
   const force = opts.force ?? isRefreshRequestedHere();
 
   const existing = preloadCache.get(url);
-  if (!force && existing && (existing.settledAtMs === null || now() - existing.settledAtMs < ttlMs)) {
+  if (
+    !force &&
+    existing &&
+    (existing.settledAtMs === null || now() - existing.settledAtMs < ttlMs)
+  ) {
     // Reuse an in-flight request, or a settled one still within its TTL.
     return existing.promise;
   }
