@@ -142,4 +142,16 @@ describe('product detail', () => {
       revenue_share: { '100': 0 },
     });
   });
+
+  it('V13: shares round half-to-even like the oracle (37/128 → 0.289062, 91/128 → 0.710938)', () => {
+    const groups = [
+      g({ product_id: 'A', quantity: 37, revenue: 37 }),
+      g({ product_id: 'B', quantity: 91, revenue: 91 }),
+    ];
+    const r = buildProductsList(buildCatalog(groups, [100]), BASE, LIST);
+    const share = (id: string) =>
+      r.products.find((p) => p.product_id === id)?.by_variation['100']?.units_share;
+    expect(share('A')).toBe(0.289062);
+    expect(share('B')).toBe(0.710938);
+  });
 });

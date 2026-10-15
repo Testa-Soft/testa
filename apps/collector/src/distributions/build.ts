@@ -12,6 +12,7 @@ import type {
   HistogramBucket,
   HistogramDistribution,
 } from '@testa-platform/shared-types';
+import { roundHalfEven } from '../modeler/round.ts';
 import type { DistributionEvent } from './query.ts';
 
 export const DISTRIBUTION_KEYS: readonly DistributionKey[] = [
@@ -42,14 +43,12 @@ export interface DistributionsInput {
   events: DistributionEvent[];
 }
 
-const round6 = (x: number): number => Math.round(x * 1e6) / 1e6;
+/** Python `round(x, 6)` parity (ties to even on the exact value), like the oracle's r6. */
+const round6 = (x: number): number => roundHalfEven(x, 6);
 
-/** Python's `round(x, 2)`: half to even on exact ties. */
+/** Python's `round(x, 2)`: half to even on the exact binary value. */
 export function round2(x: number): number {
-  const s = x * 100;
-  const f = Math.floor(s);
-  const r = s - f === 0.5 ? (f % 2 === 0 ? f : f + 1) : Math.round(s);
-  return r / 100;
+  return roundHalfEven(x, 2);
 }
 
 const before = (a: DistributionEvent, b: DistributionEvent): boolean =>
