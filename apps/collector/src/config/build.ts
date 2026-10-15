@@ -72,6 +72,8 @@ interface SourceExperiment {
   exclusions?: SourceRule[];
   variations?: SourceVariation[];
   goals?: SourceGoal[];
+  /** Crobot's per-experiment pipeline stamp (PRD-006 §6.1); absent = v1. */
+  platform_version?: string | null;
 }
 
 const OPERATORS = new Set<TargetingCondition['operator']>([
@@ -135,6 +137,9 @@ function buildExperiment(e: SourceExperiment): ExperimentConfig {
     ...(e.cross_domain ? { cross_domain: true } : {}),
     ...(targeting.length > 0 ? { targeting } : {}),
     ...(exclusions.length > 0 ? { exclusions } : {}),
+    ...(e.platform_version === 'v1' || e.platform_version === 'v2'
+      ? { platform_version: e.platform_version }
+      : {}),
   };
 }
 

@@ -12,6 +12,7 @@ import { type ModelerContext, QUERY_KNOWN_TTL_SEC } from './context.ts';
 import { PRIORITY, enqueue } from './queue.ts';
 import { readSubscription } from './subscriptions.ts';
 import './summary-view.ts';
+import { configForProject } from './project-config.ts';
 
 export type QueryStatus = 'queued' | 'running' | 'ready' | 'failed';
 
@@ -121,7 +122,7 @@ export async function runQueryJob(ctx: ModelerContext, id: string): Promise<'rea
   await ctx.redis.hset(key, { status: 'running', started_at: new Date(startedMs).toISOString() });
 
   const { request } = stored;
-  const config = await ctx.configStore.get(String(request.project_id));
+  const config = await configForProject(ctx.configStore, request.project_id);
   const experiment = requireV2Experiment(config, stored.experimentId);
   const sub = await readSubscription(ctx.query, stored.experimentId);
   const view = getView(request.view);

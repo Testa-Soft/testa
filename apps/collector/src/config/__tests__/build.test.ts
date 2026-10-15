@@ -26,6 +26,27 @@ const baseExp = {
 const sourceProject = { id: 2, name: 'Test', experiments: [baseExp] };
 
 describe('buildTestaConfig', () => {
+  it('maps platform_version v1 / v2 through; anything else is left absent (= v1)', () => {
+    const versions = ['v2', 'v1', 'V2', 'v3', null, undefined];
+    const cfg = buildTestaConfig({
+      ...sourceProject,
+      experiments: versions.map((platform_version, i) => ({
+        ...baseExp,
+        identifier: 1000 + i,
+        ...(platform_version === undefined ? {} : { platform_version }),
+      })),
+    });
+    expect(cfg.experiments.map((e) => e.platform_version)).toEqual([
+      'v2',
+      'v1',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+    ]);
+    expect(cfg.experiments.slice(2).every((e) => !('platform_version' in e))).toBe(true);
+  });
+
   it('maps a split_url experiment to ProjectConfig', () => {
     const cfg = buildTestaConfig(sourceProject, { slug: '12345' });
     expect(cfg.slug).toBe('12345');

@@ -5,6 +5,7 @@ import type { ModelerContext } from './context.ts';
  * flip `last_ready_run_id` so readers switch to the whole new run at once.
  */
 import { computeDailyRows } from './daily-rows.ts';
+import { configForProject } from './project-config.ts';
 import { recordDuration } from './queue.ts';
 import { writeRunState } from './run-state.ts';
 import { chDateTime, readSubscription } from './subscriptions.ts';
@@ -24,7 +25,7 @@ async function newestEvent(ctx: ModelerContext, projectId: number): Promise<stri
 }
 
 async function variationOrder(ctx: ModelerContext, projectId: number, experimentId: number) {
-  const config = await ctx.configStore.get(String(projectId)).catch(() => null);
+  const config = await configForProject(ctx.configStore, projectId).catch(() => null);
   const exp = config?.experiments.find((e) => e.experiment_id === experimentId);
   return exp?.variations.map((v) => v.variation_id);
 }
