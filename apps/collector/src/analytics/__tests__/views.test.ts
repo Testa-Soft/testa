@@ -44,12 +44,11 @@ describe('view registry', () => {
 });
 
 describe('stub views (P0)', () => {
-  it('products, distributions and health register themselves and answer 501', async () => {
+  it('products and distributions register themselves and answer 501', async () => {
     await import('../../products/view.ts');
     await import('../../distributions/view.ts');
-    await import('../../health/view.ts');
     const { views } = await import('../views.ts');
-    for (const name of ['products', 'distributions', 'health'] as const) {
+    for (const name of ['products', 'distributions'] as const) {
       expect(views.has(name)).toBe(true);
       expect(codeOf(() => views.get(name).validate({}))).toBe('501 not_implemented');
     }

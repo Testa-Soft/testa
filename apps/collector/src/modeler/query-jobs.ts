@@ -11,6 +11,11 @@ import { getView } from '../analytics/views.ts';
 import { type ModelerContext, QUERY_KNOWN_TTL_SEC } from './context.ts';
 import { PRIORITY, enqueue } from './queue.ts';
 import { readSubscription } from './subscriptions.ts';
+// Every view registers itself on import. The modeler process runs the query
+// jobs, so it must load them all, not only the API server (src/index.ts).
+import '../distributions/view.ts';
+import '../health/view.ts';
+import '../products/view.ts';
 import './summary-view.ts';
 
 export type QueryStatus = 'queued' | 'running' | 'ready' | 'failed';
