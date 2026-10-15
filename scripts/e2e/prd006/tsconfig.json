@@ -1,0 +1,12 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2022", "DOM"],
+    "noEmit": true,
+    "incremental": false,
+    "typeRoots": ["../../../apps/collector/node_modules/@types"],
+    "types": ["bun"]
+  },
+  "include": ["./**/*.ts", "../cross/lib/**/*.ts", "../cross/shared/**/*.ts"],
+  "exclude": []
+}
