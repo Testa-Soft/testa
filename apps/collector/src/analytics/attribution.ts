@@ -40,6 +40,11 @@ export interface ExposedVisitorsParams extends AttributionScope {
 export interface AttributedEventsParams extends ExposedVisitorsParams {
   /** Event names to keep; omit for every event name. */
   eventNames?: readonly string[];
+  /**
+   * Keep only the earliest purchase per order_id (default true). The health
+   * view passes false: a reload duplicate is still an event the site sent.
+   */
+  dedupePurchases?: boolean;
 }
 
 /** Dimensions snapshotted in `exposures` at first exposure (§3.6). */
@@ -219,15 +224,20 @@ function attributedSelect(p: AttributedEventsParams): string {
       AND has(e.exp_ids, {experiment_id:UInt64})
       ${nameFilter}
       AND e.client_ts >= x.first_exposed_at
-      AND e.client_ts < ${END_TS}
+      AND e.client_ts < ${END_TS}${
+        p.dedupePurchases === false
+          ? ''
+          : `
       AND (e.event_name != 'purchase' OR e.order_id = '' OR e.event_id IN (${DEDUPED_PURCHASE_IDS}
-      ))`;
+      ))`
+      }`;
 }
 
 /**
  * Events attributed to experiment E, each carrying the exposure `variation_id`,
  * first-exposure `date`, the stamped variation, E's session start / index, and
- * the requested `dim_<key>` columns. Purchases deduped (earliest per order_id);
+ * the requested `dim_<key>` columns. Purchases deduped (earliest per order_id)
+ * unless `dedupePurchases: false`;
  * `purchase_type` '' on a purchase reads as `initial` (§5.4).
  */
 export function buildAttributedEvents(p: AttributedEventsParams): SqlQuery {
