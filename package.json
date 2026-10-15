@@ -17,6 +17,7 @@
     "format": "biome format --write .",
     "typecheck": "turbo run typecheck",
     "e2e:cross": "bun scripts/e2e/cross/run.ts",
+    "prd006:validate": "bun scripts/e2e/prd006/run.ts",
     "demo": "pnpm --filter @testa-platform/pixel build && node demo/server.mjs",
     "diagrams": "for f in docs/architecture/diagrams/*.mmd; do npx -p @mermaid-js/mermaid-cli mmdc -i \"$f\" -o \"${f%.mmd}.png\" -b white -w 2400 -H 1200 && npx -p @mermaid-js/mermaid-cli mmdc -i \"$f\" -o \"${f%.mmd}.svg\" -b transparent; done",
     "clean": "turbo run clean && rm -rf node_modules"
