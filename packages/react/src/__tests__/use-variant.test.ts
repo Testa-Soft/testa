@@ -10,6 +10,12 @@ describe('buildAssignmentMap', () => {
     expect(map.has(102)).toBe(false);
   });
 
+  it('drops eligible-but-not-enrolled (-2) entries — they are not a variation', () => {
+    const map = buildAssignmentMap('101.-2.0.1999999999~102.1.0.0');
+    expect(map.has(101)).toBe(false);
+    expect(map.get(102)).toBe(1);
+  });
+
   it('returns an empty map for null / empty cookie', () => {
     expect(buildAssignmentMap(null).size).toBe(0);
     expect(buildAssignmentMap('').size).toBe(0);

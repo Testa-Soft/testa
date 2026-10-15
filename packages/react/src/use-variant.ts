@@ -13,7 +13,7 @@
  */
 
 import type { ExperimentConfig, ProjectConfig } from '@testa-platform/shared-types';
-import { EXCLUDED_VARIATION_ID, parsePacked } from '@testa-soft/experiment-core';
+import { parsePacked } from '@testa-soft/experiment-core';
 import { useContext } from 'react';
 import { TestaContext } from './context.ts';
 
@@ -27,7 +27,10 @@ export function buildAssignmentMap(cookieValue: string | null): Map<number, numb
   const packed = parsePacked(cookieValue);
   const map = new Map<number, number>();
   for (const [expId, state] of packed) {
-    if (state.excluded || state.variation === EXCLUDED_VARIATION_ID) continue;
+    // Negative ids are sentinels, never a variation: EXCLUDED (-1) and
+    // ELIGIBLE_PENDING (-2, targeting passed but not enrolled yet — an app
+    // branching on `isControl` would otherwise render the variant for it).
+    if (state.excluded || state.variation < 0) continue;
     map.set(expId, state.variation);
   }
   return map;
