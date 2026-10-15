@@ -108,10 +108,10 @@ Implements `docs/prds/006-ecommerce-events-and-metric-modeling.md` (**Parts 5–
 | [5.9](./phase-5/5.9-daily-rows-builder.md) | Daily rows builder (22 keys; + `units_upsell` R2) | P4 | done — merged (`3312f5f`) | 5.18 |
 | [5.15](./phase-5/5.15-modeler-process.md) | Modeler process — scheduler, queue, workers, webhook | P4 | done — merged (`c678dbf`) | 5.9 |
 | [5.8](./phase-5/5.8-sync-api-routes.md) | Sync API routes | P4 | done — merged (`6bb35e9`) | 5.15 |
-| [5.14](./phase-5/5.14-e2e-validation-harness.md) | E2E validation harness | P5 | in progress (P5, not yet merged) | 5.1 |
+| [5.14](./phase-5/5.14-e2e-validation-harness.md) | E2E validation harness | P5 | done — merged (`591d02c`) | 5.1 |
 | [5.16](./phase-5/5.16-products-distributions-views.md) | Products + distributions views | P7 | done — merged (`1cb630a`) | 5.18 |
 | [5.17](./phase-5/5.17-health-view.md) | Health view | P8 | done — merged (`940fb10`) | 5.18 |
-| [5.12](./phase-5/5.12-docs-update.md) | Docs update | P6 | done (part A docs; validation report = part B) | all |
+| [5.12](./phase-5/5.12-docs-update.md) | Docs update | P6 | done — part A docs (`e8f6425`, `030a2c2`); part B validation report (`docs/prds/006-validation-report.md`): 15/16 flows pass, V12 FAIL (tolerance, human queue), V10 unverified (Docker down mid-run) | all |
 | [5.13](./phase-5/5.13-crobot-handoff.md) | Crobot handoff (moved to the crobot repo) | — | cancelled | — |
 
 **Follow-ups merged during integration** (from crobot requests R1–R4 in

@@ -4,6 +4,33 @@ Routine / agent session log. Most recent at top. Each entry: what was picked up,
 
 ---
 
+## 2026-10-16 (Fri) — PRD-006 P6 part B: validation run + report
+
+### Context
+
+Orchestrated session (assignment 7, branch `feat/prd006-p6b` from feat/prd006 @ `553f7c6`).
+
+### Done
+
+| What | Commit |
+|---|---|
+| V13: products/distributions shares round half-to-even like the oracle (37/128 → 0.289062) | `fd4969b` |
+| V9 Playwright spec — 19/19, no changes | — |
+| Full `pnpm prd006:validate --port 8093` (CH `prd006_p6`, Redis DB 12): 55/57 checks; flows V1–V9, V11, V13–V17 pass; V12 fail; V10 skipped | report |
+| `docs/prds/006-validation-report.md` + environment, reproduce, V10, open items; V12 added to the PRD human queue | this commit |
+
+### Blocked / open
+
+- **V12** RPV identity ±1e-6 cannot hold on cent-rounded rows (Δ 1.5e-6–3.9e-6). Spec unchanged; human to decide (suggested ±0.01 × rows / visitors).
+- **V10 unverified.** Run 1 (load 9.3): ingest got `503 redis unavailable` after ~123 s, the Docker daemon went down; runs 2–3 could not start. Stats 20×3 p95 ≈ 299 ms (limit 300). Docker not restarted by this session (shared). Rerun ×3 on a quiet machine.
+- Orchestrator session `testa-platform-9d` became unreachable during V10 (socket gone).
+
+### Next
+
+V10 rerun once Docker is back; human decisions on the PRD-006 open questions.
+
+---
+
 ## 2026-05-07 (Thu) — Phase 3 continuation (lifecycle wired end-to-end)
 
 ### Context
