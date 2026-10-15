@@ -16,33 +16,72 @@ export interface SummarizeInput {
 }
 
 export function summarize(input: SummarizeInput): VariationStats[] {
-  const best = chanceToBeBest(input.draws, input.direction);
-  const control = input.draws[input.controlIndex];
+  const { draws, controlIndex } = input;
+  const control = draws[controlIndex];
   if (control === undefined) throw new Error('summarize: control index out of range');
-  return input.draws.map((variation, i) =>
-    i === input.controlIndex
-      ? { chance_to_be_best: best[i] ?? 0 }
-      : { chance_to_be_best: best[i] ?? 0, ...compare(variation, control, input) },
-  );
+  const acc = accumulate(draws, control, controlIndex, input.direction === 'lower');
+  const total = control.length;
+  return draws.map((_, i) => {
+    const chance_to_be_best = total === 0 ? 0 : (acc.wins[i] as number) / total;
+    const cmp = acc.comparisons[i];
+    return cmp === undefined
+      ? { chance_to_be_best }
+      : { chance_to_be_best, ...finish(cmp, total, input.confidence) };
+  });
 }
 
-function chanceToBeBest(draws: Float64Array[], direction: Direction): number[] {
-  const wins = new Array<number>(draws.length).fill(0);
-  const total = draws[0]?.length ?? 0;
-  const sign = direction === 'lower' ? -1 : 1;
+/** Running sums for one variation vs control. */
+interface Accumulator {
+  beats: number;
+  valid: number;
+  liftSum: number;
+  lossSum: number;
+  lifts: Float64Array;
+}
+
+/**
+ * One pass over the draws: the best variation per draw, and each variation's
+ * comparison with control. Lift and loss are relative to control, so draws
+ * where control ≤ 0 (possible for a Normal mean near zero) are left out of
+ * them.
+ */
+function accumulate(
+  draws: Float64Array[],
+  control: Float64Array,
+  controlIndex: number,
+  lower: boolean,
+): { wins: Float64Array; comparisons: (Accumulator | undefined)[] } {
+  const k = draws.length;
+  const total = control.length;
+  const wins = new Float64Array(k);
+  const comparisons = draws.map((_, i) =>
+    i === controlIndex
+      ? undefined
+      : { beats: 0, valid: 0, liftSum: 0, lossSum: 0, lifts: new Float64Array(total) },
+  );
+  const sign = lower ? -1 : 1;
   for (let d = 0; d < total; d++) {
+    const cd = control[d] as number;
     let bestIdx = 0;
     let bestVal = Number.NEGATIVE_INFINITY;
-    for (let i = 0; i < draws.length; i++) {
-      const val = sign * ((draws[i] as Float64Array)[d] as number);
-      if (val > bestVal) {
-        bestVal = val;
+    for (let i = 0; i < k; i++) {
+      const vd = (draws[i] as Float64Array)[d] as number;
+      if (sign * vd > bestVal) {
+        bestVal = sign * vd;
         bestIdx = i;
       }
+      const acc = comparisons[i];
+      if (acc === undefined) continue;
+      if (lower ? vd < cd : vd > cd) acc.beats++;
+      if (cd <= 0) continue;
+      const lift = vd / cd - 1;
+      acc.lifts[acc.valid++] = lift;
+      acc.liftSum += lift;
+      acc.lossSum += Math.max(lower ? vd - cd : cd - vd, 0) / cd;
     }
-    wins[bestIdx] = (wins[bestIdx] ?? 0) + 1;
+    wins[bestIdx] = (wins[bestIdx] as number) + 1;
   }
-  return wins.map((w) => (total === 0 ? 0 : w / total));
+  return { wins, comparisons };
 }
 
 type Comparison = Pick<
@@ -50,35 +89,15 @@ type Comparison = Pick<
   'chance_to_beat_control' | 'lift' | 'lift_ci' | 'expected_loss'
 >;
 
-/**
- * Lift and loss are relative to control, so draws where control ≤ 0 (possible
- * for a Normal mean near zero) are left out of them; with none left, they are
- * omitted rather than serialised as NaN.
- */
-function compare(v: Float64Array, c: Float64Array, input: SummarizeInput): Comparison {
-  const lower = input.direction === 'lower';
-  const lifts = new Float64Array(v.length);
-  let beats = 0;
-  let valid = 0;
-  let liftSum = 0;
-  let lossSum = 0;
-  for (let d = 0; d < v.length; d++) {
-    const vd = v[d] as number;
-    const cd = c[d] as number;
-    if (lower ? vd < cd : vd > cd) beats++;
-    if (cd <= 0) continue;
-    const lift = vd / cd - 1;
-    lifts[valid++] = lift;
-    liftSum += lift;
-    lossSum += Math.max(lower ? vd - cd : cd - vd, 0) / cd;
-  }
-  const chance = v.length === 0 ? 0 : beats / v.length;
-  if (valid === 0) return { chance_to_beat_control: chance };
+/** With no draw where control > 0, lift and loss are omitted rather than NaN. */
+function finish(acc: Accumulator, total: number, confidence: number): Comparison {
+  const chance = total === 0 ? 0 : acc.beats / total;
+  if (acc.valid === 0) return { chance_to_beat_control: chance };
   return {
     chance_to_beat_control: chance,
-    lift: liftSum / valid,
-    lift_ci: credibleInterval(lifts.subarray(0, valid), input.confidence),
-    expected_loss: lossSum / valid,
+    lift: acc.liftSum / acc.valid,
+    lift_ci: intervalInPlace(acc.lifts.subarray(0, acc.valid), confidence),
+    expected_loss: acc.lossSum / acc.valid,
   };
 }
 
@@ -87,7 +106,11 @@ function compare(v: Float64Array, c: Float64Array, input: SummarizeInput): Compa
  * statistics. Uses selection (O(n)) rather than a full sort.
  */
 export function credibleInterval(values: Float64Array, confidence: number): [number, number] {
-  const work = Float64Array.from(values);
+  return intervalInPlace(Float64Array.from(values), confidence);
+}
+
+/** As {@link credibleInterval}, reordering `work` instead of copying it. */
+function intervalInPlace(work: Float64Array, confidence: number): [number, number] {
   const tail = (1 - confidence) / 2;
   return [quantile(work, tail), quantile(work, 1 - tail)];
 }

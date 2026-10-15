@@ -9,7 +9,7 @@ import {
 } from '../index.ts';
 import { drawPosterior, isInsufficient } from '../models.ts';
 import { inverseNormalCdf, upperRegularizedGamma } from '../planning.ts';
-import { createRng } from '../rng.ts';
+import { createRng, hashSeed } from '../rng.ts';
 import { createSamplers } from '../samplers.ts';
 import { credibleInterval, summarize } from '../summarize.ts';
 
@@ -30,6 +30,20 @@ const sd = (a: Float64Array): number => {
   const m = mean(a);
   return Math.sqrt(a.reduce((s, v) => s + (v - m) ** 2, 0) / (a.length - 1));
 };
+
+describe('hashSeed is xxhash32 (seed 0), same as experiment-core', () => {
+  // Reference vectors (xxHash spec / python-xxhash docs), cross-checked
+  // against packages/experiment-core/src/xxhash.ts `xxhash32(s, 0)`.
+  it.each([
+    ['', 0x02cc5d05],
+    ['a', 0x550d7456],
+    ['abc', 0x32d153ff],
+    ['Nobody inspects the spammish repetition', 0xe2293b2f],
+    ['|purchase||101|4790|137|,', 0xf347bc29],
+  ])('%p → %d', (input, expected) => {
+    expect(hashSeed(input)).toBe(expected);
+  });
+});
 
 describe('rng + samplers', () => {
   it('same key → same stream; different key → different stream', () => {

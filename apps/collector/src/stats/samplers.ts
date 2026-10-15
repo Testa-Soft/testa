@@ -1,6 +1,6 @@
 /**
  * Distribution samplers over a seeded {@link Rng} (PRD-006 §5.5): Normal via
- * Box–Muller, Gamma via Marsaglia–Tsang, Beta as a ratio of two Gammas,
+ * Box–Muller (Marsaglia polar form), Gamma via Marsaglia–Tsang, Beta as a ratio of two Gammas,
  * Student-t as Normal / √(χ²/ν).
  */
 import type { Rng } from './rng.ts';
@@ -13,18 +13,27 @@ export interface Samplers {
 }
 
 export function createSamplers(rng: Rng): Samplers {
-  let spare: number | undefined;
+  let spare = 0;
+  let hasSpare = false;
 
   const normal = (): number => {
-    if (spare !== undefined) {
-      const z = spare;
-      spare = undefined;
-      return z;
+    if (hasSpare) {
+      hasSpare = false;
+      return spare;
     }
-    const r = Math.sqrt(-2 * Math.log(rng.next()));
-    const theta = 2 * Math.PI * rng.next();
-    spare = r * Math.sin(theta);
-    return r * Math.cos(theta);
+    // Polar form: no trig, ~21% of pairs rejected.
+    let u: number;
+    let v: number;
+    let q: number;
+    do {
+      u = 2 * rng.next() - 1;
+      v = 2 * rng.next() - 1;
+      q = u * u + v * v;
+    } while (q >= 1 || q === 0);
+    const f = Math.sqrt((-2 * Math.log(q)) / q);
+    spare = v * f;
+    hasSpare = true;
+    return u * f;
   };
 
   const gamma = (shape: number): number => {

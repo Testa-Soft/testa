@@ -30,6 +30,7 @@ function splitmix32(seed: number): () => number {
 
 const rotl = (x: number, k: number): number => (x << k) | (x >>> (32 - k));
 
+const TWO_POW_31 = 2_147_483_648;
 const TWO_POW_32 = 4_294_967_296;
 
 /** `xoshiro128**` seeded from the xxhash32 of `key`. */
@@ -37,8 +38,6 @@ export function createRng(key: string): Rng {
   return new Xoshiro128(splitmix32(hashSeed(key)));
 }
 
-// A class rather than a closure: the JIT keeps the four state words as plain
-// fields, which is markedly faster in the hot sampling loops.
 class Xoshiro128 implements Rng {
   private s0: number;
   private s1: number;
@@ -54,7 +53,7 @@ class Xoshiro128 implements Rng {
 
   /** Uniform in (0, 1); 32-bit resolution, half-step offset so log() is safe. */
   next(): number {
-    const result = Math.imul(rotl(Math.imul(this.s1, 5), 7), 9) >>> 0;
+    const result = Math.imul(rotl(Math.imul(this.s1, 5), 7), 9);
     const t = this.s1 << 9;
     this.s2 ^= this.s0;
     this.s3 ^= this.s1;
@@ -62,6 +61,7 @@ class Xoshiro128 implements Rng {
     this.s0 ^= this.s3;
     this.s2 ^= t;
     this.s3 = rotl(this.s3, 11);
-    return (result + 0.5) / TWO_POW_32;
+    // `result` is a signed int32; shift it to [0, 2³²) without `>>> 0`.
+    return (result + TWO_POW_31 + 0.5) / TWO_POW_32;
   }
 }
