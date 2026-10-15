@@ -20,6 +20,7 @@ describe('syncToday', () => {
   it('maps Frankfurter rates to USD-base rows + a USD→USD identity', async () => {
     let captured: readonly FxRow[] = [];
     const n = await syncToday({
+      backfillDays: 0,
       fetchFn: async () => jsonResponse(FIXTURE),
       upsert: async (rows) => {
         captured = rows;
@@ -39,6 +40,7 @@ describe('syncToday', () => {
   it('throws when Frankfurter returns a non-2xx status', async () => {
     await expect(
       syncToday({
+        backfillDays: 0,
         fetchFn: async () => new Response('upstream down', { status: 500 }),
         upsert: async () => undefined,
       }),
@@ -48,6 +50,7 @@ describe('syncToday', () => {
   it('throws when the payload shape is invalid', async () => {
     await expect(
       syncToday({
+        backfillDays: 0,
         fetchFn: async () => jsonResponse({ date: 'not-a-date', rates: {} }),
         upsert: async () => undefined,
       }),
@@ -58,6 +61,7 @@ describe('syncToday', () => {
     let upsertCalled = false;
     await expect(
       syncToday({
+        backfillDays: 0,
         fetchFn: async () => new Response('', { status: 503 }),
         upsert: async () => {
           upsertCalled = true;

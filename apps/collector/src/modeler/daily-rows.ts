@@ -13,7 +13,12 @@ import type {
 } from '@testa-platform/shared-types';
 import { type QueryRunner, fetchQuality } from '../analytics/attribution.ts';
 import { SyncApiError } from '../analytics/errors.ts';
-import { buildCapQuery, buildDailyRowsQuery, keyColumn } from './daily-rows-sql.ts';
+import {
+  buildCapQuery,
+  buildDailyRowsQuery,
+  buildUnconvertibleQuery,
+  keyColumn,
+} from './daily-rows-sql.ts';
 import { PAYMENT_TYPE_KEYS, type ParsedKey, parseMetrics } from './metric-keys.ts';
 import { roundHalfEven } from './round.ts';
 
@@ -69,6 +74,17 @@ function assertDimensionKeys(
   if (dimension !== 'payment_type') return;
   const bad = keys.find((k) => !PAYMENT_TYPE_KEYS.includes(k.key));
   if (bad) throw new SyncApiError('unknown_metric', 400, bad.key);
+}
+
+/** quality + `unconvertible_orders` (only when > 0, so goldens stay exact). */
+async function fetchQualityBlock(run: QueryRunner, p: DailyRowsParams): Promise<QualityBlock> {
+  const q = buildUnconvertibleQuery(p);
+  const [base, rows] = await Promise.all([
+    fetchQuality(run, p),
+    run<{ n: string | number }>(q.sql, q.params),
+  ]);
+  const unconvertible = Number(rows[0]?.n ?? 0);
+  return unconvertible > 0 ? { ...base, unconvertible_orders: unconvertible } : base;
 }
 
 async function fetchCap(run: QueryRunner, p: DailyRowsParams): Promise<number | undefined> {
@@ -170,7 +186,10 @@ export async function computeDailyRows(
     ...(p.dimension === undefined ? {} : { dimension: p.dimension }),
     ...(cap === undefined ? {} : { cap }),
   });
-  const [wide, quality] = await Promise.all([run<WideRow>(q.sql, q.params), fetchQuality(run, p)]);
+  const [wide, quality] = await Promise.all([
+    run<WideRow>(q.sql, q.params),
+    fetchQualityBlock(run, p),
+  ]);
 
   const top = p.dimension === undefined ? null : topValues(wide);
   const rows = rowsFrom(fold(wide, keys.length, top), keys, p.dimension, p.variationOrder);

@@ -13,6 +13,11 @@ export interface QualityBlock {
   multi_variation_visitors: number;
   /** Events whose stamped variation disagrees with the exposure variation. */
   variation_mismatch_events: number;
+  /**
+   * Attributed orders in a currency with no known rate: left out of every
+   * money `sum` (PRD-006 §5.1, task 5.19). Present only when > 0.
+   */
+  unconvertible_orders?: number;
 }
 
 // ─── products ───────────────────────────────────────────────────────────────
