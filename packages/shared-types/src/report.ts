@@ -151,6 +151,14 @@ export interface HistogramDistribution {
   by_variation: ByVariation<HistogramBucket[]>;
 }
 
+/** Outlier capping applied to initial orders (R4; PRD-006 §6.3). */
+export interface CappedOrders {
+  /** Pooled p99 of initial-order values, report currency (0 when there are no orders). */
+  threshold: number;
+  /** Initial orders whose value exceeded the threshold, per variation. */
+  by_variation: ByVariation<number>;
+}
+
 export interface DistributionsResult {
   experiment_id: number;
   from: string;
@@ -163,6 +171,8 @@ export interface DistributionsResult {
     currency?: CategoricalDistribution;
     order_value?: HistogramDistribution;
   };
+  /** Present only when the query set `cap_outliers: true` (R4). */
+  capped?: CappedOrders;
 }
 
 // ─── health ─────────────────────────────────────────────────────────────────

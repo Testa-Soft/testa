@@ -99,6 +99,33 @@ describe.skipIf(!liveRedis)('distributions view (live ClickHouse + Redis, real H
     expect(capped.distributions.order_value?.by_variation['100']?.map((b) => b.count)).toEqual([
       1, 0,
     ]);
+    // R4: the capped-order count (hand-computed; generate.py `distributions(capped=True)` agrees).
+    expect(capped.capped).toEqual({ threshold: 99.6, by_variation: { '100': 1, '101': 0 } });
+    // Absent without cap_outliers.
+    expect(custom.capped).toBeUndefined();
+    expect(only.capped).toBeUndefined();
+  });
+
+  it('R4 capped: demo matches the oracle; reported even without order_value in the request', async () => {
+    const { projectId, experimentId } = await h.setup('demo', [100, 101, 102]);
+    const range = ['2026-10-01', '2026-10-14'] as const;
+    const all = await h.result<DistributionsResult>(
+      experimentId,
+      query(projectId, ...range, { cap_outliers: true }),
+    );
+    // generate.py distributions(M, capped=True) on the demo set.
+    expect(all.capped).toEqual({ threshold: 298, by_variation: { '100': 1, '101': 1, '102': 1 } });
+    const currencyOnly = await h.result<DistributionsResult>(
+      experimentId,
+      query(projectId, ...range, { distributions: ['currency'], cap_outliers: true }),
+    );
+    expect(Object.keys(currencyOnly.distributions)).toEqual(['currency']);
+    expect(currencyOnly.capped).toEqual(all.capped as NonNullable<typeof all.capped>);
+    const off = await h.result<DistributionsResult>(
+      experimentId,
+      query(projectId, ...range, { cap_outliers: false }),
+    );
+    expect(off.capped).toBeUndefined();
   });
 
   it('400s through the route', async () => {

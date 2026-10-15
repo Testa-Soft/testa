@@ -106,4 +106,29 @@ describe('order_value histogram', () => {
     expect(round2(53.75)).toBe(53.75);
     expect(round2(1.006)).toBe(1.01);
   });
+
+  it('R4 capped: counts orders above the cap per variation; zeros and threshold 0 with no orders', () => {
+    const orders = [
+      { variation_id: 100, value: 120 },
+      { variation_id: 100, value: 50 },
+      { variation_id: 101, value: 99.99 },
+    ].map((o, i) => ({
+      ...o,
+      visitor_id: `v${i}`,
+      kind: 'order' as const,
+      payment_type: '',
+      coupon: '',
+      currency: 'EUR',
+      order: [i, i] as [number, number],
+    }));
+    expect(buildDistributions(input(orders, { cap: 99.987, capOutliers: true })).capped).toEqual({
+      threshold: 99.99,
+      by_variation: { '100': 1, '101': 1 },
+    });
+    expect(buildDistributions(input([], { capOutliers: true })).capped).toEqual({
+      threshold: 0,
+      by_variation: { '100': 0, '101': 0 },
+    });
+    expect(buildDistributions(input(orders, { cap: 99.987 })).capped).toBeUndefined();
+  });
 });

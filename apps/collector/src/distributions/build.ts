@@ -37,6 +37,8 @@ export interface DistributionsInput {
   bins?: number[];
   /** p99 cap for order values (`cap_outliers`). */
   cap?: number;
+  /** `cap_outliers: true` — report `capped` (R4), even with no orders. */
+  capOutliers?: boolean;
   events: DistributionEvent[];
 }
 
@@ -201,5 +203,20 @@ export function buildDistributions(input: DistributionsInput): DistributionsResu
     to: input.to,
     report_currency: input.reportCurrency,
     distributions,
+    ...(input.capOutliers ? { capped: cappedOrders(ids, orders, input.cap) } : {}),
   };
+}
+
+/**
+ * R4: initial orders whose value exceeded the pooled p99 cap, per variation
+ * (every variation listed, zeros included). Threshold 0 = no orders to cap.
+ */
+function cappedOrders(ids: number[], orders: DistributionEvent[], cap: number | undefined) {
+  const by_variation = Object.fromEntries(
+    ids.map((id) => [
+      String(id),
+      cap === undefined ? 0 : orders.filter((e) => e.variation_id === id && e.value > cap).length,
+    ]),
+  );
+  return { threshold: cap === undefined ? 0 : round2(cap), by_variation };
 }
