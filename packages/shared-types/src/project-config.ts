@@ -71,6 +71,13 @@ export interface ExperimentConfig {
    */
   cross_domain?: boolean;
   /**
+   * Tracking pipeline the experiment uses, stamped by crobot (PRD-006 §6.1).
+   * Absent = `v1` (legacy crobot calls only). `v2` = PRD-006: experiment
+   * sessions, `exp` stamping, `experiment_view` to the edge, ecommerce
+   * attribution; the analytics endpoints answer 409 `version_mismatch` otherwise.
+   */
+  platform_version?: 'v1' | 'v2';
+  /**
    * Targeting conditions (crobot `experiment_rules` type `targeting`),
    * gating ALL experiment types (split-URL and DOM/copy alike) before
    * assignment. Grouped by dimension: OR within a group, AND across groups.
