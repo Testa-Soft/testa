@@ -46,9 +46,50 @@ const envSchema = z.object({
    * crobot sends it as `Authorization: Bearer <token>`. GET stays public.
    */
   CONFIG_WRITE_TOKEN: z.string().min(8).default('dev-config-token-change-me-please'),
+
+  // ── PRD-006 modeler (task 5.15) ──────────────────────────────────────────
+  /** Prefix for every modeler Redis key (queue, locks, run state, query results). */
+  MODELER_KEY_PREFIX: z.string().default(''),
+  /** Parallel runs per modeler instance. */
+  MODELER_CONCURRENCY: z.coerce.number().int().min(1).max(64).default(4),
+  /** Scheduler tick (seconds). */
+  MODELER_INTERVAL_SEC: z.coerce.number().int().positive().default(900),
+  /** Force a refresh when the last finished run is older than this (seconds). */
+  MODELER_MAX_RUN_AGE_SEC: z.coerce.number().int().positive().default(86_400),
+  /** Per-experiment lock TTL (seconds). */
+  MODELER_LOCK_TTL_SEC: z.coerce.number().int().positive().default(600),
+  /** ClickHouse `max_execution_time` per modeler query (seconds). */
+  MODELER_MAX_EXECUTION_SEC: z.coerce.number().int().positive().default(300),
+  /** Backoff between failed attempts (seconds, comma-separated); attempts = length + 1. */
+  MODELER_RETRY_DELAYS_SEC: z.string().default('30,120,300'),
+  /** How long an on-demand query result is kept (seconds). */
+  MODELER_QUERY_TTL_SEC: z.coerce.number().int().positive().default(3600),
+  /** Worker idle poll interval (ms). */
+  MODELER_POLL_MS: z.coerce.number().int().positive().default(1000),
+  /** `1` = one synchronous pass (schedule, drain the queue, exit). Same as `--once`. */
+  MODELER_ONCE: z.enum(['0', '1']).default('0'),
+  /** Crobot base URL for the optional webhooks; empty disables them. */
+  CROBOT_WEBHOOK_URL: z.string().default(''),
+  /** HMAC-SHA256 secret for `X-Testa-Signature`. Required when the URL is set. */
+  CROBOT_WEBHOOK_SECRET: z.string().default(''),
+  /** Webhook retry backoff (seconds, comma-separated). */
+  CROBOT_WEBHOOK_RETRY_DELAYS_SEC: z.string().default('10,60,300'),
 });
 
 const parsed = envSchema.parse(process.env);
+
+/** `"30,120,300"` → `[30, 120, 300]`; fails fast on anything else. */
+function parseDelays(raw: string, name: string): readonly number[] {
+  const delays = raw
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .map(Number);
+  if (delays.some((d) => !Number.isFinite(d) || d < 0)) {
+    throw new Error(`${name} must be comma-separated non-negative seconds, got "${raw}"`);
+  }
+  return delays;
+}
 
 export const config = {
   environment: parsed.ENVIRONMENT,
@@ -93,4 +134,30 @@ export const config = {
 
   configDir: parsed.CONFIG_DIR,
   configWriteToken: parsed.CONFIG_WRITE_TOKEN,
+
+  modeler: {
+    keyPrefix: parsed.MODELER_KEY_PREFIX,
+    concurrency: parsed.MODELER_CONCURRENCY,
+    intervalSec: parsed.MODELER_INTERVAL_SEC,
+    maxRunAgeSec: parsed.MODELER_MAX_RUN_AGE_SEC,
+    lockTtlSec: parsed.MODELER_LOCK_TTL_SEC,
+    maxExecutionSec: parsed.MODELER_MAX_EXECUTION_SEC,
+    retryDelaysSec: parseDelays(parsed.MODELER_RETRY_DELAYS_SEC, 'MODELER_RETRY_DELAYS_SEC'),
+    queryTtlSec: parsed.MODELER_QUERY_TTL_SEC,
+    pollMs: parsed.MODELER_POLL_MS,
+    once: parsed.MODELER_ONCE === '1',
+  },
+
+  webhook: {
+    url: parsed.CROBOT_WEBHOOK_URL,
+    secret: parsed.CROBOT_WEBHOOK_SECRET,
+    retryDelaysSec: parseDelays(
+      parsed.CROBOT_WEBHOOK_RETRY_DELAYS_SEC,
+      'CROBOT_WEBHOOK_RETRY_DELAYS_SEC',
+    ),
+  },
 } as const;
+
+if (config.webhook.url !== '' && config.webhook.secret.length < 16) {
+  throw new Error('CROBOT_WEBHOOK_SECRET (≥16 chars) is required when CROBOT_WEBHOOK_URL is set');
+}

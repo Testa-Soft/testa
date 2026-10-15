@@ -1,6 +1,7 @@
 /**
- * The mounted sync API stubs over real HTTP (the collector's own app on an
- * ephemeral port). P4 replaces these expectations with the real behaviour.
+ * The sync API as mounted by the real collector app, over real HTTP. Only
+ * checks that need no storage (auth, request validation that fails before any
+ * I/O, route wiring); the storage-backed behaviour is in sync.integration.test.ts.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
 import type { Server } from 'bun';
@@ -24,25 +25,85 @@ const ROUTES: [string, string][] = [
   ['DELETE', '/api/v1/experiments/1717/subscription'],
   ['GET', '/api/v1/experiments/1717/daily-summary?since_run_id=r_1'],
   ['POST', '/api/v1/experiments/1717/queries'],
-  ['GET', '/api/v1/experiments/1717/queries/q_abc'],
+  ['GET', `/api/v1/experiments/1717/queries/${'a'.repeat(64)}`],
 ];
 
-describe('sync API stubs (P0)', () => {
+describe('sync API wiring (real app)', () => {
   for (const [method, path] of ROUTES) {
-    it(`${method} ${path} → 401 without token, 501 not_implemented with it`, async () => {
-      const anon = await fetch(base + path, { method });
-      expect(anon.status).toBe(401);
-      expect(await anon.json()).toEqual({ error: 'unauthorized' });
-
-      const res = await fetch(base + path, {
-        method,
-        headers: auth,
-        ...(method === 'GET' || method === 'DELETE' ? {} : { body: '{}' }),
-      });
-      expect(res.status).toBe(501);
-      expect(await res.json()).toEqual({ error: 'not_implemented' });
+    it(`${method} ${path} → 401 unauthorized without the service token`, async () => {
+      const res = await fetch(base + path, { method });
+      expect(res.status).toBe(401);
+      expect(await res.json()).toEqual({ error: 'unauthorized' });
     });
   }
+
+  it.each([
+    [{ project_id: 42, status: 'paused' }, 400, { error: 'invalid_status', field: 'status' }],
+    ['not json', 400, { error: 'invalid_status', field: 'body' }],
+    [
+      {
+        project_id: 42,
+        status: 'running',
+        from: '2026-10-05',
+        to: '2026-10-01',
+        report_currency: 'EUR',
+        metrics: ['purchase'],
+      },
+      400,
+      { error: 'invalid_range', field: 'from' },
+    ],
+    [
+      {
+        project_id: 42,
+        status: 'running',
+        from: '2026-10-01',
+        to: null,
+        report_currency: 'euro',
+        metrics: ['purchase'],
+      },
+      400,
+      { error: 'invalid_currency', field: 'report_currency' },
+    ],
+    [
+      {
+        project_id: 42,
+        status: 'running',
+        from: '2026-10-01',
+        to: null,
+        report_currency: 'EUR',
+        metrics: ['aov'],
+      },
+      400,
+      { error: 'unknown_metric', field: 'aov' },
+    ],
+  ])('PUT subscription %p → %i', async (body, status, error) => {
+    const res = await fetch(`${base}/api/v1/experiments/1717/subscription`, {
+      method: 'PUT',
+      headers: auth,
+      body: typeof body === 'string' ? body : JSON.stringify(body),
+    });
+    expect(res.status).toBe(status);
+    expect(await res.json()).toEqual(error);
+  });
+
+  it('POST queries with an unknown view → 400 unknown_view', async () => {
+    const res = await fetch(`${base}/api/v1/experiments/1717/queries`, {
+      method: 'POST',
+      headers: auth,
+      body: JSON.stringify({ view: 'funnel', project_id: 42 }),
+    });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: 'unknown_view', field: 'view' });
+  });
+
+  it('malformed ids → 404', async () => {
+    const summary = await fetch(`${base}/api/v1/experiments/abc/daily-summary`, { headers: auth });
+    expect(summary.status).toBe(404);
+    expect(await summary.json()).toEqual({ error: 'not_subscribed' });
+    const query = await fetch(`${base}/api/v1/experiments/1717/queries/nope`, { headers: auth });
+    expect(query.status).toBe(404);
+    expect(await query.json()).toEqual({ error: 'query_not_found' });
+  });
 
   it('the old /api/v1/metrics/:metric stub is gone', async () => {
     const res = await fetch(`${base}/api/v1/metrics/aov`, { headers: auth });
