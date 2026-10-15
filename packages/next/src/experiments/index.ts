@@ -39,3 +39,16 @@ export {
   PREVIEW_TOKEN,
   PREVIEW_VARIATION_ID,
 } from './preview.ts';
+
+// PRD-006 typed tracking helpers (task 5.7) — client-side; posts to the edge `/track`.
+export {
+  DEFAULT_EVENTS_ENDPOINT,
+  track,
+  trackAddToCart,
+  trackBeginCheckout,
+  trackLead,
+  trackPaymentInfo,
+  trackPurchase,
+  trackShippingInfo,
+  trackSignUp,
+} from '../track.ts';

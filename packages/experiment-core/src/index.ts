@@ -100,3 +100,33 @@ export type { UrlTraceEvent } from './trace.ts';
 // crobot `/log` diagnostic beacon (3.3.3 `sendLog` parity) — see log-url.ts.
 export { buildLogUrl } from './log-url.ts';
 export type { LogLevel } from './log-url.ts';
+
+// PRD-006 typed tracking helpers (task 5.7), shared by the pixel and the SDKs.
+export {
+  LIFTED_EVENT_KEYS,
+  addToCart,
+  beginCheckout,
+  itemsValue,
+  lead,
+  paymentInfo,
+  purchase,
+  shippingInfo,
+  signUp,
+} from './track.ts';
+export type {
+  CartOptions,
+  PaymentInfoOptions,
+  PurchaseOptions,
+  TrackCall,
+  TrackProps,
+} from './track.ts';
+
+// PRD-006 experiment sessions (task 5.5), shared by the pixel and the SDKs.
+export {
+  EXP_SESSION_TTL_SEC,
+  activeExpSessions,
+  isExpSessionActive,
+  normalizeExpiry,
+  slideExpSession,
+  startExpSessionIfNeeded,
+} from './exp-session.ts';

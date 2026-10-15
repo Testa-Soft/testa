@@ -26,6 +26,8 @@ export type ConsentState = 'granted' | 'denied' | 'unknown';
 export type QueueCall =
   | ['track', string, Record<string, unknown>?]
   | ['trackPurchase', number, string, string, number?]
+  | ['trackPurchase', Record<string, unknown>]
+  | [TrackHelperName, ...unknown[]]
   | ['consent', ConsentState]
   | ['identify', string]
   | ['navigate', string];
@@ -64,12 +66,42 @@ export interface TestaDebugSnapshot {
   network: { queued: number; sent: number; dropped: number; retried: number; pending: number };
 }
 
+/** PRD-006 typed helpers (task 5.7); the runtime maps them onto experiment-core builders. */
+export type TrackHelperName =
+  | 'trackAddToCart'
+  | 'trackBeginCheckout'
+  | 'trackShippingInfo'
+  | 'trackPaymentInfo'
+  | 'trackLead'
+  | 'trackSignUp';
+
+export const TRACK_HELPERS: readonly TrackHelperName[] = [
+  'trackAddToCart',
+  'trackBeginCheckout',
+  'trackShippingInfo',
+  'trackPaymentInfo',
+  'trackLead',
+  'trackSignUp',
+];
+
 export interface TestaQueue {
   /** FIFO of pre-hydration calls. Runtime drains in order. */
   q: QueueCall[];
 
   track(eventName: string, props?: Record<string, unknown>): void;
-  trackPurchase(value: number, currency: string, orderId: string, items?: number): void;
+  /** Positional (legacy) or object form (PRD-006 `trackPurchase({ order_id, value, currency, items, … })`). */
+  trackPurchase(
+    valueOrPurchase: number | Record<string, unknown>,
+    currency?: string,
+    orderId?: string,
+    items?: number,
+  ): void;
+  trackAddToCart(items: unknown[], opts: Record<string, unknown>): void;
+  trackBeginCheckout(items: unknown[], opts: Record<string, unknown>): void;
+  trackShippingInfo(opts?: Record<string, unknown>): void;
+  trackPaymentInfo(opts: Record<string, unknown>): void;
+  trackLead(opts?: Record<string, unknown>): void;
+  trackSignUp(opts?: Record<string, unknown>): void;
   consent(state: ConsentState): void;
   identify(visitorId: string): void;
   navigate(url: string): void;
@@ -126,12 +158,22 @@ export function installQueue(): TestaQueue {
       q.push(props !== undefined ? ['track', eventName, props] : ['track', eventName]);
     },
     trackPurchase(value, currency, orderId, items) {
+      if (typeof value === 'object') {
+        q.push(['trackPurchase', value]);
+        return;
+      }
       q.push(
         items !== undefined
-          ? ['trackPurchase', value, currency, orderId, items]
-          : ['trackPurchase', value, currency, orderId],
+          ? ['trackPurchase', value, currency as string, orderId as string, items]
+          : ['trackPurchase', value, currency as string, orderId as string],
       );
     },
+    trackAddToCart: (...args) => q.push(['trackAddToCart', ...args]),
+    trackBeginCheckout: (...args) => q.push(['trackBeginCheckout', ...args]),
+    trackShippingInfo: (...args) => q.push(['trackShippingInfo', ...args]),
+    trackPaymentInfo: (...args) => q.push(['trackPaymentInfo', ...args]),
+    trackLead: (...args) => q.push(['trackLead', ...args]),
+    trackSignUp: (...args) => q.push(['trackSignUp', ...args]),
     consent(state) {
       q.push(['consent', state]);
     },

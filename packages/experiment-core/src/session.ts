@@ -77,12 +77,24 @@ export function refreshSession(
   expId: number,
   variation: number,
   expiresSec: number,
+  /** Current time (epoch s); defaults to `expiresSec − SESSION_LENGTH_SEC`. */
+  nowSec: number = expiresSec - SESSION_LENGTH_SEC,
 ): void {
   // Never shorten a window the client slid further (PRD-006: 60 min from the
   // last event) — e.g. a 30-min server refresh after client activity.
-  const current = parsePacked(store.get(ASSIGNMENT_COOKIE)).get(expId)?.sessionExp ?? 0;
+  const entry = parsePacked(store.get(ASSIGNMENT_COOKIE)).get(expId);
+  const current = entry?.sessionExp ?? 0;
   const live = current > 0 && current < MS_THRESHOLD ? current : 0;
-  write(store, expId, { variation, excluded: false, sessionExp: Math.max(live, expiresSec) });
+  // A PRD-006 session that already expired is OVER: refreshing the window must
+  // not revive it (a returning visitor needs a new session, sessionIdx + 1),
+  // so its sessionStart is cleared while the session count is kept.
+  const ended = (entry?.sessionStart ?? 0) > 0 && live > 0 && live <= nowSec;
+  write(store, expId, {
+    variation,
+    excluded: false,
+    sessionExp: Math.max(live, expiresSec),
+    ...(ended ? { sessionStart: 0 } : {}),
+  });
 }
 
 /**

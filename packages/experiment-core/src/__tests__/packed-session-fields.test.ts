@@ -112,3 +112,27 @@ describe('server-side writers keep the session fields', () => {
     });
   });
 });
+
+describe('refreshSession and expired PRD-006 sessions', () => {
+  it('ends an expired session (sessionStart → 0, idx kept) instead of reviving it', () => {
+    const store = memoryStore({ [ASSIGNMENT_COOKIE]: '101.2.0.1760437200.1760433600.1' });
+    const now = 1760437200 + 2 * 86_400; // 2 days later
+    refreshSession(store, 101, 2, now + 1800, now);
+    expect(parsePacked(store.get(ASSIGNMENT_COOKIE)).get(101)).toEqual({
+      variation: 2,
+      excluded: false,
+      sessionExp: now + 1800,
+      sessionIdx: 1,
+    });
+  });
+
+  it('keeps an active session untouched apart from the window', () => {
+    const store = memoryStore({ [ASSIGNMENT_COOKIE]: '101.2.0.1760437200.1760433600.1' });
+    refreshSession(store, 101, 2, 1760434000 + 1800, 1760434000);
+    expect(parsePacked(store.get(ASSIGNMENT_COOKIE)).get(101)).toMatchObject({
+      sessionStart: 1760433600,
+      sessionIdx: 1,
+      sessionExp: 1760437200,
+    });
+  });
+});

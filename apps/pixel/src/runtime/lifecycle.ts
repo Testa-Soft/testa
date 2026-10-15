@@ -22,13 +22,28 @@ import type {
   AudienceCondition,
   ExpSession,
   ExperimentConfig,
+  Item,
   PixelEvent,
   ProjectConfig,
 } from '@testa-platform/shared-types';
 import type { ConsentState } from '@testa-platform/shared-types';
 import { type Teardown, applyVariation } from '@testa-soft/dom';
-import { matchesPageRule, shuffleForVisitor } from '@testa-soft/experiment-core';
-import type { TestaDebugSnapshot } from '../loader/queue.ts';
+import {
+  type CartOptions,
+  type PaymentInfoOptions,
+  type PurchaseOptions,
+  type TrackCall,
+  addToCart as buildAddToCart,
+  beginCheckout as buildBeginCheckout,
+  lead as buildLead,
+  paymentInfo as buildPaymentInfo,
+  purchase as buildPurchase,
+  shippingInfo as buildShippingInfo,
+  signUp as buildSignUp,
+  matchesPageRule,
+  shuffleForVisitor,
+} from '@testa-soft/experiment-core';
+import { TRACK_HELPERS, type TestaDebugSnapshot } from '../loader/queue.ts';
 import { TRACKER_VERSION } from '../version.ts';
 import { entryFor, readUtms, stripClickIds } from './attribution.ts';
 import * as consentMod from './consent.ts';
@@ -173,6 +188,10 @@ export function hydrate(): void {
     guardedInit('cross_domain_links', installCrossDomainLinks);
   }
 
+  // Queued tracking calls deferred by drainQueue (v2 pipeline) — after the
+  // first cycle, and also in preview mode so they are never stranded.
+  guardedInit('deferred_tracking', replayDeferredTracking);
+
   // Fire load() once. SPA re-evaluations don't re-fire it.
   guardedInit('fire_ready', fireReady);
 }
@@ -190,13 +209,11 @@ function installLiveApi(): void {
     trackCustomerEvent(name, props);
   };
   stub.trackPurchase = (value, currency, orderId, items) => {
-    trackCustomerEvent('purchase', {
-      value_native: value,
-      currency,
-      order_id: orderId,
-      ...(items !== undefined ? { items_count: items } : {}),
-    });
+    runHelper('trackPurchase', [value, currency, orderId, items]);
   };
+  for (const name of TRACK_HELPERS) {
+    stub[name] = ((...args: unknown[]) => runHelper(name, args)) as never;
+  }
   stub.consent = (state) => {
     consentMod.consent.setState(state);
   };
@@ -280,13 +297,90 @@ async function refreshPendingCount(): Promise<void> {
 
 // ─── queue draining ────────────────────────────────────────────────────────
 
+/** Queued tracking calls held until the first cycle has (re)started sessions. */
+let _deferredTrackCalls: unknown[] = [];
+
+const CONTROL_CALLS = new Set(['consent', 'identify', 'navigate']);
+
+/**
+ * Replay pre-hydration calls. On the PRD-006 pipeline, tracking calls wait for
+ * the first experiment cycle (replayDeferredTracking): it (re)starts the
+ * experiment sessions, without which a queued trackPurchase would be dropped.
+ * Control calls (consent, …) still replay first. Other projects: unchanged.
+ */
 function drainQueue(): void {
   const stub = window._testa;
   if (!stub) return;
   const queued = stub.q.slice();
   stub.q.length = 0;
+  const deferTracking = v2ExperimentIds().size > 0;
   for (const call of queued) {
-    replayCall(call);
+    const method = Array.isArray(call) ? call[0] : undefined;
+    if (deferTracking && typeof method === 'string' && !CONTROL_CALLS.has(method)) {
+      _deferredTrackCalls.push(call);
+    } else {
+      replayCall(call);
+    }
+  }
+}
+
+function replayDeferredTracking(): void {
+  const calls = _deferredTrackCalls;
+  _deferredTrackCalls = [];
+  for (const call of calls) replayCall(call);
+}
+
+/**
+ * PRD-006 typed helpers (§1.8, task 5.7) → experiment-core builders →
+ * `trackCustomerEvent`. Invalid input (e.g. trackPaymentInfo without
+ * payment_type) is reported to __pixel_debug and dropped, never thrown into
+ * the customer's page.
+ */
+function runHelper(name: string, args: unknown[]): void {
+  try {
+    const [a, b, c, d] = args as [unknown, unknown, unknown, unknown];
+    const opts = (x: unknown): Record<string, unknown> =>
+      x !== null && typeof x === 'object' ? (x as Record<string, unknown>) : {};
+    let call: TrackCall | null = null;
+    switch (name) {
+      case 'trackPurchase':
+        if (typeof a === 'object' && a !== null) {
+          call = buildPurchase(a as unknown as PurchaseOptions);
+        } else {
+          // Legacy positional signature (value, currency, orderId, items_count?).
+          call = [
+            'purchase',
+            {
+              value_native: a,
+              currency: b,
+              order_id: c,
+              ...(d !== undefined ? { items_count: d } : {}),
+            },
+          ];
+        }
+        break;
+      case 'trackAddToCart':
+        call = buildAddToCart((a ?? []) as Item[], opts(b) as unknown as CartOptions);
+        break;
+      case 'trackBeginCheckout':
+        call = buildBeginCheckout((a ?? []) as Item[], opts(b) as unknown as CartOptions);
+        break;
+      case 'trackShippingInfo':
+        call = buildShippingInfo(opts(a));
+        break;
+      case 'trackPaymentInfo':
+        call = buildPaymentInfo(opts(a) as unknown as PaymentInfoOptions);
+        break;
+      case 'trackLead':
+        call = buildLead(opts(a));
+        break;
+      case 'trackSignUp':
+        call = buildSignUp(opts(a));
+        break;
+    }
+    if (call) trackCustomerEvent(call[0], call[1]);
+  } catch (err) {
+    pushDebugError(`helper:${name}`, err);
   }
 }
 
@@ -298,12 +392,13 @@ function replayCall(call: unknown): void {
       trackCustomerEvent(args[0] as string, args[1] as Record<string, unknown> | undefined);
       break;
     case 'trackPurchase':
-      trackCustomerEvent('purchase', {
-        value_native: args[0] as number,
-        currency: args[1] as string,
-        order_id: args[2] as string,
-        ...(args[3] !== undefined ? { items_count: args[3] as number } : {}),
-      });
+    case 'trackAddToCart':
+    case 'trackBeginCheckout':
+    case 'trackShippingInfo':
+    case 'trackPaymentInfo':
+    case 'trackLead':
+    case 'trackSignUp':
+      runHelper(method, args);
       break;
     case 'consent':
       consentMod.consent.setState(args[0] as ConsentState);
@@ -553,6 +648,11 @@ interface LiftedProps {
   currency?: string;
   order_id?: string;
   items_count?: number;
+  purchase_type?: NonNullable<PixelEvent['purchase_type']>;
+  parent_order_id?: string;
+  cart_id?: string;
+  page_type?: NonNullable<PixelEvent['page_type']>;
+  items?: Item[];
 }
 
 function liftReservedProps(props: Record<string, unknown>): {
@@ -571,11 +671,21 @@ function liftReservedProps(props: Record<string, unknown>): {
           (lifted as Record<string, number>)[key] = value;
         }
         break;
+      case 'purchase_type':
+        if (value === 'initial' || value === 'upsell') lifted.purchase_type = value;
+        break;
       case 'currency':
       case 'order_id':
+      case 'parent_order_id':
+      case 'cart_id':
+      case 'page_type':
         if (typeof value === 'string' && value.length > 0) {
           (lifted as Record<string, string>)[key] = value;
         }
+        break;
+      case 'items':
+        // PRD-006: items ride top-level (props is a flat string map); the edge validates them.
+        if (Array.isArray(value)) lifted.items = value as Item[];
         break;
       default:
         rest[key] = value;
@@ -1062,6 +1172,7 @@ function guardedInit(phase: string, fn: () => void): void {
 /** Test reset hook. Forgets `_alreadyHydrated`, clears in-memory state. */
 export function __resetForTests(): void {
   _pendingEvents = [];
+  _deferredTrackCalls = [];
   _reportedNoSessionDrops = 0;
   _heldEvents = [];
   _consentReplayUnsub?.();

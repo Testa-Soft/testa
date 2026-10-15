@@ -97,7 +97,7 @@ describe('sliding 60-minute session (unit)', () => {
     sessions.ensureSession(17, 170, T0);
     const { started, session } = sessions.ensureSession(17, 170, T0 + 2 * 24 * 60 * MIN);
     expect(started).toBe(true);
-    expect(session.sessionIdx).toBe(2);
+    expect(session?.sessionIdx).toBe(2);
     expect(sessions.ensureSession(17, 170, T0 + 2 * 24 * 60 * MIN + MIN).started).toBe(false);
   });
 

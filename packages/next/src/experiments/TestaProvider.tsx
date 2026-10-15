@@ -41,7 +41,13 @@ import {
   installTestaGlobal,
 } from '@testa-soft/dom';
 import { ASSIGNMENT_COOKIE, UUID_COOKIE, resolveExposures } from '@testa-soft/experiment-core';
-import { DocumentCookieStore, emitExposure, initTesta, preloadConfig } from '@testa-soft/react';
+import {
+  DocumentCookieStore,
+  emitExposure,
+  initTesta,
+  preloadConfig,
+  startPrd006Tracking,
+} from '@testa-soft/react';
 import { usePathname } from 'next/navigation.js';
 import { useEffect, useRef, useState } from 'react';
 import { readClientCookie } from '../client-cookie.ts';
@@ -94,6 +100,11 @@ export interface TestaProviderProps {
   trackingHost?: string;
   /** `Secure` on client-written cookies. Default true; false for local http dev. */
   secureCookies?: boolean;
+  /**
+   * PRD-006: edge worker `/track` URL that `track*` helpers and v2
+   * `experiment_view` events post to. Default same-origin `/track`.
+   */
+  eventsEndpoint?: string;
   /**
    * Cookie `Domain` for client-written cookies. Pass the SAME value the proxy
    * uses (`cookieDomain` / `discoverRootDomain`) — a mismatch writes a
@@ -181,6 +192,20 @@ export function TestaProvider(props: TestaProviderProps): null {
       }
       if (cancelled) return;
 
+      // PRD-006 (v2 experiments only): re-init experiment sessions on any page,
+      // and send experiment_view through `track` on variation_applied — wired
+      // BEFORE either path below emits. No-op for projects without v2.
+      teardowns.push(
+        startPrd006Tracking({
+          config,
+          store: new DocumentCookieStore({
+            secure: props.secureCookies ?? true,
+            ...(props.cookieDomain ? { domain: props.cookieDomain } : {}),
+          }),
+          ...(props.eventsEndpoint ? { endpoint: props.eventsEndpoint } : {}),
+        }),
+      );
+
       const currentUrl = typeof window !== 'undefined' ? window.location.href : '';
       const assignmentCookie = readClientCookie(ASSIGNMENT_COOKIE);
 
@@ -207,7 +232,7 @@ export function TestaProvider(props: TestaProviderProps): null {
         }
         // A redirect is in flight: leave the shield UP, the page is leaving.
         if (result.redirected) return;
-        teardowns = result.teardowns;
+        teardowns = [...teardowns, ...result.teardowns];
         revealShield();
         return;
       }
