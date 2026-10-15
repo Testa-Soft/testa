@@ -80,7 +80,9 @@ registerView('distributions', {
       reportCurrency,
     };
     const keys = params.distributions ?? DISTRIBUTION_KEYS;
-    const wantsCap = params.cap_outliers === true && keys.includes('order_value');
+    // The cap clamps the order-value histogram and is reported as `capped` (R4)
+    // whenever cap_outliers is set, whichever distributions were asked for.
+    const wantsCap = params.cap_outliers === true;
     const [events, cap] = await Promise.all([
       fetchDistributionEvents(ctx.query, scope),
       wantsCap ? fetchOrderCap(ctx.query, scope) : Promise.resolve(undefined),
@@ -95,6 +97,7 @@ registerView('distributions', {
       events,
       ...(params.order_value_bins === undefined ? {} : { bins: params.order_value_bins }),
       ...(cap === undefined ? {} : { cap }),
+      ...(wantsCap ? { capOutliers: true } : {}),
     });
   },
 });

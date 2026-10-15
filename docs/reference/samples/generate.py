@@ -672,7 +672,7 @@ def products(M, limit=8, purchase_type="all"):
             "sort": "control_revenue", "limit": limit, "offset": 0, "total_products": len(order), "products": out}
 
 
-def distributions(M, bins=None):
+def distributions(M, bins=None, capped=False):
     var_of = {vid: M["exposed"][vid]["variation_id"] for vid in M["exposed"]}
     D = {k: {str(v): defaultdict(int) for v in M["variations"]} for k in ("payment_type", "coupon", "currency")}
     vals = {str(v): [] for v in M["variations"]}
@@ -699,11 +699,17 @@ def distributions(M, bins=None):
         for x in l:
             i = max(i for i, b in enumerate(bins) if x >= b); cnt[i] += 1
         hist[v] = [{"from": b, "to": bins[i + 1] if i + 1 < len(bins) else None, "count": c, "share": r6(c / len(l)) if l else None} for i, (b, c) in enumerate(zip(bins, cnt))]
-    return {"experiment_id": M["exp_id"], "from": M["frm"], "to": M["to"], "report_currency": M["ccy"],
+    out = {"experiment_id": M["exp_id"], "from": M["frm"], "to": M["to"], "report_currency": M["ccy"],
             "distributions": {"payment_type": {"basis": "add_payment_info events", "by_variation": fmt(D["payment_type"])},
                               "coupon": {"basis": "initial orders", "by_variation": fmt(D["coupon"])},
                               "currency": {"basis": "initial orders", "by_variation": fmt(D["currency"])},
                               "order_value": {"basis": "initial orders", "bins": bins, "by_variation": hist}}}
+    if capped:
+        # R4: initial orders above the pooled p99 cap (M["cap"]), per variation. Opt-in: goldens are uncapped.
+        has_orders = any(vals.values())
+        out["capped"] = {"threshold": round(M["cap"], 2) if has_orders else 0,
+                         "by_variation": {v: sum(1 for x in l if has_orders and x > M["cap"]) for v, l in vals.items()}}
+    return out
 
 
 EVENT_PARAM_SPEC = {
