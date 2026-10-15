@@ -1,4 +1,4 @@
-/** JSON + Markdown run report (`.artifacts/report.{json,md}`). */
+/** JSON + Markdown run report (`node_modules/.cache/e2e-cross/report.{json,md}`). */
 
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';

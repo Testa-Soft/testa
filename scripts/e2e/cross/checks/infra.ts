@@ -67,7 +67,7 @@ export const infraChecks: readonly CheckDef[] = [
       const pid = new PidFile(cfg.artifactsDir).read().consumer;
       return pid !== undefined && isAlive(pid)
         ? pass(`pid ${pid}`)
-        : fail('consumer not running (see .artifacts/logs/consumer.log)');
+        : fail('consumer not running (see node_modules/.cache/e2e-cross/logs/consumer.log)');
     },
   },
   {
@@ -95,7 +95,7 @@ export const infraChecks: readonly CheckDef[] = [
       if (status?.edge === 'running') return pass('GET /health 200');
       if (status?.edge === 'disabled') return pending('X0', 'edge disabled with --no-edge');
       return fail(
-        `edge ${status?.edge ?? 'unknown'}: ${status?.edgeNote ?? ''} (see .artifacts/logs/edge.log)`,
+        `edge ${status?.edge ?? 'unknown'}: ${status?.edgeNote ?? ''} (see node_modules/.cache/e2e-cross/logs/edge.log)`,
       );
     },
   },

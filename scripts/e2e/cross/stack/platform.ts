@@ -144,7 +144,7 @@ async function startProc(
     logFile: join(cfg.logsDir, `${name}.log`),
   });
   new PidFile(cfg.artifactsDir).set(name, pid);
-  log(`started ${name} (pid ${pid}, log .artifacts/logs/${name}.log)`);
+  log(`started ${name} (pid ${pid}, log node_modules/.cache/e2e-cross/logs/${name}.log)`);
   return pid;
 }
 

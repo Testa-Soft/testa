@@ -97,7 +97,7 @@ export const syncChecks: readonly CheckDef[] = [
         { timeoutMs: 90_000, intervalMs: 3_000, rethrow: (e) => e instanceof PendingError },
       ).catch((err: Error) => {
         throw new Error(
-          `${err.message} — either the modeler sends no webhook (P4) or crobot's receiver/job didn't run (CB); see .artifacts/logs/modeler.log and crobot storage/logs/laravel.log`,
+          `${err.message} — either the modeler sends no webhook (P4) or crobot's receiver/job didn't run (CB); see node_modules/.cache/e2e-cross/logs/modeler.log and crobot storage/logs/laravel.log`,
         );
       });
       return pass(

@@ -4,7 +4,7 @@
  *
  * Brings up the real processes of both systems (testa-platform collector +
  * consumer + modeler + edge on the host, crobot e2e app in its own containers),
- * runs every check layer against them, writes `.artifacts/report.{json,md}`
+ * runs every check layer against them, writes `node_modules/.cache/e2e-cross/report.{json,md}`
  * and tears everything down unless `--keep-up`. No mocks at the boundary.
  *
  * Exit code: 1 if any check fails (or, with --strict, is pending); else 0.
@@ -143,7 +143,7 @@ async function main(): Promise<number> {
       [...done.values()],
     );
     log(
-      `${summary.pass} pass · ${summary.fail} fail · ${summary.pending} pending ${JSON.stringify(summary.pendingByPackage)} → scripts/e2e/cross/.artifacts/report.md`,
+      `${summary.pass} pass · ${summary.fail} fail · ${summary.pending} pending ${JSON.stringify(summary.pendingByPackage)} → node_modules/.cache/e2e-cross/report.md`,
     );
     if (args.keepUp) {
       log(

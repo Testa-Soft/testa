@@ -8,5 +8,5 @@
     "types": ["bun"]
   },
   "include": ["./**/*.ts"],
-  "exclude": [".artifacts"]
+  "exclude": []
 }

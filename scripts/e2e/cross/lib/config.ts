@@ -9,7 +9,7 @@
  *   - Crobot      compose project `crobot-e2e` (crb-e2e-web :8188, crb-e2e-worker), MySQL `crobot_e2e`
  *
  * Secrets are local throwaway values generated on first run and persisted in
- * `.artifacts/secrets.json` so `--keep-up` stacks and later runs agree.
+ * `node_modules/.cache/e2e-cross/secrets.json` so `--keep-up` stacks and later runs agree.
  */
 
 import { randomBytes } from 'node:crypto';
@@ -95,7 +95,7 @@ function loadSecrets(artifactsDir: string): Secrets {
 }
 
 export function buildConfig(args: CliArgs): HarnessConfig {
-  const artifactsDir = join(harnessRoot, 'scripts', 'e2e', 'cross', '.artifacts');
+  const artifactsDir = join(harnessRoot, 'node_modules', '.cache', 'e2e-cross');
   const logsDir = join(artifactsDir, 'logs');
   const screenshotsDir = join(artifactsDir, 'screenshots');
   for (const dir of [artifactsDir, logsDir, screenshotsDir, join(artifactsDir, 'configs')]) {
