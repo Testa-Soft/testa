@@ -17,7 +17,7 @@ import {
   buildExposedVisitors,
   dimColumn,
 } from '../analytics/attribution.ts';
-import { withFx } from './fx.ts';
+import { withFx } from '../fx/sql.ts';
 import { BUILTIN_KEY_SQL, type KeySql, type ParsedKey } from './metric-keys.ts';
 
 export interface DailyRowsQueryParams extends AttributionScope {
@@ -199,6 +199,19 @@ export function buildCapQuery(p: AttributionScope & { reportCurrency: string }):
 SELECT quantileExactInclusive(0.99)(m) AS cap, count() AS orders
 FROM (${moneyEvents(attributed.sql, undefined)}) AS c
 WHERE purchase_type = 'initial'`,
+    params: { ...attributed.params, report_currency: p.reportCurrency },
+  };
+}
+
+/** Attributed orders whose currency has no usable rate (left out of money sums). */
+export function buildUnconvertibleQuery(
+  p: AttributionScope & { reportCurrency: string },
+): SqlQuery {
+  const attributed = buildAttributedEvents({ ...p, eventNames: ['purchase'] });
+  return {
+    sql: `
+SELECT sum(fx_unconvertible) AS n
+FROM (${withFx(attributed.sql)}) AS u`,
     params: { ...attributed.params, report_currency: p.reportCurrency },
   };
 }
