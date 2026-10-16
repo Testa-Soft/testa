@@ -17,7 +17,7 @@ TypeScript oracle (`scripts/e2e/prd006/oracle.ts`, a port of `docs/reference/sam
 | V7 | Stats endpoint | F3 + F2 | ✅ pass | 6/6 | 0.1 s |
 | V8 | API contract | — | ✅ pass | 7/7 | 24.2 s |
 | V9 | Pixel in a browser | fixture page | ✅ pass | 1/1 | 8.0 s |
-| V10 | Performance | generated 200k visitors | ⏭️ skipped | 0/1 | 0.0 s |
+| V10 | Performance | generated 200k visitors | ❌ fail (stats p95 308–340 ms) | 4/5 | ~10 min |
 | V11 | Repo health | — | ✅ pass | 4/4 | 12.2 s |
 | V12 | V2 dashboard values | F1 + F2 | ❌ fail | 3/4 | 1.1 s |
 | V13 | Products + distributions views | F1 + F2 | ✅ pass | 5/5 | 1.3 s |
@@ -197,17 +197,17 @@ pnpm --filter @testa-platform/pixel test:e2e -g prd006 --workers=1
 
 Redis defaults to `redis://localhost:6380/12` (`PRD006_REDIS_URL`); the webhook receiver binds `port + 100`.
 
-## V10 performance — unverified
+## V10 performance (rerun 2026-10-16, after Docker restart)
 
-Run as `--only V10` with `PRD006_PERF=1`; three back-to-back runs were planned, minimum p95 as the estimate.
+`PRD006_PERF=1 PRD006_CLICKHOUSE_DATABASE=prd006_p6 pnpm prd006:validate --port 8093 --only V10`, three back-to-back runs on `feat/prd006` (P6b merged). No other harness running; Docker VM ~2.5 cores busy during ingest (ClickHouse merges), PhpStorm/Chrome open.
 
-| Run | Start (1-min load) | Result |
-|---|---|---|
-| 1 | 01:55 (9.31) | ingest of 200k visitors failed after ~123 s: `/_ingest returned 503: redis unavailable`; modeler wait timed out (daily-summary → 500); dimension query → 500. Stats 20×3 p95 **300 ms** displayed (passed `< 300`, so 299.x ms). daily-summary p95 3 ms is not meaningful (fast 500s). |
-| 2 | 02:07 (2.49) | did not start: Docker daemon down (`docker compose up` → cannot connect to the Docker daemon) |
-| 3 | 02:07 (2.49) | same as run 2 |
+| Run | 1-min load at start | Ingest (1,188,714 events) | Modeler (22 keys, 14 d) < 120 s | daily-summary p95 < 200 ms | 1-dim summary < 60 s | **stats 20×3 p95 < 300 ms** |
+|---|---|---|---|---|---|---|
+| 1 | 4.8 | 655 s | 2.2 s ✅ | 24 ms ✅ | 1.5 s ✅ | **310 ms ❌** |
+| 2 | 5.5 | 521 s | 2.2 s ✅ | 28 ms ✅ | 1.5 s ✅ | **340 ms ❌** |
+| 3 | 10.0 | 461 s | 2.2 s ✅ | 15 ms ✅ | 1.2 s ✅ | **308 ms ❌** |
 
-The Docker daemon stopped during run 1's ~2M-event ingest (cause not established: Docker VM memory pressure is plausible; another session stopping it is not ruled out). **V10 is unverified.** The only usable number is the stateless stats endpoint, p95 ≈ 299 ms at load ~9, at the PRD's 300 ms limit. Rerun V10 three times on a quiet machine with Docker healthy (check the Docker VM memory limit first).
+**Result:** four of five V10 bounds pass with wide margins. The stats endpoint misses the 300 ms p95 by 3–13 % on every run. It is pure CPU in the collector (20 metrics × 3 variations × 100k draws ≈ 6M posterior samples: seeded xoshiro128**, Marsaglia–Tsang gamma, one-pass summary, O(n) selection). The earlier "~299 ms" reading was at the same limit. This is the cost of the spec'd draw count, not a regression. Closing the gap needs a spec decision (for the human): (a) relax the bound to e.g. p95 < 400 ms for 20×3 at 100k draws, (b) lower `FULL_DRAWS` (Monte-Carlo error at 50k is still < 0.5 pp on chance-to-beat), or (c) a normal approximation for large-count Beta posteriors. (b) and (c) change the seeded goldens.
 
 ## Open items
 
@@ -220,5 +220,5 @@ The Docker daemon stopped during run 1's ~2M-event ingest (cause not established
    | 2002 / 402 | 12.757203614 | 12.757199849 | −3.8e-6 |
 
    Tolerance left as specified and reported as FAIL. Suggested spec change: ±0.01 × rows / visitors (half a cent per contributing row, normalised per visitor).
-2. **V10** — rerun on a quiet machine (above).
+2. **V10 stats p95** — 308–340 ms vs < 300 ms on three runs; spec decision needed (above).
 3. Carried from P6 part A (human queue): health count 2 vs golden 1; page-gated apply; hourly `_pixel_health`; cross-origin sendBeacon (see `docs/prds/006-ecommerce-events-and-metric-modeling.md` → Open questions).
