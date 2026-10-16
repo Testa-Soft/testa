@@ -143,7 +143,7 @@ platform_version?: 'v1' | 'v2';   // absent = 'v1'
 
 ### Lookup by numeric `project_id` (config alias)
 
-Crobot publishes configs to `POST /api/v1/config/{projectUuid}`, so they are stored under the UUID. Events, subscriptions and the sync API carry the numeric `ProjectConfig.project_id`, so every save also writes an alias `{CONFIG_DIR}/_by-project-id/{project_id}.json` → `{ "key": "<store key>" }`, and the collector resolves configs by numeric id through it (falling back to a config stored under the numeric id itself; an alias whose target now has another `project_id` is ignored). `GET /api/v1/config/{numericId}` is unchanged (404 unless stored under that key). Configs published before the alias existed need one re-publish — P4-fix1 `b9681b3`.
+Crobot publishes configs to `POST /api/v1/config/{projectUuid}`, so they are stored under the UUID. Events, subscriptions and the sync API carry the numeric `ProjectConfig.project_id`, so every save also writes an alias (file store: `{CONFIG_DIR}/_by-project-id/{project_id}.json` → `{ "key": "<store key>" }`; Redis store: `testa:config:by-project-id:{project_id}` → `<store key>`), and the collector resolves configs by numeric id through it (falling back to a config stored under the numeric id itself; an alias whose target now has another `project_id` is ignored). `GET /api/v1/config/{numericId}` is unchanged (404 unless stored under that key). Configs published before the alias existed need one re-publish — P4-fix1 `b9681b3`.
 
 ### `weight`
 

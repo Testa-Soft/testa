@@ -11,7 +11,7 @@
  */
 import IORedis from 'ioredis';
 import { config } from '../config.ts';
-import { fileConfigStore } from '../config/store.ts';
+import { createConfigStore } from '../config/select.ts';
 import { modelerClickHouse } from './ch.ts';
 import type { ModelerContext } from './context.ts';
 import { modelerKeys } from './keys.ts';
@@ -30,7 +30,7 @@ export function createModelerContext(): ModelerContext & { close: () => Promise<
     keys: modelerKeys(config.modeler.keyPrefix),
     query: ch.query,
     insert: ch.insert,
-    configStore: fileConfigStore(config.configDir),
+    configStore: createConfigStore(config.configStore, () => redis),
     webhook: config.webhook.url ? createWebhookSender(config.webhook) : noWebhooks,
     settings: config.modeler,
     now: Date.now,

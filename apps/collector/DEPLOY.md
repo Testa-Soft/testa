@@ -7,7 +7,9 @@ crobot writes to:
 - `GET  /api/v1/config/{projectId}` — read it (what the SDK/middleware fetches).
 
 Configs are stored as static `{projectId}.json` files under `CONFIG_DIR`, which
-is a Fly **volume** so they survive deploys/restarts.
+is a Fly **volume** so they survive deploys/restarts (`CONFIG_STORE=file`, the default).
+A deployment that runs the modeler / sync API on other machines must use
+`CONFIG_STORE=redis` instead (see `docs/architecture/02-collector.md`).
 
 > This instance can also run ingest/metrics if you set `CLICKHOUSE_URL` +
 > `REDIS_URL`, but for "just upload + serve configs" you don't need them.

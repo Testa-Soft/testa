@@ -12,8 +12,9 @@
 
 import { Hono } from 'hono';
 import { config } from './config.ts';
+import { migrateFileConfigs } from './config/migrate.ts';
 import { makeConfigGetHandler, makeConfigPutHandler } from './config/route.ts';
-import { fileConfigStore } from './config/store.ts';
+import { createConfigStore } from './config/select.ts';
 import { ping as pingCh } from './db/clickhouse.ts';
 import { makeFxRatesHandler } from './fx/route.ts';
 import { syncToday } from './fx/sync.ts';
@@ -52,8 +53,24 @@ app.post('/_ingest', makeIngestHandler({ getRedis: () => redis() }));
 
 // Config API — testa-platform is the single source of truth for servable configs.
 // The upstream POSTs its project JSON on change; the collector builds + writes a
-// static `{projectId}.json` to the config bucket; @testa/next GETs it.
-const configStore = fileConfigStore(config.configDir);
+// config to the store (CONFIG_STORE: file dir or shared Redis); @testa/next GETs it.
+const configStore = createConfigStore(config.configStore, redis);
+if (config.configStore.kind === 'redis') {
+  // One-time: copy configs that only exist on the old file volume into Redis.
+  // Never fatal — a Redis blip at boot must not keep the API down.
+  try {
+    const result = await migrateFileConfigs({
+      dir: config.configStore.dir,
+      target: configStore,
+      log: (m) => console.log(`[config] ${m}`),
+    });
+    console.log(
+      `[config] file→redis migration: ${result.copied.length} copied, ${result.skipped.length} already present, ${result.failed.length} failed`,
+    );
+  } catch (err) {
+    console.error('[config] file→redis migration failed', { err: (err as Error).message });
+  }
+}
 app.post(
   '/api/v1/config/:projectId',
   makeConfigPutHandler({ store: configStore, writeToken: config.configWriteToken }),
