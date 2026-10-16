@@ -27,6 +27,11 @@ primary_region = "fra"
   ENVIRONMENT = "staging"
   PORT = "8090"
   CONFIG_DIR = "/app/.data/configs"
+  # Configs live in the shared Redis (REDIS_URL secret), so the app, the
+  # modeler and any replacement machine all see the same set. CONFIG_DIR is only
+  # the one-time migration source: on startup the app copies volume files that
+  # Redis lacks (idempotent, never overwrites).
+  CONFIG_STORE = "redis"
   CLICKHOUSE_URL = "http://testa-staging-clickhouse.internal:8123"
   CLICKHOUSE_USER = "testa"
   CLICKHOUSE_DATABASE = "testa"
@@ -41,7 +46,8 @@ primary_region = "fra"
   consumer = "bun run src/consumer/main.ts"
   modeler = "bun run src/modeler/main.ts"
 
-# The config bucket lives on the API machine only.
+# Legacy config volume, kept only as the source of the one-time file → Redis
+# migration on the app machine. Configs are served from Redis (CONFIG_STORE).
 [[mounts]]
   source = "staging_config"
   destination = "/app/.data/configs"

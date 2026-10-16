@@ -93,6 +93,18 @@ deploy/staging/provision.sh verify     # health + sync API auth probe
 The collector's release command applies ClickHouse migrations before each
 version starts (`bun run src/db/migrate.ts`, idempotent).
 
+**Configs live in Redis** (`CONFIG_STORE=redis` in `collector.fly.toml`, keys
+`testa:config:{uuid}` and `testa:config:by-project-id:{id}` in
+`testa-staging-redis`), so the app, the modeler and any replacement machine
+share one set and a lost machine/volume no longer loses them. The
+`staging_config` volume is only the source of a one-time migration: on startup
+the app copies any `{uuid}.json` there that Redis lacks (logged as
+`[config] file→redis migration: …`). If the volume is empty, re-publish each
+project from crobot (activate / save the experiment) to repopulate. Check:
+```sh
+fly ssh console --app testa-staging-redis -C "redis-cli -a \$REDIS_PASSWORD --scan --pattern 'testa:config:*'"
+```
+
 Useful:
 ```sh
 fly logs --app testa-collector-staging                    # all three processes
