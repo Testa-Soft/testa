@@ -1,0 +1,31 @@
+# Staging ClickHouse (PRD-006 analytics store). Private only: no public
+# service, reachable on Fly's private network as
+#   http://testa-staging-clickhouse.internal:8123
+# Same server version as the local stack the X1 acceptance ran on.
+#
+# One-time:
+#   fly apps create testa-staging-clickhouse
+#   fly volumes create ch_data --app testa-staging-clickhouse --region fra --size 10
+#   fly secrets set --app testa-staging-clickhouse CLICKHOUSE_PASSWORD=<from secrets.env>
+# Deploy:
+#   fly deploy --config deploy/staging/clickhouse.fly.toml
+
+app = "testa-staging-clickhouse"
+primary_region = "fra"
+
+[build]
+  image = "clickhouse/clickhouse-server:24.10-alpine"
+
+[env]
+  # The image creates this database and user on first start.
+  CLICKHOUSE_DB = "testa"
+  CLICKHOUSE_USER = "testa"
+  CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT = "1"
+
+[[mounts]]
+  source = "ch_data"
+  destination = "/var/lib/clickhouse"
+
+[[vm]]
+  size = "shared-cpu-2x"
+  memory = "4gb"

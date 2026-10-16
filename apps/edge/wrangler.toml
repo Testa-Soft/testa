@@ -41,6 +41,25 @@ enabled = true
 name = "testa-edge-staging"
 vars = { ENVIRONMENT = "staging" }
 
+# Bindings are not inherited by named environments: staging declares its own.
+# KV IDs come from `wrangler kv namespace create KV_PROJECT_CONFIG --env staging`
+# (and KV_INTEGRATION_BUNDLES); see deploy/staging/README.md.
+[[env.staging.kv_namespaces]]
+binding = "KV_PROJECT_CONFIG"
+id = "PLACEHOLDER_STAGING_PROJECT_CONFIG"
+
+[[env.staging.kv_namespaces]]
+binding = "KV_INTEGRATION_BUNDLES"
+id = "PLACEHOLDER_STAGING_BUNDLES"
+
+[[env.staging.durable_objects.bindings]]
+name = "BATCH_BUFFER"
+class_name = "BatchBuffer"
+
+[[env.staging.migrations]]
+tag = "v1"
+new_classes = ["BatchBuffer"]
+
 [env.production]
 name = "testa-edge"
 vars = { ENVIRONMENT = "production" }
