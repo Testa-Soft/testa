@@ -47,8 +47,7 @@ Platform data stack (Fly): **done** — `testa-staging-clickhouse`, `testa-stagi
 2. **Point the collector's webhooks at crobot** (once the Forge URL exists): set `CROBOT_WEBHOOK_URL` in
    `collector.fly.toml` to the crobot `APP_URL`, then `deploy/staging/provision.sh collector`. Optional: without it
    crobot's 15-minute cron still syncs.
-3. **Edge worker**: only needed for real pixel traffic; the simulator below posts straight to the collector.
-   Steps under "Edge worker" further down.
+3. **Edge worker**: **done** (`testa-edge-staging`, see "Edge worker" below); the simulator still posts straight to the collector.
 
 ## Test run with simulated traffic
 
@@ -109,7 +108,15 @@ deploy/staging/provision.sh collector
 
 ## Edge worker (Cloudflare)
 
-Needs `npx wrangler login` once (from `apps/edge`).
+**Live:** `https://testa-edge-staging.mbagdonas6.workers.dev` (pixel endpoint `/track`).
+KV ids are committed in `wrangler.toml` `[env.staging]`; secrets set: `INGEST_SHARED_SECRET`,
+`INGEST_ORIGIN_URL`, `VISITOR_ID_SALT` (random). `COOKIE_FALLBACK_DOMAIN` is unset: on `*.workers.dev`
+the edge cookie is not first-party anyway and `/track` does not depend on it. Staging uses a SQLite-backed
+Durable Object (`new_sqlite_classes`): the account rejects new KV-backed DO namespaces (CF code 10099),
+so `[env.production]` will need the same change before its first deploy.
+The staging site sends v2 events here via Vercel `NEXT_PUBLIC_TESTA_EVENTS_URL` (staging custom env only).
+
+Needs `npx wrangler login` once (from `apps/edge`). Re-deploy only needs the last command.
 
 ```sh
 cd apps/edge

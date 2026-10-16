@@ -46,19 +46,21 @@ vars = { ENVIRONMENT = "staging" }
 # (and KV_INTEGRATION_BUNDLES); see deploy/staging/README.md.
 [[env.staging.kv_namespaces]]
 binding = "KV_PROJECT_CONFIG"
-id = "PLACEHOLDER_STAGING_PROJECT_CONFIG"
+id = "afca10ee449e4b6fbb06ffe89783bfb5"
 
 [[env.staging.kv_namespaces]]
 binding = "KV_INTEGRATION_BUNDLES"
-id = "PLACEHOLDER_STAGING_BUNDLES"
+id = "afb9aea6cae546c2ad6e881738d9fccf"
 
 [[env.staging.durable_objects.bindings]]
 name = "BATCH_BUFFER"
 class_name = "BatchBuffer"
 
+# Staging uses a SQLite-backed DO: Cloudflare no longer allows creating new
+# KV-backed DO namespaces on this account (API code 10099).
 [[env.staging.migrations]]
 tag = "v1"
-new_classes = ["BatchBuffer"]
+new_sqlite_classes = ["BatchBuffer"]
 
 [env.production]
 name = "testa-edge"
