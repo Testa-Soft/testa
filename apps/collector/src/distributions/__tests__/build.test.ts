@@ -131,4 +131,21 @@ describe('order_value histogram', () => {
     });
     expect(buildDistributions(input(orders, { cap: 99.987 })).capped).toBeUndefined();
   });
+
+  it('V13: shares round half-to-even like the oracle (37/128 → 0.289062, 91/128 → 0.710938)', () => {
+    const payments = Array.from({ length: 128 }, (_, i) => ({
+      variation_id: 100,
+      visitor_id: `p${i}`,
+      kind: 'payment' as const,
+      payment_type: i < 37 ? 'card' : 'paypal',
+      coupon: '',
+      currency: 'EUR',
+      value: 0,
+      order: [i, i] as [number, number],
+    }));
+    const shares = buildDistributions(input(payments, { keys: ['payment_type'] })).distributions
+      .payment_type?.by_variation['100'];
+    expect(shares?.find((b) => b.value === 'card')?.share).toBe(0.289062);
+    expect(shares?.find((b) => b.value === 'paypal')?.share).toBe(0.710938);
+  });
 });

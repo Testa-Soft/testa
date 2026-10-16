@@ -13,6 +13,7 @@ import type {
   ProductsPurchaseType,
   ProductsSort,
 } from '@testa-platform/shared-types';
+import { roundHalfEven } from '../modeler/round.ts';
 import type { ItemGroup, OrderKey } from './query.ts';
 
 /** §6.5: a variant with fewer control units is `low_sample`. */
@@ -67,7 +68,8 @@ interface ProductAcc {
   by: Map<number, VariationAcc>;
 }
 
-const round = (x: number, dp: number): number => Math.round(x * 10 ** dp) / 10 ** dp;
+/** Python `round(x, dp)` parity (ties to even on the exact value), like the oracle. */
+const round = (x: number, dp: number): number => roundHalfEven(x, dp);
 const ratio6 = (a: number, b: number): number | null => (b ? round(a / b, 6) : null);
 
 function cmpSeen(a: Seen, b: Seen): number {
