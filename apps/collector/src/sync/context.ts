@@ -4,7 +4,7 @@
  */
 import type { SyncStatus } from '@testa-platform/shared-types';
 import { config } from '../config.ts';
-import { fileConfigStore } from '../config/store.ts';
+import { createConfigStore } from '../config/select.ts';
 import { insertRows, query } from '../db/clickhouse.ts';
 import type { ModelerContext } from '../modeler/context.ts';
 import { modelerKeys } from '../modeler/keys.ts';
@@ -27,7 +27,7 @@ export function defaultSyncContext(): SyncContext {
       keys: modelerKeys(config.modeler.keyPrefix),
       query: (sql, params) => query(sql, params),
       insert: insertRows,
-      configStore: fileConfigStore(config.configDir),
+      configStore: createConfigStore(config.configStore, redis),
       webhook: noWebhooks,
       settings: config.modeler,
       now: Date.now,

@@ -16,8 +16,10 @@ import type { ProjectConfig } from '@testa-platform/shared-types';
 
 const SAFE_PROJECT_ID = /^[A-Za-z0-9_-]+$/;
 
+export const isSafeProjectId = (projectId: string): boolean => SAFE_PROJECT_ID.test(projectId);
+
 export function assertSafeProjectId(projectId: string): void {
-  if (!SAFE_PROJECT_ID.test(projectId)) {
+  if (!isSafeProjectId(projectId)) {
     throw new Error(`unsafe projectId: ${projectId}`);
   }
 }

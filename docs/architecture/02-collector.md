@@ -41,7 +41,7 @@ bun run dev:consumer    # or production: bun src/consumer/main.ts
 bun run dev:modeler     # or production: bun src/modeler/main.ts  (--once / MODELER_ONCE=1: one pass)
 ```
 
-This split means write throughput (server), CH write rate (consumer) and modeling load (modeler) scale independently. The server and the modeler must share Redis, ClickHouse, `CONFIG_DIR` and `MODELER_KEY_PREFIX`.
+This split means write throughput (server), CH write rate (consumer) and modeling load (modeler) scale independently. The server and the modeler must share Redis, ClickHouse, the config store and `MODELER_KEY_PREFIX`. Whenever they run as separate processes/machines, use `CONFIG_STORE=redis` (configs under `testa:config:{key}` + `testa:config:by-project-id:{n}`, prefix `CONFIG_REDIS_PREFIX`); the default `CONFIG_STORE=file` (`CONFIG_DIR`, per-machine) only suits a single-machine / config-only deployment. With `redis`, the API copies `CONFIG_DIR` files missing from Redis into it on startup (idempotent, never overwrites).
 
 ## /_ingest write path
 

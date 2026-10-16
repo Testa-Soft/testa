@@ -40,6 +40,16 @@ const envSchema = z.object({
    * events) to. Served statically from here.
    */
   CONFIG_DIR: z.string().default('.data/configs'),
+  /**
+   * Where configs live. `redis` (REDIS_URL) is shared by every process and
+   * machine — required when the modeler / sync API run apart from the API
+   * (staging). `file` (CONFIG_DIR) is the default so config-only deployments
+   * without Redis (production `testa-collector`) and local dev keep working.
+   * With `redis`, the API copies CONFIG_DIR files missing from Redis on startup.
+   */
+  CONFIG_STORE: z.enum(['file', 'redis']).default('file'),
+  /** Redis key prefix for configs (`{prefix}{key}`, `{prefix}by-project-id:{n}`). */
+  CONFIG_REDIS_PREFIX: z.string().min(1).default('testa:config:'),
 
   /**
    * Shared secret required on `POST /api/v1/config/*` (the config WRITE path).
@@ -133,6 +143,11 @@ export const config = {
   },
 
   configDir: parsed.CONFIG_DIR,
+  configStore: {
+    kind: parsed.CONFIG_STORE,
+    dir: parsed.CONFIG_DIR,
+    redisPrefix: parsed.CONFIG_REDIS_PREFIX,
+  },
   configWriteToken: parsed.CONFIG_WRITE_TOKEN,
 
   modeler: {
