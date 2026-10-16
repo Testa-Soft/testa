@@ -145,6 +145,25 @@ describe('@testa-soft/next track (v2)', () => {
     expect(named('add_payment_info')).toEqual([]);
   });
 
+  it('conversion lifts goal_id to the top level (ClickHouse goal_id column)', () => {
+    const id = nextId++;
+    start(config(id, 'v2'), `${id}.1.0.0`);
+    track('conversion', {
+      goal_id: 510,
+      action: '#cta',
+      experiment_id: id,
+      variation_id: 1,
+      label: 'x',
+    });
+    expect(named('conversion')[0]).toMatchObject({
+      goal_id: 510,
+      experiment_id: id,
+      variation_id: 1,
+      props: { action: '#cta', label: 'x' },
+      exp: [[id, 1, T0_SEC, 1]],
+    });
+  });
+
   it('experiment_view only on a page the experiment runs on', () => {
     const id = nextId++;
     start(config(id, 'v2', [{ match_type: 'contains', url_pattern: '/elsewhere' }]), `${id}.1.0.0`);

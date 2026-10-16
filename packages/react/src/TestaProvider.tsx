@@ -53,7 +53,7 @@ import { DocumentCookieStore } from './cookie-store.ts';
 import { initTesta } from './init.ts';
 import { configNeedsShield, readShieldHint, writeShieldHint } from './shield-hint.ts';
 import { installSpaNav } from './spa-nav.ts';
-import { startPrd006Tracking } from './track.ts';
+import { startPrd006Tracking, trackPageView } from './track.ts';
 import { buildAssignmentMap } from './use-variant.ts';
 
 export interface TestaProviderProps {
@@ -206,6 +206,8 @@ export function TestaProvider(props: TestaProviderProps): JSX.Element {
         return;
       }
       teardowns = [...teardowns, ...result.teardowns];
+      // PRD-006 lifecycle events (once per route), after the variant applied.
+      trackPageView();
       setValue({ config, assignments: buildAssignmentMap(store.get(ASSIGNMENT_COOKIE)) });
       setSettled(true); // shield revealed post-commit (pre-paint effect below), after the variant paints
     };

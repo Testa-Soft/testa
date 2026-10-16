@@ -47,6 +47,7 @@ import {
   initTesta,
   preloadConfig,
   startPrd006Tracking,
+  trackPageView,
 } from '@testa-soft/react';
 import { usePathname } from 'next/navigation.js';
 import { useEffect, useRef, useState } from 'react';
@@ -234,6 +235,7 @@ export function TestaProvider(props: TestaProviderProps): null {
         if (result.redirected) return;
         teardowns = [...teardowns, ...result.teardowns];
         revealShield();
+        trackPageView();
         return;
       }
 
@@ -308,6 +310,8 @@ export function TestaProvider(props: TestaProviderProps): null {
           nowSec,
         ),
       );
+      // PRD-006 lifecycle events, after apply so the view lands in the session.
+      trackPageView();
     })().catch(() => {
       revealShield();
     });
