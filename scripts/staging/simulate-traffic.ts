@@ -9,7 +9,7 @@
  *   --days <n>         spread exposures over the last n days (default 14)
  *   --lift <id=m,…>    funnel-entry multiplier per variation (default 1.10 for every non-control)
  *   --seed <n>         generator seed (default: current minute, so reruns add new visitors)
- *   --domain <host>    host in page URLs (default staging-shop.testa-soft.tech)
+ *   --domain <host>    host in page URLs (default testa-web-native-landing-git-staging-testa-8da30fbe.vercel.app)
  *   --collector <url>  default https://testa-collector-staging.fly.dev
  *   --dry-run          generate and print the summary, send nothing
  *
@@ -139,7 +139,7 @@ async function main(): Promise<void> {
     nowMs,
     lift: parseLift(values.lift, variations),
     seed,
-    domain: values.domain ?? 'staging-shop.testa-soft.tech',
+    domain: values.domain ?? 'testa-web-native-landing-git-staging-testa-8da30fbe.vercel.app',
   });
   console.log(
     `project ${config.project_id} (${project}) · experiment ${experiment} · variations ${variations.join(', ')} (control ${variations[0]}) · seed ${seed}`,
