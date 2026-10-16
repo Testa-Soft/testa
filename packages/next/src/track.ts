@@ -11,6 +11,7 @@ export {
   trackAddToCart,
   trackBeginCheckout,
   trackLead,
+  trackPageView,
   trackPaymentInfo,
   trackPurchase,
   trackShippingInfo,

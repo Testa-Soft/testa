@@ -26,6 +26,7 @@ import {
   activeExpSessions,
   addToCart,
   beginCheckout,
+  isCrawlerUserAgent,
   lead,
   matchesPageRule,
   parsePacked,
@@ -43,7 +44,10 @@ export const SDK_TRACKER_VERSION = 'sdk-prd006';
 export const DEFAULT_EVENTS_ENDPOINT = '/track';
 const SESSION_ID_COOKIE = '_testa_sid';
 const SESSION_ID_TTL_SEC = 30 * 60;
-const SESSIONLESS = new Set(['experiment_view']);
+/** Sent even with no active experiment session (`in_experiment = 0`), like the pixel's page_view. */
+const SESSIONLESS = new Set(['experiment_view', 'page_view', 'session_start']);
+/** Top-level ClickHouse columns besides LIFTED_EVENT_KEYS (goal conversions carry `goal_id`). */
+const TOP_LEVEL_KEYS = new Set(['experiment_id', 'variation_id', 'goal_id']);
 
 interface Tracker {
   projectId: number;
@@ -51,6 +55,8 @@ interface Tracker {
   store: CookieStore;
   v2: Set<number>;
   send: (events: PixelEvent[]) => void;
+  /** No `_testa_sid` when tracking started this route → the next page view opens a session. */
+  newSession: boolean;
 }
 
 let _tracker: Tracker | null = null;
@@ -138,11 +144,7 @@ function buildEvent(
   const rest: Record<string, string | number | boolean | null> = {};
   for (const [k, v] of Object.entries(props)) {
     if (v === undefined) continue;
-    if (
-      (LIFTED_EVENT_KEYS as readonly string[]).includes(k) ||
-      k === 'experiment_id' ||
-      k === 'variation_id'
-    ) {
+    if ((LIFTED_EVENT_KEYS as readonly string[]).includes(k) || TOP_LEVEL_KEYS.has(k)) {
       lifted[k] = v;
     } else if (
       v === null ||
@@ -226,6 +228,23 @@ export const trackLead = (opts: { lead_type?: string; form_id?: string } = {}): 
   run(() => lead(opts));
 export const trackSignUp = (opts: { method?: string } = {}): void => run(() => signUp(opts));
 
+/**
+ * `session_start` (first page view of a new session) then `page_view` for the
+ * current URL — the pixel's lifecycle events (PRD-002). Call once per route,
+ * AFTER the variation is applied, so the view lands inside the experiment
+ * session. Crawlers send nothing.
+ */
+export function trackPageView(): void {
+  const t = _tracker;
+  if (!t) return;
+  if (typeof navigator !== 'undefined' && isCrawlerUserAgent(navigator.userAgent)) return;
+  if (t.newSession) {
+    _tracker = { ...t, newSession: false };
+    track('session_start');
+  }
+  track('page_view');
+}
+
 export interface Prd006TrackingOptions {
   config: ProjectConfig;
   store: CookieStore;
@@ -249,6 +268,7 @@ export function startPrd006Tracking(opts: Prd006TrackingOptions): () => void {
     store: opts.store,
     v2,
     send: opts.send ?? defaultSend(endpoint),
+    newSession: !opts.store.get(SESSION_ID_COOKIE),
   };
   if (v2.size === 0) return () => undefined;
   try {
