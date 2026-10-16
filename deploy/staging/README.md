@@ -28,6 +28,47 @@ crobot staging (Forge) ◀──▶ testa-collector-staging (Fly, *.fly.dev)
 
 Branch: `staging` (= `main` + `feat/prd006`). Deploy only from it.
 
+## Setup checklist
+
+Platform data stack (Fly): **done** — `testa-staging-clickhouse`, `testa-staging-redis`,
+`testa-collector-staging` are live; `provision.sh verify` and `smoke.ts` pass.
+
+1. **crobot on Forge** (crobot repo, branch `staging`, full guide `docs/deploy/staging.md`):
+   - [ ] Server: PHP 8.2, MySQL 8, Redis, Node 20. Site root `public/`, branch `staging`, Let's Encrypt.
+   - [ ] Environment: paste `docs/deploy/staging.env.example`; fill `APP_KEY`, `APP_URL`/`TRACKING_URL`/`FRONTEND_URL`, `DB_*`,
+         `STAGING_SEED_EMAIL`/`STAGING_SEED_PASSWORD` (≥ 12 chars), and from `~/.config/testa-staging/secrets.env`:
+         `TESTA_COLLECTOR_TOKEN` = `CONFIG_WRITE_TOKEN`, `TESTA_METRICS_TOKEN` = `SERVICE_TOKEN`,
+         `TESTA_ANALYTICS_WEBHOOK_SECRET` = `CROBOT_WEBHOOK_SECRET`. Keep `APP_ENV=staging`, `TESTA_ANALYTICS_MOCK=false`,
+         `TESTA_COLLECTOR_API_URL=https://testa-collector-staging.fly.dev`.
+   - [ ] Deploy script from the guide (includes `adminlte:install --only=assets`, migrate, caches, `queue:restart`).
+   - [ ] Queue worker: connection `redis`, queue `default` (not Horizon: it has no `staging` supervisor).
+   - [ ] Scheduler: `php artisan schedule:run` every minute.
+   - [ ] First deploy, then `php artisan db:seed --class=StagingSeeder --force`.
+2. **Point the collector's webhooks at crobot** (once the Forge URL exists): set `CROBOT_WEBHOOK_URL` in
+   `collector.fly.toml` to the crobot `APP_URL`, then `deploy/staging/provision.sh collector`. Optional: without it
+   crobot's 15-minute cron still syncs.
+3. **Edge worker**: only needed for real pixel traffic; the simulator below posts straight to the collector.
+   Steps under "Edge worker" further down.
+
+## Test run with simulated traffic
+
+1. Log in to crobot staging, create (or use the seeded) **v2** A/B test on the staging project, add its goals, **activate** it.
+   Activating pushes the config to the staging collector and subscribes the experiment.
+2. Note the project **UUID** (Team → project, or the `projects/<uuid>.js` script name) and the experiment **identifier**.
+3. Check the collector serves it: `curl https://testa-collector-staging.fly.dev/api/v1/config/<uuid>` lists the experiment
+   with `"platform_version":"v2"`.
+4. Feed traffic (≈ 5000 visitors per variation over 14 days ≈ 25k events per variation):
+   ```sh
+   set -a; . ~/.config/testa-staging/secrets.env; set +a
+   bun scripts/staging/simulate-traffic.ts --project <uuid> --experiment <identifier> --dry-run   # preview counts
+   bun scripts/staging/simulate-traffic.ts --project <uuid> --experiment <identifier>
+   # options: --visitors 5000 --days 14 --lift 1=1.15,2=0.95 --seed 7
+   ```
+   Variations and the numeric project id come from the served config, so they always match crobot. Each run uses a new
+   seed (new visitors) unless `--seed` is given; rerunning the same seed resends the same events.
+5. Within ~5 min the modeler builds the daily rows (`MODELER_INTERVAL_SEC=300`); crobot picks them up on its 15-minute
+   cron, via the webhook, or `php artisan analytics:sync <experiment id> --wait=6`. All Analytics V2 tabs then fill in.
+
 ## Secrets
 
 Generated once into `~/.config/testa-staging/secrets.env` (mode 600, never
