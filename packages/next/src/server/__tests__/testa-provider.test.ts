@@ -98,6 +98,21 @@ describe('TestaProvider (server component)', () => {
     expect('previewApiUrl' in (el as { props: object }).props).toBe(false);
   });
 
+  it('passes eventsEndpoint through to the client component (PRD-006 cross-origin /track)', async () => {
+    const el = await TestaProvider({
+      config: CONFIG,
+      eventsEndpoint: 'https://edge.example/track',
+    });
+    expect((el as { props: { eventsEndpoint?: string } }).props.eventsEndpoint).toBe(
+      'https://edge.example/track',
+    );
+  });
+
+  it('omits eventsEndpoint when not supplied', async () => {
+    const el = await TestaProvider({ config: CONFIG });
+    expect('eventsEndpoint' in (el as { props: object }).props).toBe(false);
+  });
+
   it('returns null when neither config nor projectId is given at runtime', async () => {
     // Cast around the union type — a caller can still violate it at runtime.
     expect(await TestaProvider({} as never)).toBeNull();
