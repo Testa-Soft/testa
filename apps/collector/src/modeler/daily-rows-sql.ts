@@ -28,8 +28,11 @@ export interface DailyRowsQueryParams extends AttributionScope {
   cap?: number;
 }
 
-/** Wide-row column for key #i and field f (c, n, s, q, v). */
-export const keyColumn = (i: number, f: 'c' | 'n' | 's' | 'q' | 'v'): string => `k${i}_${f}`;
+/** Wide-row field: c, n, s, q, v = Σ s², w = Σ n² (per visitor). */
+export type WideField = 'c' | 'n' | 's' | 'q' | 'v' | 'w';
+
+/** Wide-row column for key #i and field f. */
+export const keyColumn = (i: number, f: WideField): string => `k${i}_${f}`;
 
 const IS_INIT = `(event_name = 'purchase' AND purchase_type = 'initial')`;
 const IS_UPS = `(event_name = 'purchase' AND purchase_type = 'upsell')`;
@@ -165,6 +168,7 @@ export function buildDailyRowsQuery(p: DailyRowsQueryParams): SqlQuery {
       `sum(${k.s}) AS ${keyColumn(i, 's')}`,
       `sum(${k.q}) AS ${keyColumn(i, 'q')}`,
       `sum(pow(${k.s}, 2)) AS ${keyColumn(i, 'v')}`,
+      `sum(pow(${k.n}, 2)) AS ${keyColumn(i, 'w')}`,
     ];
   });
 

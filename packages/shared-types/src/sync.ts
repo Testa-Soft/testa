@@ -94,6 +94,12 @@ export interface DailyRow {
   sum_sq: number;
   /** Σ (per-visitor total)². */
   sum_sq_visitor: number;
+  /**
+   * Σ (per-visitor count)², n = the visitor's `count` contribution. With
+   * `count` (Σ n) and `visitors` it gives the per-visitor count variance: the
+   * `count` stats model input for `count_mode: every` goals (admin v2).
+   */
+  count_sq_visitor: number;
 }
 
 /** A daily row of an on-demand summary query with a `dimension` (top 10 + `(other)`). */

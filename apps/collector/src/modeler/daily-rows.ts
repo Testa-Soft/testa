@@ -1,7 +1,8 @@
 /**
  * Daily rows builder (PRD-006 §2.2–2.4, task 5.9): raw events → additive rows,
  * one per first-exposure date × variation (× dimension value) × metric key.
- * Rows only carry visitors / converted / count / sum / sum_sq / sum_sq_visitor;
+ * Rows only carry visitors / converted / count / sum / sum_sq / sum_sq_visitor /
+ * count_sq_visitor;
  * crobot sums any range and divides. Reference: generate.py `daily_summary`.
  */
 import type {
@@ -44,7 +45,7 @@ export const OTHER = '(other)';
 const MAX_SPAN_DAYS = 400;
 const CURRENCY_RE = /^[A-Z]{3}$/;
 const DAY_MS = 86_400_000;
-const FIELDS = ['c', 'n', 's', 'q', 'v'] as const;
+const FIELDS = ['c', 'n', 's', 'q', 'v', 'w'] as const;
 
 type Acc = { visitors: number; vals: number[] };
 type WideRow = Record<string, string | number>;
@@ -161,6 +162,7 @@ function rowsFrom(
         sum: roundHalfEven(at(2), 2),
         sum_sq: roundHalfEven(at(3), 2),
         sum_sq_visitor: roundHalfEven(at(4), 2),
+        count_sq_visitor: at(5),
       };
       if (dimension === undefined) return base;
       const row: DimensionRow = { ...base, dimension, dimension_value: g.dv };

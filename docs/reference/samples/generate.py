@@ -849,7 +849,8 @@ SUMMARY_KEYS = ["purchase", "upsell", "revenue", "add_to_cart", "begin_checkout"
 
 
 def summary_values(M, vid, capped=False):
-    """Per visitor, per metric key: (converted 0/1, count, sum, [per-unit values for sum_sq], visitor total for sum_sq_visitor)."""
+    """Per visitor, per metric key: (converted 0/1, count, sum, [per-unit values for sum_sq], visitor total for sum_sq_visitor).
+    daily_summary also sums count² per visitor into count_sq_visitor (admin v2: stats for `count_mode: every`)."""
     es = M["att"].get(vid, [])
     by = defaultdict(list)
     for e in es: by[e["event_name"]].append(e)
@@ -917,15 +918,16 @@ def daily_summary(M, keys=SUMMARY_KEYS, dimension=None, capped=False):
         vals = summary_values(M, vid, capped)
         for k in keys:
             c, n, s, units = vals[k]
-            a = acc.setdefault(g + (k,), [0, 0, 0.0, 0.0, 0.0])
-            a[0] += c; a[1] += n; a[2] += s; a[3] += sum(u * u for u in units); a[4] += s * s
+            a = acc.setdefault(g + (k,), [0, 0, 0.0, 0.0, 0.0, 0])
+            a[0] += c; a[1] += n; a[2] += s; a[3] += sum(u * u for u in units); a[4] += s * s; a[5] += n * n
     rows = []
     order = {v: i for i, v in enumerate(M["variations"])}
     for (d, var, dv, k), a in sorted(acc.items(), key=lambda kv: (kv[0][0], str(kv[0][2]), order[kv[0][1]], keys.index(kv[0][3]))):
         row = {"date": d, "variation_id": var}
         if dimension: row["dimension"] = dimension; row["dimension_value"] = dv
         row.update({"metric_key": k, "visitors": vis[(d, var, dv)], "converted": a[0], "count": a[1],
-                    "sum": round(a[2], 2), "sum_sq": round(a[3], 2), "sum_sq_visitor": round(a[4], 2)})
+                    "sum": round(a[2], 2), "sum_sq": round(a[3], 2), "sum_sq_visitor": round(a[4], 2),
+                    "count_sq_visitor": a[5]})
         rows.append(row)
     return {"experiment_id": M["exp_id"], "from": M["frm"], "to": M["to"], "report_currency": M["ccy"],
             "date_basis": "first_exposure", "cap_outliers": capped, "dimension": dimension,
