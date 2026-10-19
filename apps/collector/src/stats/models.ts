@@ -6,6 +6,10 @@
  * - `normal`: flat-prior posterior of a mean, mean + (s / √n) · t(n − 1),
  *   from n, Σx, Σx². Used for AOV (capped), RPV, engagement and per-order /
  *   per-unit metrics. No log-normal (decided).
+ * - `count` (admin v2): mean events per visitor for `count_mode: every`
+ *   goals. Same flat-prior posterior of a mean over visitors, from
+ *   n = visitors, sum = Σ count, sumSq = Σ count_sq_visitor. Counts are
+ *   over-dispersed, so the empirical variance is used (no Poisson / Gamma).
  */
 import type { StatModel, VariationInput } from './index.ts';
 import type { Samplers } from './samplers.ts';
@@ -21,6 +25,8 @@ export const MIN_EVENTS = 10;
  */
 export function isInsufficient(model: StatModel, v: VariationInput): boolean {
   if (model === 'beta') return v.n < MIN_N || (v.x ?? 0) < MIN_EVENTS;
+  // count: n = visitors, sum = events — the same floors as a rate.
+  if (model === 'count') return v.n < MIN_N || (v.sum ?? 0) < MIN_EVENTS;
   return v.n < MIN_EVENTS;
 }
 
