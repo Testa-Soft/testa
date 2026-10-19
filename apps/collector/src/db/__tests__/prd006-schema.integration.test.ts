@@ -82,13 +82,13 @@ describe.skipIf(!live)(`PRD-006 schema (live ClickHouse, db=${database})`, () =>
     await close();
   });
 
-  it('applies 001–023 and drops the old revenue MVs', async () => {
+  it('applies 001–025 and drops the old revenue MVs', async () => {
     const files = await query<{ filename: string }>(
       'SELECT filename FROM _migrations ORDER BY filename',
     );
     const names = files.map((f) => f.filename);
-    expect(names.at(-1)).toBe('023_create_metric_daily.sql');
-    expect(names).toHaveLength(23);
+    expect(names.at(-1)).toBe('025_metric_daily_count_sq_visitor.sql');
+    expect(names).toHaveLength(25);
 
     const tables = await query<{ name: string }>(
       'SELECT name FROM system.tables WHERE database = currentDatabase()',
@@ -110,7 +110,7 @@ describe.skipIf(!live)(`PRD-006 schema (live ClickHouse, db=${database})`, () =>
     expect(tableNames).toContain('mv_experiment_summary');
   });
 
-  it('has idx_exp on events only and the 90-day page_view TTL', async () => {
+  it('has idx_exp on events only and the 1-day / 13-month page_view TTL (024)', async () => {
     const idx = await query<{ table: string }>(
       `SELECT table FROM system.data_skipping_indices
        WHERE database = currentDatabase() AND name = 'idx_exp'`,
@@ -121,7 +121,7 @@ describe.skipIf(!live)(`PRD-006 schema (live ClickHouse, db=${database})`, () =>
       `SELECT create_table_query FROM system.tables
        WHERE database = currentDatabase() AND name = 'events'`,
     );
-    expect(ddl?.create_table_query).toContain('toIntervalDay(90)');
+    expect(ddl?.create_table_query).not.toContain('toIntervalDay(90)');
     expect(ddl?.create_table_query).toContain('toIntervalDay(1)');
     expect(ddl?.create_table_query).toContain('toIntervalMonth(13)');
   });
