@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'bun:test';
+import { loadPixelUrlMatch } from '../../__test-utils__/pixel-url-match.ts';
 import { buildTestaConfig } from '../build.ts';
 
 // A trimmed copy of the real `GET /projects/12345.json` payload.
@@ -201,6 +202,30 @@ describe('buildTestaConfig', () => {
     expect(cfg.experiments[0]?.goals).toEqual([
       { goal_id: 7, type: 'page_view', action: '/quiz', match_type: 'contains' },
     ]);
+  });
+
+  it('compiles a starts_with goal to regex ^ + escaped action (the pixel has no prefix mode)', async () => {
+    const action = 'https://shop.example/thanks?(a)+[b].*$';
+    const cfg = buildTestaConfig({
+      ...sourceProject,
+      experiments: [
+        { ...baseExp, goals: [{ id: 7, type: 'page_view', action, match_type: 'starts_with' }] },
+      ],
+    });
+    const goal = cfg.experiments[0]?.goals[0];
+    expect(goal).toEqual({
+      goal_id: 7,
+      type: 'page_view',
+      action: '^https://shop\\.example/thanks\\?\\(a\\)\\+\\[b\\]\\.\\*\\$',
+      match_type: 'regex',
+    });
+    // Through the pixel's real matcher it behaves exactly like startsWith.
+    const urlMatchesGoal = await loadPixelUrlMatch();
+    for (const url of [action, `${action}/more`, `x${action}`, 'https://shop.example/thanks']) {
+      expect(urlMatchesGoal(url, goal?.action ?? '', goal?.match_type)).toBe(
+        url.startsWith(action),
+      );
+    }
   });
 
   it('still ignores experiment types that are neither split_url nor copy', () => {
