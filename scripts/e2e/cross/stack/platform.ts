@@ -10,7 +10,7 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { chCommand, chPing, chServerCommand } from '../lib/clickhouse.ts';
-import type { HarnessConfig } from '../lib/config.ts';
+import { ALLOWED_CH_DATABASES, type HarnessConfig } from '../lib/config.ts';
 import { http, waitFor } from '../lib/http.ts';
 import { log } from '../lib/log.ts';
 import { redisPing, redisResetDb } from '../lib/redis.ts';
@@ -99,7 +99,8 @@ export async function platformDown(cfg: HarnessConfig): Promise<void> {
 
 async function resetData(cfg: HarnessConfig): Promise<number> {
   const db = cfg.clickhouse.database;
-  if (!/^prd006_x0$/.test(db)) throw new Error(`refusing to drop database ${db}`);
+  if (!(ALLOWED_CH_DATABASES as readonly string[]).includes(db))
+    throw new Error(`refusing to drop database ${db}`);
   await chServerCommand(cfg.clickhouse, `DROP DATABASE IF EXISTS ${db} SYNC`);
   await chServerCommand(cfg.clickhouse, `CREATE DATABASE ${db}`);
   const out = await runOrThrow(['bun', 'run', 'src/db/migrate.ts'], {
