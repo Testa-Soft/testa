@@ -21,6 +21,7 @@ interface StoredRow {
   sum: number;
   sum_sq: number;
   sum_sq_visitor: number;
+  count_sq_visitor: number;
 }
 
 async function runRows(
@@ -30,7 +31,8 @@ async function runRows(
   runId: string,
 ): Promise<DailyRow[]> {
   const rows = await ctx.query<StoredRow>(
-    `SELECT toString(date) AS d, variation_id, metric_key, visitors, converted, count, sum, sum_sq, sum_sq_visitor
+    `SELECT toString(date) AS d, variation_id, metric_key, visitors, converted, count, sum, sum_sq, sum_sq_visitor,
+            count_sq_visitor
      FROM metric_daily
      WHERE project_id = {p:UInt64} AND experiment_id = {e:UInt64} AND run_id = {r:String}
      ORDER BY date, variation_id, metric_key`,
@@ -46,6 +48,7 @@ async function runRows(
     sum: Number(r.sum),
     sum_sq: Number(r.sum_sq),
     sum_sq_visitor: Number(r.sum_sq_visitor),
+    count_sq_visitor: Number(r.count_sq_visitor),
   }));
 }
 

@@ -47,8 +47,12 @@ export const BUILTIN_METRIC_KEYS = [
 
 export type BuiltinMetricKey = (typeof BUILTIN_METRIC_KEYS)[number];
 
-/** A daily metric key: a built-in key, a custom event, or a crobot goal id. */
-export type MetricKey = BuiltinMetricKey | `event:${string}` | `goal:${number}`;
+/**
+ * A daily metric key: a built-in key, a custom event, a crobot goal id, or a
+ * page-view rule `page:<exact|contains|starts_with|regex>:<encodeURIComponent(action)>`
+ * (admin v2; ≤ 1024 chars, matched like the pixel's `urlMatchesGoal`).
+ */
+export type MetricKey = BuiltinMetricKey | `event:${string}` | `goal:${number}` | `page:${string}`;
 
 /**
  * Breakdown dimensions (PRD-006 §3.6), each a snapshot at first exposure.
@@ -94,6 +98,12 @@ export interface DailyRow {
   sum_sq: number;
   /** Σ (per-visitor total)². */
   sum_sq_visitor: number;
+  /**
+   * Σ (per-visitor count)², n = the visitor's `count` contribution. With
+   * `count` (Σ n) and `visitors` it gives the per-visitor count variance: the
+   * `count` stats model input for `count_mode: every` goals (admin v2).
+   */
+  count_sq_visitor: number;
 }
 
 /** A daily row of an on-demand summary query with a `dimension` (top 10 + `(other)`). */
@@ -112,6 +122,8 @@ export type SyncErrorCode =
   /** Malformed request (e.g. missing / invalid `project_id`, R3); `field` names it. */
   | 'invalid_body'
   | 'unknown_metric'
+  /** A `page:regex:` key ClickHouse (RE2) can't compile or reads unlike the pixel (JS). */
+  | 'invalid_regex'
   | 'unknown_dimension'
   | 'unknown_view'
   | 'invalid_range'

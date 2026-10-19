@@ -9,7 +9,8 @@ import { summarize } from './summarize.ts';
 
 export { sampleSizeTwoProportion, srmChiSquare } from './planning.ts';
 
-export type StatModel = 'beta' | 'normal';
+/** See `StatModel` in shared-types: `count` = mean events per visitor (Σn, Σn²). */
+export type StatModel = 'beta' | 'normal' | 'count';
 
 export interface VariationInput {
   variation: number;

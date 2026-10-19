@@ -16,6 +16,8 @@ import type {
 } from '@testa-platform/shared-types';
 import { SyncApiError } from '../analytics/errors.ts';
 import { VIEW_NAMES, getView } from '../analytics/views.ts';
+import { parseMetrics } from '../modeler/metric-keys.ts';
+import { assertPageRegexes } from '../modeler/page-keys.ts';
 import { type StoredQuery, queryId, readQuery, submitQuery } from '../modeler/query-jobs.ts';
 import { clampRetry, retryAfter } from '../modeler/queue.ts';
 import { readSubscription } from '../modeler/subscriptions.ts';
@@ -55,6 +57,8 @@ async function validateQuery(
   }
   const { view, project_id: _p, refresh, ...rest } = body;
   const params = getView(view).validate(rest) as Record<string, unknown>;
+  if (Array.isArray(params.metrics))
+    await assertPageRegexes(ctx.query, parseMetrics(params.metrics));
   await requireOwnedV2(ctx, projectId, experimentId);
   if (params.report_currency === undefined) {
     const sub = await readSubscription(ctx.query, projectId, experimentId);

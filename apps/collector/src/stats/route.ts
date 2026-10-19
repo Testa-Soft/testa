@@ -15,6 +15,8 @@ export const FULL_DRAWS = 100_000;
 export const SEGMENT_DRAWS = 10_000;
 export const MAX_METRICS = 50;
 export const MAX_VARIATIONS = 10;
+/** Metric keys echo crobot ids; `page:<match>:<value>` keys run up to 1024 chars. */
+export const MAX_KEY_LENGTH = 1024;
 /** Far above 50 × 10 inputs; enforced in bytes by the router's bodyLimit. */
 export const MAX_BODY_BYTES = 256 * 1024;
 
@@ -39,8 +41,8 @@ const variationSchema = z.object({
 });
 
 const metricSchema = z.object({
-  key: z.string().min(1).max(200),
-  model: z.enum(['beta', 'normal']),
+  key: z.string().min(1).max(MAX_KEY_LENGTH),
+  model: z.enum(['beta', 'normal', 'count']),
   direction: z.enum(['higher', 'lower']).optional(),
   variations: z.array(variationSchema).min(2),
 });
@@ -120,7 +122,8 @@ function missingInput(
   v: z.infer<typeof variationSchema>,
 ): string | undefined {
   if (model === 'beta') return v.x === undefined || v.x > v.n ? 'x' : undefined;
-  if (v.sum === undefined) return 'sum';
+  // count: sum = Σ events ≥ 0 (normal means may be negative, counts can't).
+  if (v.sum === undefined || (model === 'count' && v.sum < 0)) return 'sum';
   return v.sumSq === undefined ? 'sumSq' : undefined;
 }
 

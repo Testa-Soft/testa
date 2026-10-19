@@ -320,6 +320,7 @@ describe.skipIf(!liveRedis)('sync API (live ClickHouse + Redis, real HTTP)', () 
     expect(Object.keys(body.rows[0]).sort()).toEqual(
       [
         'converted',
+        'count_sq_visitor',
         'count',
         'date',
         'metric_key',

@@ -5,6 +5,7 @@
  *   POST /_ingest                 HMAC-signed batch from edge worker
  *   *    /api/v1/experiments/*    PRD-006 sync API (X-Service-Token) — sync/router.ts (P4)
  *   POST /api/v1/stats            Bayesian stats (X-Service-Token) — stats/router.ts (P3)
+ *   GET  /api/v1/projects/:id/tracking/{events,hits}  admin v2 tracking (Bearer) — tracking/router.ts
  *   GET  /_internal/fx-rates      CH dictionary source (Phase 1.6)
  *   GET  /_internal/live          liveness (always 200, no deps) — Fly health check
  *   GET  /_internal/health        readiness: Redis/CH ping
@@ -22,6 +23,7 @@ import { makeIngestHandler } from './ingest/route.ts';
 import { ping as pingRedis, redis } from './redis/client.ts';
 import { makeStatsRouter } from './stats/router.ts';
 import { makeSyncRouter } from './sync/router.ts';
+import { makeTrackingRouter } from './tracking/router.ts';
 // Query views register themselves with the view registry on import.
 import './products/view.ts';
 import './distributions/view.ts';
@@ -82,6 +84,8 @@ app.get('/api/v1/config/:projectId', makeConfigGetHandler({ store: configStore }
 // After P0 nobody edits these lines: each package owns its router file.
 app.route('/api/v1/experiments', makeSyncRouter({ serviceToken: config.serviceToken }));
 app.route('/api/v1/stats', makeStatsRouter({ serviceToken: config.serviceToken }));
+// Admin v2 tracking diagnostics: Bearer auth with the config write token.
+app.route('/api/v1/projects', makeTrackingRouter({ token: config.configWriteToken }));
 
 app.get('/_internal/fx-rates', makeFxRatesHandler());
 
