@@ -19,6 +19,7 @@ import {
 } from '../analytics/attribution.ts';
 import { withFx } from '../fx/sql.ts';
 import { BUILTIN_KEY_SQL, type KeySql, type ParsedKey } from './metric-keys.ts';
+import { pageMatchSql } from './page-keys.ts';
 
 export interface DailyRowsQueryParams extends AttributionScope {
   reportCurrency: string;
@@ -39,7 +40,7 @@ const IS_UPS = `(event_name = 'purchase' AND purchase_type = 'upsell')`;
 
 function keySql(key: ParsedKey, i: number): KeySql {
   if (key.kind === 'builtin') return BUILTIN_KEY_SQL[key.key];
-  const n = key.kind === 'event' ? `cev_${i}` : `cgoal_${i}`;
+  const n = key.kind === 'event' ? `cev_${i}` : key.kind === 'goal' ? `cgoal_${i}` : `cpage_${i}`;
   return { c: `toUInt64(${n} > 0)`, n, s: '0', q: '0' };
 }
 
@@ -58,6 +59,11 @@ function customCounters(keys: readonly ParsedKey[]): {
         `countIf(event_name = 'conversion' AND goal_id = {goal_${i}:UInt64}) AS cgoal_${i}`,
       );
       params[`goal_${i}`] = key.goalId;
+    } else if (key.kind === 'page') {
+      parts.push(
+        `countIf(event_name = 'page_view' AND ${pageMatchSql(key.matchType, `page_${i}`)}) AS cpage_${i}`,
+      );
+      params[`page_${i}`] = key.value;
     }
   });
   return { sql: parts.map((p) => `,\n        ${p}`).join(''), params };
@@ -156,7 +162,11 @@ function dimensionValue(dimension: DimensionKey | undefined): string {
 export function buildDailyRowsQuery(p: DailyRowsQueryParams): SqlQuery {
   const exposureDims = p.dimension && p.dimension !== 'payment_type' ? [p.dimension] : [];
   const exposed = buildExposedVisitors({ ...p, dims: exposureDims });
-  const attributed = buildAttributedEvents({ ...p, dims: [] });
+  const attributed = buildAttributedEvents({
+    ...p,
+    dims: [],
+    withUrl: p.keys.some((k) => k.kind === 'page'),
+  });
   const custom = customCounters(p.keys);
   const money = moneyEvents(attributed.sql, p.cap);
 

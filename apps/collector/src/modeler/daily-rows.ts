@@ -21,6 +21,7 @@ import {
   keyColumn,
 } from './daily-rows-sql.ts';
 import { PAYMENT_TYPE_KEYS, type ParsedKey, parseMetrics } from './metric-keys.ts';
+import { assertPageRegexes } from './page-keys.ts';
 import { roundHalfEven } from './round.ts';
 
 export interface DailyRowsParams {
@@ -180,6 +181,7 @@ export async function computeDailyRows(
   assertCurrency(p.reportCurrency);
   const keys = parseMetrics(p.metrics);
   assertDimensionKeys(p.dimension, keys);
+  await assertPageRegexes(run, keys);
 
   const cap = p.capOutliers ? await fetchCap(run, p) : undefined;
   const q = buildDailyRowsQuery({
