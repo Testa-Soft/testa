@@ -24,7 +24,9 @@ export const MIN_EVENTS = 10;
  * visitors (RPV), so only the 10-observation floor applies here.
  */
 export function isInsufficient(model: StatModel, v: VariationInput): boolean {
-  if (model === 'beta') return v.n < MIN_N || (v.x ?? 0) < MIN_EVENTS;
+  // More conversions than the base (an open-funnel step with a tracking gap)
+  // is not a rate, so it gets no verdict.
+  if (model === 'beta') return v.n < MIN_N || (v.x ?? 0) < MIN_EVENTS || (v.x ?? 0) > v.n;
   // count: n = visitors, sum = events — the same floors as a rate.
   if (model === 'count') return v.n < MIN_N || (v.sum ?? 0) < MIN_EVENTS;
   return v.n < MIN_EVENTS;
@@ -40,7 +42,8 @@ export function drawPosterior(
 }
 
 function drawBeta(v: VariationInput, draws: number, s: Samplers): Float64Array {
-  const x = v.x ?? 0;
+  // Clamped so Beta's second shape stays positive (x > n has no verdict anyway).
+  const x = Math.min(v.x ?? 0, v.n);
   const a = 1 + x;
   const b = 1 + v.n - x;
   const out = new Float64Array(draws);
