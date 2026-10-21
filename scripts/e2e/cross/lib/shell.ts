@@ -66,7 +66,9 @@ export async function spawnDetached(
   const exports = Object.entries(opts.env)
     .map(([k, v]) => `export ${k}=${shellQuote(v)};`)
     .join(' ');
-  const script = `set -m; cd ${shellQuote(opts.cwd)}; ${exports} nohup ${cmd
+  // No nohup: macOS nohup exits ("can't detach from console") outside a console
+  // session. `set -m` already puts the job in its own process group.
+  const script = `set -m; cd ${shellQuote(opts.cwd)}; ${exports} ${cmd
     .map(shellQuote)
     .join(' ')} > ${shellQuote(opts.logFile)} 2>&1 < /dev/null & echo $!`;
   const out = await runOrThrow(['sh', '-c', script]);
