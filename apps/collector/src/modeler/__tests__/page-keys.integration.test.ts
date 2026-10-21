@@ -12,7 +12,7 @@ import { beforeAll, describe, expect, it } from 'bun:test';
 import type { DailyRow, MetricKey } from '@testa-platform/shared-types';
 import { type UrlMatchesGoal, loadPixelUrlMatch } from '../../__test-utils__/pixel-url-match.ts';
 import type { SyncApiError } from '../../analytics/errors.ts';
-import { startsWithPattern } from '../../config/regex.ts';
+import { pagePattern, startsWithPattern } from '../../config/regex.ts';
 import { computeDailyRows } from '../daily-rows.ts';
 import { parseMetricKey } from '../metric-keys.ts';
 import { assertPageRegexes, pageMatchSql, parsePageKey } from '../page-keys.ts';
@@ -29,6 +29,9 @@ import { EXPECTED, FROM, SEED_KEYS, TO, seedPageEvents } from './page-seed.ts';
 
 /** What the pixel does with a crobot goal of this rule (config builder → urlMatchesGoal). */
 function pixelMatches(match: UrlMatchesGoal, url: string, rule: (typeof RULES)[number]): boolean {
+  const page = pagePattern(rule.matchType, rule.value);
+  if (page.matchType === 'regex' && rule.matchType !== 'regex')
+    return match(url, page.value, 'regex');
   return rule.matchType === 'starts_with'
     ? match(url, startsWithPattern(rule.value), 'regex')
     : match(url, rule.value, rule.matchType);
@@ -112,8 +115,10 @@ describe.skipIf(!live)(`page keys (live ClickHouse, db=${database})`, () => {
   });
 
   it(`parity: pixel urlMatchesGoal ≡ ClickHouse on ${URLS.length} URLs × ${RULES.length} rules`, async () => {
-    const preds = RULES.map((r, i) => `${pageMatchSql(r.matchType, `r${i}`)} AS m${i}`);
-    const params = Object.fromEntries(RULES.map((r, i) => [`r${i}`, r.value]));
+    // ClickHouse evaluates the rule the way daily-rows-sql does (pagePattern first).
+    const pages = RULES.map((r) => pagePattern(r.matchType, r.value));
+    const preds = pages.map((p, i) => `${pageMatchSql(p.matchType, `r${i}`)} AS m${i}`);
+    const params = Object.fromEntries(pages.map((p, i) => [`r${i}`, p.value]));
     const rows = await run<Record<string, number | string>>(
       `SELECT url, ${preds.join(', ')} FROM (SELECT arrayJoin({urls:Array(String)}) AS url)`,
       { ...params, urls: [...URLS] },

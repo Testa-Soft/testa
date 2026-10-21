@@ -17,6 +17,7 @@ import {
   buildExposedVisitors,
   dimColumn,
 } from '../analytics/attribution.ts';
+import { pagePattern } from '../config/regex.ts';
 import { withFx } from '../fx/sql.ts';
 import { BUILTIN_KEY_SQL, type KeySql, type ParsedKey } from './metric-keys.ts';
 import { pageMatchSql } from './page-keys.ts';
@@ -60,10 +61,12 @@ function customCounters(keys: readonly ParsedKey[]): {
       );
       params[`goal_${i}`] = key.goalId;
     } else if (key.kind === 'page') {
+      // Same rule as the pixel's goal (a path value matches after scheme + host).
+      const page = pagePattern(key.matchType, key.value);
       parts.push(
-        `countIf(event_name = 'page_view' AND ${pageMatchSql(key.matchType, `page_${i}`)}) AS cpage_${i}`,
+        `countIf(event_name = 'page_view' AND ${pageMatchSql(page.matchType, `page_${i}`)}) AS cpage_${i}`,
       );
-      params[`page_${i}`] = key.value;
+      params[`page_${i}`] = page.value;
     }
   });
   return { sql: parts.map((p) => `,\n        ${p}`).join(''), params };

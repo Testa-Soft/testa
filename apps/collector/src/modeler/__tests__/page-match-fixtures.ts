@@ -48,6 +48,12 @@ export const RULES: readonly PageRule[] = [
   { matchType: 'starts_with', value: 'https://shop.example/cart(' },
   { matchType: 'starts_with', value: 'http://' },
   { matchType: 'starts_with', value: 'https://shop.example/search?q=a+' },
+  // A value starting with "/" is a path: matched after the URL's scheme and host.
+  { matchType: 'exact', value: '/thanks' },
+  { matchType: 'exact', value: '/' },
+  { matchType: 'starts_with', value: '/thanks' },
+  { matchType: 'starts_with', value: '/cart(' },
+  { matchType: 'starts_with', value: '/search?q=a+' },
   { matchType: 'regex', value: '/thanks$' },
   { matchType: 'regex', value: '^https://shop\\.example/thanks(\\?|$)' },
   { matchType: 'regex', value: '/p/\\d+(-[a-z]+)*$' },
