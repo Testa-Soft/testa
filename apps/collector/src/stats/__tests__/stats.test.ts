@@ -149,6 +149,9 @@ describe('insufficient_data (§5.1)', () => {
     expect(isInsufficient('beta', { variation: 1, n: 99, x: 50 })).toBe(true);
     expect(isInsufficient('beta', { variation: 1, n: 500, x: 9 })).toBe(true);
     expect(isInsufficient('beta', { variation: 1, n: 100, x: 10 })).toBe(false);
+    // More conversions than its base (an open-funnel step with a tracking gap)
+    // is not a rate: no verdict.
+    expect(isInsufficient('beta', { variation: 1, n: 277, x: 342 })).toBe(true);
   });
 
   it('normal: < 10 observations', () => {
@@ -301,5 +304,24 @@ describe('planning + SRM (V15)', () => {
     // df = 4: Q(2, x) = e^-x (1 + x).
     expect(upperRegularizedGamma(2, 3)).toBeCloseTo(Math.exp(-3) * 4, 12);
     expect(upperRegularizedGamma(2, 0.5)).toBeCloseTo(Math.exp(-0.5) * 1.5, 12);
+  });
+});
+
+describe('beta inputs with more conversions than their base', () => {
+  it('flags every variation insufficient and still draws finite rates', () => {
+    const stats = computeStats({
+      model: 'beta',
+      control: 0,
+      seedKey: 'x-over-n',
+      draws: 2000,
+      variations: [
+        { variation: 0, n: 277, x: 342 },
+        { variation: 1, n: 314, x: 383 },
+      ],
+    });
+    for (const s of stats.values()) {
+      expect(s.insufficient_data).toBe(true);
+      expect(Number.isFinite(s.chance_to_be_best)).toBe(true);
+    }
   });
 });
