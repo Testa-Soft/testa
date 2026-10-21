@@ -22,7 +22,7 @@ import type {
   VariationChange,
   VariationConfig,
 } from '@testa-platform/shared-types';
-import { startsWithPattern } from './regex.ts';
+import { pagePattern, startsWithPattern } from './regex.ts';
 
 type RedirectMode = NonNullable<Extract<VariationChange, { type: 'redirect' }>['url_match_type']>;
 
@@ -172,15 +172,21 @@ function mapGoals(goals: SourceGoal[] | undefined): GoalConfig[] {
       goal_id: g.id,
       ...(g.title ? { name: g.title } : {}),
       type: g.type,
-      ...goalMatch(g.action, g.match_type),
+      ...goalMatch(g.action, g.match_type, g.type),
     }));
 }
 
 function goalMatch(
   action: string,
   matchType: SourceGoal['match_type'],
+  type: GoalType,
 ): Pick<GoalConfig, 'action' | 'match_type'> {
   if (!matchType) return { action };
+  if (type === 'page_view') {
+    const page = pagePattern(matchType, action);
+    if (page.matchType === 'regex' && matchType !== 'regex')
+      return { action: page.value, match_type: 'regex' };
+  }
   if (matchType === 'starts_with')
     return { action: startsWithPattern(action), match_type: 'regex' };
   return {
