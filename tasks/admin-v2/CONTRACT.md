@@ -30,7 +30,7 @@ Rules:
 | E4 | contact_details | contact_details_rate | visitors |
 | E5 | payment_load | payment_load_rate | visitors |
 | E6 | lead_register | lead_rate | visitors |
-| E7 | upsell | upsell_rate | purchase (main purchases) |
+| E7 | upsell | upsell_rate | visitors (visitors with an additional purchase ÷ visitors, since 2026-10-21) |
 | F1 | step_cart_to_checkout | step_cart_to_checkout | add_to_cart |
 | F2 | step_checkout_to_contact | step_checkout_to_contact | begin_checkout |
 | F3 | step_contact_to_payment | step_contact_to_payment | add_shipping_info |
@@ -50,6 +50,10 @@ Preset codes live in ONE PHP catalogue: `App\Domain\Analytics\Services\GoalPrese
 - `match_type` enum gains `starts_with`
 
 `project_goals` (new): `id`, `project_id` FK, `code` varchar(8), `title`, `type` enum(click,page_view,custom), `action`, `match_type` nullable, `rule_hash` char(40) = sha1(type|normalised action|match_type), `in_library` bool default true, timestamps, `deleted_at`. Unique (`project_id`,`code`). Unique (`project_id`,`rule_hash`) among non-deleted rows (enforce in code if MySQL can't with soft deletes).
+
+`analytics_settings` / `analytics_defaults` add `disabled_goals: list<string>` (since 2026-10-21): built-in codes E1–E7 / F1–F4 switched off for the experiment (views only; data is still collected). Upper-cased, each once; the primary goal can't be disabled (422 `disabled_goals`).
+
+Goal preferences: `GET /projects/{uuid}/analytics/defaults` → `{data: AnalyticsSettings}` (any v2 project member); `PUT` same body as experiment settings, merged (ADMIN, SUPER_ADMIN, ANALYST). New v2 experiments copy them when the create request sends no `analytics_settings`.
 
 `projects` add: `next_goal_number` int unsigned default 1 (incremented under row lock; codes never reused), `analytics_defaults` JSON nullable (same shape as `experiments.analytics_settings`; copied into a new v2 experiment's `analytics_settings` at create when the request doesn't send one).
 
@@ -73,7 +77,7 @@ Routing: analytics routes also accept the experiment identifier as `/experiments
 
 `goal-table`:
 - `goal` param accepts a goal id **or** a code (`E1`, `F2`, `G4`). E/F codes resolve even if no goal row exists on the experiment (goals are views).
-- `goals[]` items add `code`, `kind`, `base_label` ("Visitors", "Main purchases", "Reached add_to_cart"…), `count_mode`, `totals {visitors, conversions, events}`, and `by_variation[] {variation_id, value, uplift, label, stats}` (every variation). `best` stays.
+- `goals[]` items add `code`, `kind`, `base_label` ("Visitors", "Reached add_to_cart"…), `count_mode`, `totals {visitors, conversions, events}`, and `by_variation[] {variation_id, value, uplift, label, stats}` (every variation). `best` stays.
 - `selected` adds `code`, `base_label`, `count_mode`.
 
 New project-level catalogue: `GET /projects/{uuid}/analytics/catalogue` →
