@@ -120,7 +120,7 @@ Collector (Bearer, same auth as config API):
 - `GET /api/v1/projects/{projectId}/tracking/hits?event=<name>&since=<ISO>&limit=50` → recent raw hits with their params, read so Buffer flush lag doesn't hide them (`events_buffer`/`merge`).
 
 crobot (proxies + judgement):
-- `GET /projects/{uuid}/tracking/events` → per preset code `{code, event, status: receiving|stale|never, last_received_at, received_24h, params:[{name, status: ok|missing|invalid, last_seen_at}]}`; receiving = seen in 24 h, stale = seen in 30 d not 24 h. Cached 60 s.
+- `GET /projects/{uuid}/tracking/events` → per preset code `{code, event, status: receiving|stale|never, last_received_at, received_24h, params:[{name, status: ok|missing|invalid, last_seen_at}]}`; receiving = seen in 24 h, stale = seen in 30 d not 24 h. Cached 5 min.
 - `POST /projects/{uuid}/tracking/listen {code}` → `{id, code, started_at, expires_at}` (Redis, 10 min TTL)
 - `GET /projects/{uuid}/tracking/listen/{id}` → `{id, code, status: listening|expired, hits:[{received_at, params:[{name,value,status}]}]}`
 
