@@ -40,6 +40,14 @@ export interface TrackingEventsResponse {
 }
 
 const RECENT = 'a.server_ts >= {recent:DateTime64(3)}';
+/**
+ * `client_ts` lower bounds so ClickHouse can prune partitions / the primary
+ * key (`events` is partitioned and ordered on client_ts, not server_ts). The
+ * 1-day margin absorbs clock skew; rows whose client clock runs >1 day behind
+ * the server fall outside the window (accepted).
+ */
+const RECENT_PRUNE = 'a.client_ts >= {recent:DateTime64(3)} - INTERVAL 1 DAY';
+const LOOKBACK_PRUNE = 'a.client_ts >= {lookback:DateTime64(3)} - INTERVAL 1 DAY';
 
 /**
  * Raw-row presence per typed param: the health checks, except `purchase_type`
@@ -73,7 +81,7 @@ SELECT a.event_name AS event_name,
        ${cols.join(',\n       ')}
 FROM events_buffer AS a
 WHERE a.project_id = {project_id:UInt64} AND a.event_name IN {names:Array(String)}
-  AND a.server_ts >= {lookback:DateTime64(3)}
+  AND a.server_ts >= {lookback:DateTime64(3)} AND ${LOOKBACK_PRUNE}
 GROUP BY event_name`;
 }
 
@@ -82,7 +90,7 @@ SELECT a.event_name AS event_name, k AS name,
        toUInt64(count()) AS n, toString(max(a.server_ts)) AS last
 FROM events_buffer AS a ARRAY JOIN mapKeys(a.props) AS k
 WHERE a.project_id = {project_id:UInt64} AND a.event_name IN {names:Array(String)}
-  AND ${RECENT} AND a.props[k] != ''
+  AND ${RECENT} AND ${RECENT_PRUNE} AND a.props[k] != ''
 GROUP BY event_name, name
 ORDER BY event_name, name
 LIMIT 50 BY event_name`;
@@ -99,7 +107,8 @@ FROM event_items AS i
 INNER JOIN (
   SELECT a.event_id AS event_id, a.server_ts AS server_ts
   FROM events_buffer AS a
-  WHERE a.project_id = {project_id:UInt64} AND a.event_name IN {names:Array(String)} AND ${RECENT}
+  WHERE a.project_id = {project_id:UInt64} AND a.event_name IN {names:Array(String)}
+    AND ${RECENT} AND ${RECENT_PRUNE}
 ) AS e ON e.event_id = i.event_id
 WHERE i.project_id = {project_id:UInt64} AND i.event_name IN {names:Array(String)}
 GROUP BY event_name`;
