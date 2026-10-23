@@ -213,3 +213,25 @@ describe('itemRowsFromEvent (task 5.4)', () => {
     expect(itemRowsFromEvent(makeEvent())).toEqual([]);
   });
 });
+
+describe('rowFromEvent — purchase_type default', () => {
+  const item = { item_id: 'SKU-1', price: 10, quantity: 1 };
+
+  it('stores a purchase sent without purchase_type as the main order (initial)', () => {
+    const ev = makeEvent({ event_name: 'purchase', order_id: 'T-1', items: [item] });
+    expect(rowFromEvent(ev).purchase_type).toBe('initial');
+    expect(itemRowsFromEvent(ev)[0]?.purchase_type).toBe('initial');
+  });
+
+  it('keeps an explicit upsell', () => {
+    const ev = makeEvent({ event_name: 'purchase', purchase_type: 'upsell', items: [item] });
+    expect(rowFromEvent(ev).purchase_type).toBe('upsell');
+    expect(itemRowsFromEvent(ev)[0]?.purchase_type).toBe('upsell');
+  });
+
+  it('leaves non-purchase events without a purchase_type', () => {
+    const ev = makeEvent({ event_name: 'add_to_cart', items: [item] });
+    expect(rowFromEvent(ev).purchase_type).toBe('');
+    expect(itemRowsFromEvent(ev)[0]?.purchase_type).toBe('');
+  });
+});

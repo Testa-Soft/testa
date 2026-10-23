@@ -23,7 +23,7 @@ export type EventParam = Exclude<SpecParam, `items[].${string}`>;
  * new spec param fails typecheck. `purchase_type` is read from the raw row,
  * since attribution reports '' on a purchase as `initial`.
  */
-const EVENT_PARAM_SQL: Record<EventParam, string> = {
+export const EVENT_PARAM_SQL: Record<EventParam, string> = {
   order_id: `a.order_id != ''`,
   value_native: 'a.value_native != 0',
   currency: `a.currency != ''`,
@@ -38,7 +38,7 @@ const EVENT_PARAM_SQL: Record<EventParam, string> = {
  * Nullable: a missing price is stored as 0 and a missing quantity as the
  * default 1, so quantity is effectively always present.
  */
-const ITEM_FIELD_SQL: Record<ItemField, string> = {
+export const ITEM_FIELD_SQL: Record<ItemField, string> = {
   item_id: `i.item_id != ''`,
   price: 'i.price != 0',
   quantity: 'i.quantity > 0',

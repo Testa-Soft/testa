@@ -508,6 +508,31 @@ ORDER BY (project_id, experiment_id, run_id, date, variation_id, metric_key)
 TTL toDateTime(computed_at) + INTERVAL 7 DAY DELETE WHERE is_final = 0;
 ```
 
+## Admin v2 migrations (024–025)
+
+### 024_events_ttl_pageview_13m.sql
+
+Replaces 015's TTL: in-experiment `page_view` 90 days → **13 months**, so page-view goals (`page:<match_type>:<value>` metric keys) keep their history. Non-experiment `page_view` stays at 1 day. `events_buffer` needs no change (TTL is a MergeTree property; no columns change).
+
+```sql
+ALTER TABLE events
+    MODIFY TTL
+        toDateTime(client_ts) + INTERVAL 1 DAY DELETE
+            WHERE event_name = 'page_view' AND in_experiment = 0,
+        toDateTime(client_ts) + INTERVAL 13 MONTH DELETE
+            WHERE event_name = 'page_view' AND in_experiment = 1,
+        toDateTime(client_ts) + INTERVAL 13 MONTH DELETE;
+```
+
+### 025_metric_daily_count_sq_visitor.sql
+
+`count_sq_visitor` = Σ over visitors of n² (n = the visitor's per-key count): the input of the `count` stats model for `count_mode: every` goals.
+
+```sql
+ALTER TABLE metric_daily
+    ADD COLUMN IF NOT EXISTS count_sq_visitor Float64 DEFAULT 0 AFTER sum_sq_visitor;
+```
+
 ## Operational notes
 
 - **Partitioning by `toYYYYMM(ts)` ⟶ TTL-friendly.** Each month is a discrete partition CH can drop atomically when 13 months old.

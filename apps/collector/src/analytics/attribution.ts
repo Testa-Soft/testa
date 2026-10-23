@@ -45,6 +45,8 @@ export interface AttributedEventsParams extends ExposedVisitorsParams {
    * view passes false: a reload duplicate is still an event the site sent.
    */
   dedupePurchases?: boolean;
+  /** Also select `url` (page-view metric keys); off by default so other queries don't read it. */
+  withUrl?: boolean;
 }
 
 /** Dimensions snapshotted in `exposures` at first exposure (§3.6). */
@@ -215,7 +217,7 @@ function attributedSelect(p: AttributedEventsParams): string {
       e.cart_id AS cart_id,
       e.items_count AS items_count,
       e.goal_id AS goal_id,
-      e.props AS props${dims.map((d) => `,\n      x.${dimColumn(d)} AS ${dimColumn(d)}`).join('')}
+      e.props AS props${p.withUrl ? ',\n      e.url AS url' : ''}${dims.map((d) => `,\n      x.${dimColumn(d)} AS ${dimColumn(d)}`).join('')}
     FROM events AS e
     INNER JOIN (${exposedSelect(dims)}
     ) AS x ON e.visitor_id = x.visitor_id

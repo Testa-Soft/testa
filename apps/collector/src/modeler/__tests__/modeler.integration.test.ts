@@ -142,7 +142,7 @@ async function subscribe(
 
 async function storedRows(projectId: number, runId: string): Promise<DailyRow[]> {
   const rows = await run<Record<string, string | number>>(
-    `SELECT toString(date) AS d, variation_id, metric_key, visitors, converted, count, sum, sum_sq, sum_sq_visitor, is_final
+    `SELECT toString(date) AS d, variation_id, metric_key, visitors, converted, count, sum, sum_sq, sum_sq_visitor, count_sq_visitor, is_final
      FROM metric_daily WHERE project_id = {p:UInt64} AND run_id = {r:String}`,
     { p: projectId, r: runId },
   );
@@ -156,6 +156,7 @@ async function storedRows(projectId: number, runId: string): Promise<DailyRow[]>
     sum: Number(r.sum),
     sum_sq: Number(r.sum_sq),
     sum_sq_visitor: Number(r.sum_sq_visitor),
+    count_sq_visitor: Number(r.count_sq_visitor),
   }));
 }
 

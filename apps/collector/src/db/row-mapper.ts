@@ -118,6 +118,15 @@ function stringifyProps(props: EnrichedEvent['props']): Record<string, string> {
   return out;
 }
 
+/**
+ * A purchase sent without purchase_type is the main order: the tracking guide
+ * says to leave it empty there, and the modeler counts `initial` orders only.
+ */
+function purchaseTypeOf(ev: EnrichedEvent): string {
+  if (ev.purchase_type) return ev.purchase_type;
+  return ev.event_name === 'purchase' ? 'initial' : '';
+}
+
 export function rowFromEvent(ev: EnrichedEvent): EventsRow {
   // Pre-PRD-006 events (old pixels, in-flight stream entries) have no exp.
   const exp = ev.exp ?? [];
@@ -159,7 +168,7 @@ export function rowFromEvent(ev: EnrichedEvent): EventsRow {
     exp_session_starts: exp.map((t) => t[2]),
     exp_session_idx: exp.map((t) => t[3] ?? 0),
     goal_id: ev.goal_id ?? 0,
-    purchase_type: ev.purchase_type ?? '',
+    purchase_type: purchaseTypeOf(ev),
     parent_order_id: ev.parent_order_id ?? '',
     page_type: ev.page_type ?? '',
     cart_id: ev.cart_id ?? '',
@@ -202,7 +211,7 @@ export function itemRowsFromEvent(ev: EnrichedEvent): EventItemRow[] {
     event_name: ev.event_name,
     exp_ids: expIds,
     order_id: ev.order_id ?? '',
-    purchase_type: ev.purchase_type ?? '',
+    purchase_type: purchaseTypeOf(ev),
     currency: ev.currency ?? '',
     item_id: it.item_id,
     product_id: it.product_id || it.item_id,

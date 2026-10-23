@@ -84,6 +84,7 @@ export async function runRefresh(
       sum: r.sum,
       sum_sq: r.sum_sq,
       sum_sq_visitor: r.sum_sq_visitor,
+      count_sq_visitor: r.count_sq_visitor,
     })),
   );
 

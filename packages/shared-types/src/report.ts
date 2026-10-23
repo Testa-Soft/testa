@@ -252,7 +252,12 @@ export interface HealthResult {
 
 // ─── stats (POST /api/v1/stats) ─────────────────────────────────────────────
 
-export type StatModel = 'beta' | 'normal';
+/**
+ * `beta`: a rate (n, x). `normal`: a mean (n, sum, sumSq). `count`: mean
+ * events per visitor for `count_mode: every` goals — n = visitors,
+ * sum = Σ count, sumSq = Σ count_sq_visitor (admin v2).
+ */
+export type StatModel = 'beta' | 'normal' | 'count';
 
 /** Summed inputs for one variation of one metric. */
 export interface StatsVariationInput {
@@ -261,7 +266,7 @@ export interface StatsVariationInput {
   n: number;
   /** Successes (beta). */
   x?: number;
-  /** Normal: Σx and Σx². */
+  /** Normal: Σx and Σx². Count: Σ count and Σ count_sq_visitor. */
   sum?: number;
   sumSq?: number;
 }

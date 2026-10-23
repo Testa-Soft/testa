@@ -6,6 +6,8 @@
  */
 import type { SubscriptionResponse } from '@testa-platform/shared-types';
 import { SyncApiError } from '../analytics/errors.ts';
+import { parseMetrics } from '../modeler/metric-keys.ts';
+import { assertPageRegexes } from '../modeler/page-keys.ts';
 import { PRIORITY } from '../modeler/queue.ts';
 import { readRunState } from '../modeler/run-state.ts';
 import { requestRefresh } from '../modeler/scheduler.ts';
@@ -37,6 +39,7 @@ export async function putSubscription(
   raw: unknown,
 ): Promise<SubscriptionResponse> {
   const body = validateSubscription(raw);
+  await assertPageRegexes(ctx.query, parseMetrics(body.metrics));
   await requireOwnedV2(ctx, body.projectId, experimentId);
 
   const prev = await readSubscription(ctx.query, body.projectId, experimentId);

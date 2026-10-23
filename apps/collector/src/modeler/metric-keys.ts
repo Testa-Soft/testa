@@ -16,6 +16,7 @@ import {
   type MetricKey,
 } from '@testa-platform/shared-types';
 import { SyncApiError } from '../analytics/errors.ts';
+import { type PageMatchType, parsePageKey } from './page-keys.ts';
 
 export interface KeySql {
   c: string;
@@ -68,7 +69,8 @@ export const BUILTIN_KEY_SQL: Record<BuiltinMetricKey, KeySql> = {
 export type ParsedKey =
   | { kind: 'builtin'; key: BuiltinMetricKey }
   | { kind: 'event'; key: MetricKey; name: string }
-  | { kind: 'goal'; key: MetricKey; goalId: number };
+  | { kind: 'goal'; key: MetricKey; goalId: number }
+  | { kind: 'page'; key: MetricKey; matchType: PageMatchType; value: string };
 
 const EVENT_NAME_RE = /^[A-Za-z0-9_.:-]{1,128}$/;
 const GOAL_RE = /^goal:([1-9]\d{0,17})$/;
@@ -76,7 +78,11 @@ const GOAL_RE = /^goal:([1-9]\d{0,17})$/;
 const isBuiltin = (k: string): k is BuiltinMetricKey =>
   (BUILTIN_METRIC_KEYS as readonly string[]).includes(k);
 
-/** Parse one metric key; throws 400 `unknown_metric` (field = the key) when invalid. */
+/**
+ * Parse one metric key; throws 400 `unknown_metric` (field = the key) when
+ * invalid, `invalid_regex` for a `page:regex:` key the pixel and RE2 would
+ * read differently (see `page-keys.ts`; RE2 compilation is checked async).
+ */
 export function parseMetricKey(raw: unknown): ParsedKey {
   if (typeof raw !== 'string') throw new SyncApiError('unknown_metric', 400, String(raw));
   if (isBuiltin(raw)) return { kind: 'builtin', key: raw };
@@ -88,6 +94,8 @@ export function parseMetricKey(raw: unknown): ParsedKey {
   if (goal?.[1] && Number.isSafeInteger(Number(goal[1]))) {
     return { kind: 'goal', key: raw as MetricKey, goalId: Number(goal[1]) };
   }
+  const page = parsePageKey(raw);
+  if (page) return { kind: 'page', key: raw as MetricKey, ...page };
   throw new SyncApiError('unknown_metric', 400, raw);
 }
 

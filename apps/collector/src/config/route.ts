@@ -13,6 +13,7 @@
 
 import type { Context } from 'hono';
 import { z } from 'zod';
+import { isBearerAuthorized } from '../auth/bearer.ts';
 import { type TestaConfigSource, buildTestaConfig } from './build.ts';
 import type { ConfigStore } from './store.ts';
 
@@ -22,18 +23,6 @@ export interface ConfigRouteDeps {
   now?: () => string;
   /** Shared secret required to WRITE config (Bearer token). Omit to disable auth. */
   writeToken?: string;
-}
-
-/** Constant-time-ish bearer check. */
-function isAuthorized(header: string | undefined, token: string | undefined): boolean {
-  if (!token) return true; // auth disabled (dev/tests without a token)
-  const prefix = 'Bearer ';
-  if (!header || !header.startsWith(prefix)) return false;
-  const provided = header.slice(prefix.length);
-  if (provided.length !== token.length) return false;
-  let diff = 0;
-  for (let i = 0; i < token.length; i++) diff |= provided.charCodeAt(i) ^ token.charCodeAt(i);
-  return diff === 0;
 }
 
 // Minimal boundary validation of the upstream project JSON — only the fields the
@@ -91,7 +80,7 @@ export function makeConfigPutHandler(deps: ConfigRouteDeps) {
   const now = deps.now ?? (() => new Date().toISOString());
 
   return async (c: Context): Promise<Response> => {
-    if (!isAuthorized(c.req.header('authorization'), deps.writeToken)) {
+    if (!isBearerAuthorized(c.req.header('authorization'), deps.writeToken)) {
       return c.json({ ok: false, error: 'unauthorized' }, 401);
     }
 
