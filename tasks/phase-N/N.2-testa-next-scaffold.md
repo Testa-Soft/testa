@@ -14,7 +14,7 @@ files_to_create:
   - packages/next/src/__tests__/next-cookie-store.test.ts
   - packages/next/src/__tests__/uuid.test.ts
 references:
-  - docs/prds/003-nextjs-redirect-middleware.md
+  - docs/prds/003-nextjs-redirect-middleware.md (removed; `git show 2145e3a:docs/prds/003-nextjs-redirect-middleware.md`)
   - packages/experiment-core/src/cookie-store.ts
 commits: []
 completed_at: null

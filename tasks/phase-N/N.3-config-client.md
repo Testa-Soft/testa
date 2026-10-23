@@ -12,7 +12,7 @@ files_to_create:
   - packages/next/src/config/instance-cache.ts
   - packages/next/src/config/__tests__/config-client.test.ts
 references:
-  - docs/prds/003-nextjs-redirect-middleware.md
+  - docs/prds/003-nextjs-redirect-middleware.md (removed; `git show 2145e3a:docs/prds/003-nextjs-redirect-middleware.md`)
   - packages/shared-types/src/project-config.ts
 commits: []
 completed_at: null

@@ -2,7 +2,7 @@
  * @testa/next — Testa split-URL A/B testing for Next.js.
  *
  * v1: server-side, flicker-free split-URL redirects via middleware. No client
- * pixel, no analytics, no consent handling (see docs/prds/003-*).
+ * pixel, no analytics, no consent handling (see PRD 003: `git show 2145e3a:docs/prds/003-nextjs-redirect-middleware.md`).
  */
 
 export {
