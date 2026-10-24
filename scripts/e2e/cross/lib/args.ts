@@ -3,7 +3,7 @@
  *
  *   --platform-dir <path>  testa-platform checkout whose collector/edge to run (default: this repo)
  *   --crobot-dir <path>    crobot worktree to serve as the e2e app (default: ~/projects/crobot/.worktrees/x0)
- *   --only <a,b>           layers (infra|smoke|contract|sync|ui|lifecycle) and/or check ids
+ *   --only <a,b>           layers (infra|smoke|contract|sync|ui|lifecycle|admin-v2) and/or check ids
  *   --keep-up              leave every process / container running after the run
  *   --down                 tear down a stack left by --keep-up and exit
  *   --strict               pending checks count as failures (exit 1) — X1 acceptance mode

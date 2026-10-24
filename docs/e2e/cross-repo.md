@@ -71,6 +71,13 @@ exactly per the validation doc), plus one pixel-shaped event through the edge.
 | `sync` | crobot's real code (subscription, `SyncMetricSummaryJob`, webhook receiver, extras jobs) against the live platform; MySQL rows vs platform rows |
 | `ui` | crobot's Playwright specs (`tests/e2e/analytics-v2`) in chromium on :8188 — crobot PRD §9 numbers |
 | `lifecycle` | stop / unsubscribe (runs last, it changes subscriptions) |
+| `admin-v2` | crobot admin-v2 backend (`tasks/admin-v2/CONTRACT.md`) through real HTTP: goal forms + `invalid_goals`, filter codes, `starts_with` → regex in the served config, analytics envelope / `i:{identifier}` / catalogue ETag / `no_data`, tracking via edge → listen session, retroactive page_view / custom goals in goal-table, goal library, sessions (`logout-others` runs last). Runs after `lifecycle` (adds experiments + library goals to project 42) |
+
+admin-v2 run (own ClickHouse DB, crobot e2e app from the admin-v2 integration branch):
+
+```sh
+E2E_CROSS_CH_DATABASE=admin_v2_x0 pnpm e2e:cross --crobot-dir ~/projects/crobot/.worktrees/av2-x0app [--only admin-v2]
+```
 
 ## DoD traceability matrix
 
