@@ -33,6 +33,11 @@ export async function insertEvents(rows: readonly object[]): Promise<void> {
   await insertRows('events_buffer', rows);
 }
 
+/** Insert rows into `event_items` (PRD-006, one row per item; JSONEachRow). */
+export async function insertEventItems(rows: readonly object[]): Promise<void> {
+  await insertRows('event_items', rows);
+}
+
 /** Run a read query and return parsed rows. */
 export async function query<T = unknown>(
   q: string,

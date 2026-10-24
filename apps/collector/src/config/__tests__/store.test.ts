@@ -48,4 +48,32 @@ describe('fileConfigStore', () => {
     expect(() => assertSafeProjectId('..')).toThrow();
     expect(() => assertSafeProjectId('ok-123_ABC')).not.toThrow();
   });
+
+  it('indexes a UUID-keyed config by its numeric project_id (UUID behaviour unchanged)', async () => {
+    const store = fileConfigStore(dir);
+    const uuid = '9b2f6c1e-4d1a-4f7e-9c3b-2a1d5e8f0a11';
+    const config = { ...CONFIG, project_id: 4242, slug: uuid };
+    await store.put(uuid, config);
+
+    expect(await store.get(uuid)).toEqual(config);
+    expect(await store.getByProjectId?.(4242)).toEqual(config);
+    // No config file appears under the numeric key: GET /api/v1/config/4242 still 404s.
+    expect(await store.get('4242')).toBeNull();
+  });
+
+  it('falls back to a config stored under the numeric id; unknown ids → null', async () => {
+    const store = fileConfigStore(dir);
+    await store.put('7', { ...CONFIG, project_id: 7 });
+    expect((await store.getByProjectId?.(7))?.project_id).toBe(7);
+    expect(await store.getByProjectId?.(987654)).toBeNull();
+    expect(await store.getByProjectId?.(-1)).toBeNull();
+  });
+
+  it('ignores a stale alias whose target now belongs to another project', async () => {
+    const store = fileConfigStore(dir);
+    await store.put('shared-key', { ...CONFIG, project_id: 11 });
+    await store.put('shared-key', { ...CONFIG, project_id: 12 });
+    expect(await store.getByProjectId?.(11)).toBeNull();
+    expect((await store.getByProjectId?.(12))?.project_id).toBe(12);
+  });
 });

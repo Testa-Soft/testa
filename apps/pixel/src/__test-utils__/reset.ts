@@ -13,6 +13,7 @@
  */
 
 import { consent } from '../runtime/consent.ts';
+import { __resetForTests as resetExpSessions } from '../runtime/experiments/session.ts';
 import {
   __clearPendingEventsForTests,
   __resetForTests as resetLifecycle,
@@ -32,6 +33,7 @@ export async function resetPixelState(): Promise<void> {
   resetLifecycle();
   __clearPendingEventsForTests();
   resetHealth();
+  resetExpSessions();
   resetTransport();
   resetRedirectBreadcrumbs();
   await resetOutbox();

@@ -1,31 +1,25 @@
 import { afterAll, beforeEach, describe, expect, it } from 'bun:test';
 import type { EnrichedEvent } from '@testa-platform/shared-types';
-import IORedis, { type Redis } from 'ioredis';
+import type { Redis } from 'ioredis';
+import { openPrefixedTestRedis } from '../../__test-utils__/redis.ts';
 import { enqueue } from '../stream.ts';
 
 const liveRedis = process.env.REDIS_URL ?? process.env.RUN_LIVE_REDIS;
-const url = process.env.REDIS_URL ?? 'redis://localhost:6380';
-const TEST_DB = 8;
-
-let client: Redis | null = null;
+// One shared test DB (REDIS_TEST_DB) + a key prefix unique to this file run;
+// cleanup deletes only this file's keys (never FLUSHDB — other sessions share Redis).
+const redisTest = liveRedis ? openPrefixedTestRedis('stream') : null;
 
 function getClient(): Redis {
-  if (!client) {
-    client = new IORedis(url, { db: TEST_DB, lazyConnect: false, maxRetriesPerRequest: 1 });
-  }
-  return client;
+  if (!redisTest) throw new Error('live Redis disabled (set REDIS_URL)');
+  return redisTest.client;
 }
 
 afterAll(async () => {
-  if (client) {
-    await client.flushdb().catch(() => undefined);
-    await client.quit().catch(() => undefined);
-    client = null;
-  }
+  await redisTest?.close();
 });
 
 beforeEach(async () => {
-  if (liveRedis) await getClient().flushdb();
+  await redisTest?.cleanup();
 });
 
 function makeEvent(overrides: Partial<EnrichedEvent> = {}): EnrichedEvent {
@@ -41,6 +35,9 @@ function makeEvent(overrides: Partial<EnrichedEvent> = {}): EnrichedEvent {
     tracker_version: '4.0.0',
     viewport_w: 1024,
     viewport_h: 768,
+    screen_w: 1920,
+    screen_h: 1080,
+    exp: [],
     server_ts: 1730902400500,
     country: 'US',
     region: 'CA',
@@ -49,6 +46,12 @@ function makeEvent(overrides: Partial<EnrichedEvent> = {}): EnrichedEvent {
     device_type: 'desktop',
     browser: 'chrome',
     os: 'macos',
+    os_name: 'macos',
+    os_version: '',
+    browser_name: 'chrome',
+    browser_version: '',
+    referrer_domain: '(direct)',
+    channel: 'Direct',
     is_bot: 0,
     ...overrides,
   };

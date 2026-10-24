@@ -11,7 +11,8 @@
  * data)` (also installed as `window.testa.pushEvent` /
  * `window.Analytica.pushEvent` for docs parity).
  *
- * Conversions POST the 3.3.3 payload `{goal_id, action, lead_uuid, variation,
+ * Conversions also go to the edge `/track` as `conversion` events (v2
+ * experiments, goal_id lifted), and POST the 3.3.3 payload `{goal_id, action, lead_uuid, variation,
  * data}` so crobot results populate identically to the legacy pixel. crobot
  * dedups once-per-visitor server-side; the transport also guards once-per-load.
  */
@@ -24,6 +25,7 @@ import {
   registerGoalController,
 } from '@testa-soft/dom';
 import { resolveGoalExperiments } from '@testa-soft/experiment-core';
+import { track } from './track.ts';
 
 export type GoalCycleTeardown = () => void;
 
@@ -50,7 +52,9 @@ export function startGoalTracking(
   if (assigned.length === 0) return () => {};
 
   const controller = createGoalController({
-    track: (_name, props = {}) => {
+    track: (name, props = {}) => {
+      // PRD-006: the same conversion to ClickHouse (v2 only; no-op otherwise).
+      track(name, props);
       const { goal_id, action, variation_id, goal_name, experiment_id, ...data } = props as {
         goal_id?: number;
         action?: string;

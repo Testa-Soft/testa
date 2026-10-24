@@ -22,6 +22,7 @@ import type {
   VariationChange,
   VariationConfig,
 } from '@testa-platform/shared-types';
+import { pagePattern, startsWithPattern } from './regex.ts';
 
 type RedirectMode = NonNullable<Extract<VariationChange, { type: 'redirect' }>['url_match_type']>;
 
@@ -48,13 +49,17 @@ interface SourceRule {
   operator?: string;
 }
 
+/** crobot goal `match_type` values (admin v2 adds `starts_with`). */
+type SourceGoalMatchType = MatchType | 'starts_with';
+
 /** crobot `GoalResource`: { id, title, type, action, match_type, rank }. */
 interface SourceGoal {
   id?: number;
   title?: string | null;
   type?: string;
   action?: string | null;
-  match_type?: string | null;
+  /** A {@link SourceGoalMatchType}; anything else (e.g. `site_wide`) → `contains`. */
+  match_type?: SourceGoalMatchType | (string & {}) | null;
   rank?: number | null;
 }
 
@@ -72,6 +77,8 @@ interface SourceExperiment {
   exclusions?: SourceRule[];
   variations?: SourceVariation[];
   goals?: SourceGoal[];
+  /** Crobot's per-experiment pipeline stamp (PRD-006 §6.1); absent = v1. */
+  platform_version?: string | null;
 }
 
 const OPERATORS = new Set<TargetingCondition['operator']>([
@@ -135,6 +142,9 @@ function buildExperiment(e: SourceExperiment): ExperimentConfig {
     ...(e.cross_domain ? { cross_domain: true } : {}),
     ...(targeting.length > 0 ? { targeting } : {}),
     ...(exclusions.length > 0 ? { exclusions } : {}),
+    ...(e.platform_version === 'v1' || e.platform_version === 'v2'
+      ? { platform_version: e.platform_version }
+      : {}),
   };
 }
 
@@ -146,7 +156,8 @@ const GOAL_MATCH_TYPES = new Set<MatchType>(['exact', 'contains', 'not_contains'
  * id/action can't fire (or can't be attributed by `/api/leads/convert`), so
  * they are dropped rather than served broken. `match_type` only matters for
  * `page_view`; an unrecognised value (e.g. `site_wide`) falls back to
- * `contains` — the 3.3.3 `urlMatches` default.
+ * `contains` — the 3.3.3 `urlMatches` default. `starts_with` (admin v2) has no
+ * pixel mode: it ships as `regex` `^` + the escaped action.
  */
 function mapGoals(goals: SourceGoal[] | undefined): GoalConfig[] {
   return (goals ?? [])
@@ -161,15 +172,29 @@ function mapGoals(goals: SourceGoal[] | undefined): GoalConfig[] {
       goal_id: g.id,
       ...(g.title ? { name: g.title } : {}),
       type: g.type,
-      action: g.action,
-      ...(g.match_type
-        ? {
-            match_type: GOAL_MATCH_TYPES.has(g.match_type as MatchType)
-              ? (g.match_type as MatchType)
-              : 'contains',
-          }
-        : {}),
+      ...goalMatch(g.action, g.match_type, g.type),
     }));
+}
+
+function goalMatch(
+  action: string,
+  matchType: SourceGoal['match_type'],
+  type: GoalType,
+): Pick<GoalConfig, 'action' | 'match_type'> {
+  if (!matchType) return { action };
+  if (type === 'page_view') {
+    const page = pagePattern(matchType, action);
+    if (page.matchType === 'regex' && matchType !== 'regex')
+      return { action: page.value, match_type: 'regex' };
+  }
+  if (matchType === 'starts_with')
+    return { action: startsWithPattern(action), match_type: 'regex' };
+  return {
+    action,
+    match_type: GOAL_MATCH_TYPES.has(matchType as MatchType)
+      ? (matchType as MatchType)
+      : 'contains',
+  };
 }
 
 function mapConditions(rules: SourceRule[] | undefined): TargetingCondition[] {

@@ -5,9 +5,10 @@
   "type": "module",
   "description": "Bun + Hono ingest API + ClickHouse consumer + read API for aggregated metrics",
   "scripts": {
-    "build": "bun build ./src/index.ts --target=bun --outdir=dist --sourcemap=external && bun build ./src/consumer/main.ts --target=bun --outdir=dist --sourcemap=external",
+    "build": "bun build ./src/index.ts --target=bun --outdir=dist --sourcemap=external && bun build ./src/consumer/main.ts --target=bun --outdir=dist --sourcemap=external && bun build ./src/modeler/main.ts --target=bun --outdir=dist/modeler --sourcemap=external",
     "dev:server": "bun run --hot src/index.ts",
     "dev:consumer": "bun run --hot src/consumer/main.ts",
+    "dev:modeler": "bun run --hot src/modeler/main.ts",
     "migrate": "bun run src/db/migrate.ts",
     "test": "bun test",
     "typecheck": "tsc --noEmit",

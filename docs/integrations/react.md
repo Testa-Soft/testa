@@ -128,6 +128,65 @@ GTM Custom HTML and non-bundled scripts. Conversions POST the legacy crobot
 payload, so results populate identically to the pixel; crobot dedups
 once-per-visitor server-side.
 
+## Ecommerce & conversion events (PRD-006, v2 experiments)
+
+For experiments on the PRD-006 pipeline (`platform_version: "v2"` in the
+project config), send ecommerce events with `track` or the typed helpers. They
+post pixel-format events to your edge worker's `/track` (same-origin by
+default; set `<TestaProvider eventsEndpoint="https://track.example.com/track">`
+otherwise), stamped with the visitor's active experiment sessions.
+
+```ts
+import {
+  track, trackAddToCart, trackBeginCheckout, trackShippingInfo,
+  trackPaymentInfo, trackPurchase, trackLead, trackSignUp,
+} from '@testa-soft/react';
+
+trackAddToCart(items, { currency: 'EUR', cart_id: 'c_8f2a' });
+trackBeginCheckout(items, { currency: 'EUR', cart_id: 'c_8f2a' });
+trackShippingInfo({ cart_id: 'c_8f2a' });                 // add_shipping_info
+trackPaymentInfo({ payment_type: 'apple_pay' });          // add_payment_info (payment_type required)
+trackPurchase({
+  order_id: 'ORD-42', currency: 'EUR', items,
+  discount: 15.8, tax: 37.5, shipping: 4.9, coupon: 'AUTUMN10', payment_type: 'card',
+});
+trackPurchase({ order_id: 'ORD-42-U1', parent_order_id: 'ORD-42', purchase_type: 'upsell', currency: 'EUR', items: upsellItems });
+trackLead({ lead_type: 'quote', form_id: 'b2b_quote' });   // generate_lead (not lead_generated)
+trackSignUp({ method: 'email' });
+track('size_guide_opened', { product_id: 'SW-MER' });     // custom event
+```
+
+- `items` follow the GA4 shape plus `product_id` (`item_id` required; `price`
+  is the unit price after item discounts, `quantity` defaults to 1).
+- **Revenue** (`value_native`) is computed as Σ price × quantity − `discount`,
+  **excluding tax and shipping** (those go along as extras). Pass `value` to
+  override.
+- Events are sent only while the visitor has an active experiment session
+  (60 minutes, sliding on every event); outside one they are dropped. The
+  provider starts / renews sessions on every page and fires `experiment_view`
+  when a v2 variation is applied.
+- Projects without v2 experiments send nothing from these helpers;
+  `pushEvent` (custom goal matching) keeps working unchanged.
+- Helpers never throw: invalid input (e.g. `trackPaymentInfo` without
+  `payment_type`, an upsell without `parent_order_id`) is dropped.
+- Using the pixel instead? The same helpers exist on `window._testa`
+  (`_testa.trackPurchase({…})`, …), queue-safe before the pixel loads; the
+  positional `_testa.trackPurchase(value, currency, orderId)` still works.
+- **Upgrading from 1.5.0 (release note).** v2 experiments need this SDK version
+  on every surface that writes the `_testa_exp` cookie. A 1.5.0 middleware /
+  provider still reads the new cookie correctly (assignments, exclusions and the
+  `sessionExp` expiry keep their meaning), but when it **rewrites** the cookie
+  it drops the new experiment-session fields (5–6). Assignments survive; the
+  pixel then starts a new experiment session, so session counts inflate and
+  new-vs-returning skews. v1 experiments are unaffected.
+- **Keep `/track` same-origin.** The pixel falls back to `sendBeacon` on
+  `pagehide`, and browsers refuse a cross-origin `sendBeacon` with a JSON body.
+  With `/track` on another origin (or a pixel `apiUrl` pointing elsewhere),
+  events still queued when the visitor leaves are delayed until the next page
+  view, or lost if there is none. The SDK helpers post with
+  `fetch(…, { keepalive: true })`; cross-origin endpoints need CORS (the edge
+  worker allows any origin).
+
 ## Analytics events
 
 Same client event bus as `@testa-soft/next`. Two events, two moments:

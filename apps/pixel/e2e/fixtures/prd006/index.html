@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Testa PRD-006 fixture</title>
+    <!--
+      PRD-006 V9 fixture (apps/pixel/e2e/prd006.spec.ts).
+      The spec sets window.cfPrefill with an init script, then serves the
+      freshly built loader + runtime bundles for the two /__testa/ URLs via
+      page.route. /track is intercepted by the spec as well.
+    -->
+    <script src="/__testa/loader.js"></script>
+    <script src="/__testa/runtime.js" defer></script>
+  </head>
+  <body>
+    <h1>Testa PRD-006 fixture page</h1>
+  </body>
+</html>

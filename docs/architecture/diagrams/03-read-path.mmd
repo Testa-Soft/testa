@@ -3,14 +3,30 @@ flowchart LR
   classDef cro fill:#f3e5f5,stroke:#6a1b9a,stroke-width:2px
   classDef plat fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px
 
-  V[Vue<br/>RevenueMetrics.vue] -->|GET /api/experiments<br/>/:id/metrics/aov| L[Laravel<br/>MetricsProxyController]
-  L -->|cache 60s<br/>in Redis| RC[(Crobot Redis)]
-  L -->|GET /api/v1/metrics/aov<br/>X-Service-Token| C[Collector read API]
-  C -->|SELECT| CH[(ClickHouse<br/>mv_aov_daily<br/>+ fx_rates dict)]
-  C -->|Welch's t-test<br/>or bootstrap CI| C
-  C -->|JSON| L
-  L -->|JSON| V
+  %% PRD-006 Part 3: crobot subscribes, the platform models on its own queue, crobot pulls stored rows.
+  SVC[Crobot experiment services<br/>start / change / stop / archive] -->|PUT / DELETE …/subscription<br/>project_id · X-Service-Token| API[Collector sync API<br/>/api/v1/experiments/*]
+  API -->|upsert| SUB[(ClickHouse<br/>metric_subscriptions)]
+  API -->|enqueue high priority| Q[(Redis<br/>modeler:queue · run state)]
+
+  SCH[Modeler scheduler<br/>every 15 min] -->|new events / stale / stopped| Q
+  Q --> W[Modeler workers<br/>computeDailyRows]
+  W -->|exposures ⟕ events / event_items<br/>FX previous day| CH[(ClickHouse<br/>events · exposures · event_items<br/>fx_rates_history)]
+  W -->|insert run_id rows| MD[(ClickHouse<br/>metric_daily)]
+  W -->|last_ready_run_id · quality| Q
+  W -.->|summary-ready / query-ready<br/>HMAC webhook| HOOK[Crobot webhook receiver]
+
+  JOB[Crobot SyncMetricSummaryJob<br/>15-min cron + webhook] -->|GET …/daily-summary<br/>?project_id=&since_run_id=| API
+  API -->|read last ready run| MD
+  JOB -->|replace rows| MS[(Crobot MySQL<br/>metric_summary)]
+  HOOK --> JOB
+
+  XQ[Crobot query jobs<br/>extras · breakdowns · sync button] -->|POST / GET …/queries| API
+  API -->|cached result 1 h| Q
+
+  STAT[Crobot stats calls] -->|POST /api/v1/stats<br/>summed rows| ST[Collector stats<br/>stateless Monte Carlo]
+
+  V[Vue Analytics V2 UI] -->|reads MySQL only| MS
 
   class V vue
-  class L,RC cro
-  class C,CH plat
+  class SVC,JOB,HOOK,XQ,STAT,MS cro
+  class API,SUB,Q,SCH,W,CH,MD,ST plat

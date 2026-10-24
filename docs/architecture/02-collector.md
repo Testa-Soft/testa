@@ -5,11 +5,13 @@ The **collector** is a Bun + Hono service that:
 1. Accepts HMAC-signed batches of events from the edge worker (`POST /_ingest`).
 2. Pushes each event onto a Redis Stream (`events`).
 3. A separate Bun process drains the stream and INSERTs into ClickHouse.
-4. Exposes a small read API (`GET /api/v1/metrics/*`) that returns pre-aggregated metric summaries to crobot.
+4. Serves the config API (`/api/v1/config/:projectId`) — testa-platform owns the servable project configs.
+5. Runs the PRD-006 **modeler** (third process): scheduler + workers that turn raw events into additive daily rows (`metric_daily`) per subscribed experiment, plus on-demand query views.
+6. Exposes the PRD-006 **sync API** (`/api/v1/experiments/*`) that crobot pulls those rows from, and the stateless **stats** endpoint (`POST /api/v1/stats`).
 
 The collector is the **only service that talks to ClickHouse**. Crobot does NOT have a CH client.
 
-## Two processes from one source
+## Three processes from one source
 
 ```
 apps/collector/
@@ -19,20 +21,27 @@ apps/collector/
 │   ├── config.ts           Zod-validated env
 │   ├── ingest/             POST /_ingest implementation (Phase 1.4)
 │   ├── consumer/           XREADGROUP loop, batch INSERT (Phase 1.5)
-│   ├── metrics/            GET /api/v1/metrics/* (Phase 4)
-│   ├── fx/                 Frankfurter sync, /_internal/fx-rates (Phase 1.6)
-│   ├── db/                 ClickHouse client + migrations (Phase 1.1-1.3)
+│   ├── modeler/main.ts     Modeler process entry (scheduler + workers; --once for one pass)
+│   ├── modeler/            daily rows builder, queue, run state, query jobs, webhooks (PRD-006 5.9/5.15)
+│   ├── sync/               /api/v1/experiments/* sync API (PRD-006 5.8, R3 project scoping)
+│   ├── analytics/          shared attribution SQL, view registry, guards, errors (5.18)
+│   ├── products/ distributions/ health/   query views (5.16, 5.17)
+│   ├── stats/              POST /api/v1/stats — Bayesian Monte Carlo (5.10, 5.11)
+│   ├── config/             config API + store (numeric project_id alias)
+│   ├── fx/                 Frankfurter sync + backfill, previous-day FX SQL (1.6, 5.19)
+│   ├── db/                 ClickHouse client, row mapping (events + event_items), migrations
 │   └── auth/               HMAC verify + service token verify
 ```
 
-Run as two separate Bun processes (Docker containers / systemd units in production):
+Run as three separate Bun processes (Docker containers / systemd units in production):
 
 ```sh
 bun run dev:server      # or production: bun src/index.ts
 bun run dev:consumer    # or production: bun src/consumer/main.ts
+bun run dev:modeler     # or production: bun src/modeler/main.ts  (--once / MODELER_ONCE=1: one pass)
 ```
 
-This split means write throughput (server) and CH write rate (consumer) scale independently.
+This split means write throughput (server), CH write rate (consumer) and modeling load (modeler) scale independently. The server and the modeler must share Redis, ClickHouse, the config store and `MODELER_KEY_PREFIX`. Whenever they run as separate processes/machines, use `CONFIG_STORE=redis` (configs under `testa:config:{key}` + `testa:config:by-project-id:{n}`, prefix `CONFIG_REDIS_PREFIX`); the default `CONFIG_STORE=file` (`CONFIG_DIR`, per-machine) only suits a single-machine / config-only deployment. With `redis`, the API copies `CONFIG_DIR` files missing from Redis into it on startup (idempotent, never overwrites).
 
 ## /_ingest write path
 
@@ -127,33 +136,19 @@ On CH 4xx (schema mismatch): log + XACK to drop the batch. Investigate offline.
 
 Graceful shutdown: on SIGTERM, finish current batch, XACK, then exit.
 
-## Read API (Phase 4)
+## Read path (PRD-006)
 
-```
-GET /api/v1/metrics/aov?experiment_id=42&from=2026-04-01&to=2026-05-01&report_currency=USD
-Headers:
-  X-Service-Token: <SERVICE_TOKEN env>
+Diagram: `diagrams/03-read-path.mmd`. Contract: `docs/reference/api-endpoints.md` (sync API, stats) and PRD-006 Part 3.
 
-Response (matches AovSummary from shared-types):
-{
-  "experiment_id": 42,
-  "report_currency": "USD",
-  "from": "2026-04-01",
-  "to": "2026-05-01",
-  "variations": [
-    { "variation_id": 100, "aov": 49.99, "ci_low": 47.10, "ci_high": 52.88,
-      "sample_size": 1234, "total_revenue": 61687.66, "orders": 1234 }
-  ],
-  "significance": [
-    { "reference_variation_id": 100, "compared_variation_id": 101,
-      "delta": 4.21, "delta_relative": 0.084, "p_value": 0.024, "is_significant": true }
-  ]
-}
-```
+1. **Subscribe.** Crobot `PUT /api/v1/experiments/:id/subscription` (body carries `project_id`). Stored in `metric_subscriptions` (ReplacingMergeTree); a new / changed / stopped subscription enqueues a refresh at high priority.
+2. **Model.** The modeler scheduler (every `MODELER_INTERVAL_SEC`) enqueues running subscriptions with newer events, a failed or missing run, or a run older than 24 h; stopped ones get one final run (`is_final = 1`). Workers take a per-experiment lock, compute every subscribed metric for `[from, to ?? today]` (`computeDailyRows`: exposed set from `exposures` ⟕ attributed events / `event_items`, purchases deduped, FX at the previous day's rate), insert the rows under a new `run_id`, then flip `last_ready_run_id` in Redis — readers never see half a run. 1 attempt + 3 retries, then `failed` with the last good run still served.
+3. **Pull.** Crobot `GET …/daily-summary?project_id=&since_run_id=` — status + the last ready run's rows from `metric_daily`. Never computes.
+4. **Extras.** `POST …/queries` (summary with a dimension / outlier capping, products, distributions, health) run on the same queue at higher priority; results cached 1 h in Redis.
+5. **Significance.** Crobot sums rows and calls `POST /api/v1/stats`.
 
-Uses materialized view `mv_aov_daily` + `fx_rates` dictionary for currency conversion. Welch's t-test for significance (RPV uses bootstrap CIs).
+Experiment ids are unique per project only, so subscriptions, run state, locks and query ids are project-scoped (R3). The collector checks `X-Service-Token`, that the experiment exists in the project's config (`experiment_not_found`) and is `platform_version: "v2"` (`version_mismatch`); user-level permissions stay in crobot.
 
-The collector does not enforce per-experiment authorization — it only checks that `X-Service-Token` matches. Crobot's `MetricsProxyController` enforces user-level permissions before proxying.
+The pre-PRD-006 read API (`GET /api/v1/metrics/*`, `mv_aov_daily` / `mv_rpv_*`) was never built and its MVs were dropped (migrations 019–021).
 
 ## ClickHouse interaction
 
@@ -166,4 +161,6 @@ The collector does not enforce per-experiment authorization — it only checks t
 - `docs/architecture/03-data-model.md` — full CH schema
 - `docs/reference/clickhouse-schema.md` — DDL
 - `docs/reference/api-endpoints.md` — endpoint specs (request/response)
+- `docs/prds/006-ecommerce-events-and-metric-modeling.md` — PRD-006 (events, modeling, sync API, stats)
+- `docs/reference/samples/` — reference oracle (`generate.py`) + modeled examples
 - `docs/reference/hmac-protocol.md` — HMAC details

@@ -26,6 +26,9 @@ function makeEvent(overrides: Partial<PixelEvent> = {}): PixelEvent {
     tracker_version: '4.0.0',
     viewport_w: 1920,
     viewport_h: 1080,
+    screen_w: 1920,
+    screen_h: 1080,
+    exp: [],
     ...overrides,
   };
 }
@@ -189,5 +192,67 @@ describe('truncateIp', () => {
   it('empty input → empty', () => {
     expect(truncateIp('')).toBe('');
     expect(truncateIp('not an ip')).toBe('');
+  });
+});
+
+describe('enrich — PRD-006 fields (task 5.3)', () => {
+  const inputs = (ua: string): EnrichInputs => ({ userAgent: ua, countryHeader: 'LT' });
+  const UAS = {
+    macChrome:
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.6668.58 Safari/537.36',
+    iphoneSafari:
+      'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1',
+    samsung:
+      'Mozilla/5.0 (Linux; Android 14; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/25.0 Chrome/121.0.0.0 Mobile Safari/537.36',
+    chromebook:
+      'Mozilla/5.0 (X11; CrOS x86_64 14541.0.0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
+    winEdge:
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36 Edg/129.0.2792.52',
+  };
+
+  it.each<[keyof typeof UAS, string, string, string]>([
+    ['macChrome', 'macOS', 'Chrome', '129'],
+    ['iphoneSafari', 'iOS', 'Safari', '17'],
+    ['samsung', 'Android', 'Samsung Internet', '25'],
+    ['chromebook', 'ChromeOS', 'Chrome', '128'],
+    ['winEdge', 'Windows', 'Edge', '129'],
+  ])('%s → os_name %s, browser_name %s %s', (ua, os, browser, major) => {
+    const e = enrich(inputs(UAS[ua]), makeEvent());
+    expect([e.os_name, e.browser_name, e.browser_version]).toEqual([os, browser, major]);
+  });
+
+  it('keeps the legacy os / browser fields as before', () => {
+    const e = enrich(inputs(UAS.macChrome), makeEvent());
+    expect(e.os).toBe('Mac OS 10.15.7');
+    expect(e.os_version).toBe('10.15.7');
+    expect(e.browser).toBe('Chrome');
+  });
+
+  it('derives referrer_domain + channel from entry attribution only', () => {
+    const view = enrich(
+      inputs(UAS.macChrome),
+      makeEvent({
+        event_name: 'experiment_view',
+        entry_referrer: 'https://www.google.com/',
+        entry_url: 'https://example.com/?gclid=x',
+        click_id_type: 'gclid',
+      }),
+    );
+    expect([view.referrer_domain, view.channel]).toEqual(['google.com', 'Paid Search']);
+
+    const organic = enrich(
+      inputs(UAS.macChrome),
+      makeEvent({ entry_referrer: 'https://duckduckgo.com/' }),
+    );
+    expect([organic.referrer_domain, organic.channel]).toEqual([
+      'duckduckgo.com',
+      'Organic Search',
+    ]);
+
+    const direct = enrich(inputs(UAS.macChrome), makeEvent({ entry_url: 'https://example.com/' }));
+    expect([direct.referrer_domain, direct.channel]).toEqual(['(direct)', 'Direct']);
+
+    const plain = enrich(inputs(UAS.macChrome), makeEvent({ referrer: 'https://google.com/' }));
+    expect([plain.referrer_domain, plain.channel]).toEqual(['', '']);
   });
 });

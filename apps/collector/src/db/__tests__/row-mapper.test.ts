@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import type { EnrichedEvent } from '@testa-platform/shared-types';
-import { rowFromEvent } from '../row-mapper.ts';
+import { itemRowsFromEvent, rowFromEvent } from '../row-mapper.ts';
 
 function makeEvent(overrides: Partial<EnrichedEvent> = {}): EnrichedEvent {
   return {
@@ -15,6 +15,9 @@ function makeEvent(overrides: Partial<EnrichedEvent> = {}): EnrichedEvent {
     tracker_version: '4.0.0',
     viewport_w: 1280,
     viewport_h: 720,
+    screen_w: 1920,
+    screen_h: 1080,
+    exp: [],
     server_ts: 1730902400500,
     country: 'US',
     region: '',
@@ -23,6 +26,12 @@ function makeEvent(overrides: Partial<EnrichedEvent> = {}): EnrichedEvent {
     device_type: 'desktop',
     browser: '',
     os: '',
+    os_name: '',
+    os_version: '',
+    browser_name: '',
+    browser_version: '',
+    referrer_domain: '(direct)',
+    channel: 'Direct',
     is_bot: 0,
     ...overrides,
   };
@@ -55,5 +64,174 @@ describe('rowFromEvent — timestamp + defaults', () => {
     expect(row.country).toBe('XX');
     expect(row.referrer).toBe('');
     expect(row.value_native).toBe(0);
+  });
+});
+
+describe('rowFromEvent — PRD-006 fields (task 5.4)', () => {
+  const prd006 = makeEvent({
+    event_name: 'purchase',
+    exp: [
+      [1717, 101, 1760433600, 1],
+      [1802, 200, 1760431800, 3],
+    ],
+    goal_id: 12,
+    purchase_type: 'upsell',
+    parent_order_id: 'O-1',
+    order_id: 'O-1-U1',
+    page_type: 'thank_you',
+    cart_id: 'c_8f2a',
+    utm_term: 'merino',
+    utm_content: 'ad-1',
+    screen_w: 390,
+    screen_h: 844,
+    visit_number: 3,
+    entry_referrer: 'https://www.google.com/',
+    entry_url: 'https://shop.example/?utm_source=google',
+    entry_utm_source: 'google',
+    entry_utm_medium: 'cpc',
+    entry_utm_campaign: 'autumn',
+    entry_utm_term: 'merino',
+    entry_utm_content: 'ad-1',
+    click_id_type: 'gclid',
+    os_name: 'iOS',
+    os_version: '17.5',
+    browser_name: 'Safari',
+    browser_version: '17',
+    referrer_domain: 'google.com',
+    channel: 'Paid Search',
+  });
+
+  it('unzips exp into parallel arrays', () => {
+    const row = rowFromEvent(prd006);
+    expect([row.exp_ids, row.exp_var_ids, row.exp_session_starts, row.exp_session_idx]).toEqual([
+      [1717, 1802],
+      [101, 200],
+      [1760433600, 1760431800],
+      [1, 3],
+    ]);
+  });
+
+  it('maps every new scalar column', () => {
+    const row = rowFromEvent(prd006);
+    expect(row).toMatchObject({
+      goal_id: 12,
+      purchase_type: 'upsell',
+      parent_order_id: 'O-1',
+      page_type: 'thank_you',
+      cart_id: 'c_8f2a',
+      utm_term: 'merino',
+      utm_content: 'ad-1',
+      screen_w: 390,
+      screen_h: 844,
+      visit_number: 3,
+      entry_referrer: 'https://www.google.com/',
+      entry_url: 'https://shop.example/?utm_source=google',
+      entry_utm_source: 'google',
+      entry_utm_medium: 'cpc',
+      entry_utm_campaign: 'autumn',
+      entry_utm_term: 'merino',
+      entry_utm_content: 'ad-1',
+      click_id_type: 'gclid',
+      os_name: 'iOS',
+      os_version: '17.5',
+      browser_name: 'Safari',
+      browser_version: '17',
+      referrer_domain: 'google.com',
+      channel: 'Paid Search',
+    });
+  });
+
+  it('defaults every new column when absent (incl. a pre-PRD-006 event without exp)', () => {
+    const { exp: _exp, referrer_domain: _r, channel: _c, ...old } = makeEvent();
+    const row = rowFromEvent(old as typeof prd006);
+    expect(row).toMatchObject({
+      exp_ids: [],
+      exp_var_ids: [],
+      exp_session_starts: [],
+      exp_session_idx: [],
+      goal_id: 0,
+      purchase_type: '',
+      parent_order_id: '',
+      page_type: '',
+      cart_id: '',
+      visit_number: 0,
+      entry_referrer: '',
+      click_id_type: '',
+      referrer_domain: '',
+      channel: '',
+    });
+  });
+});
+
+describe('itemRowsFromEvent (task 5.4)', () => {
+  it('one row per item, carrying event_id, order_id, purchase_type, exp_ids; product_id defaults to item_id', () => {
+    const ev = makeEvent({
+      event_name: 'purchase',
+      order_id: 'O-1',
+      purchase_type: 'initial',
+      currency: 'EUR',
+      exp: [[1717, 101, 1760433600, 1]],
+      items: [
+        {
+          item_id: 'SW-MER-NVY-M',
+          product_id: 'SW-MER',
+          item_name: 'Merino',
+          item_variant: 'Navy / M',
+          price: 89,
+          quantity: 2,
+          index: 3,
+        },
+        { item_id: 'SCF-WL-GRY' },
+      ],
+    });
+    const rows = itemRowsFromEvent(ev);
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toMatchObject({
+      event_id: ev.event_id,
+      client_ts: '2024-11-06 14:13:20.123',
+      order_id: 'O-1',
+      purchase_type: 'initial',
+      currency: 'EUR',
+      exp_ids: [1717],
+      item_id: 'SW-MER-NVY-M',
+      product_id: 'SW-MER',
+      item_variant: 'Navy / M',
+      price: 89,
+      quantity: 2,
+      position: 3,
+    });
+    expect(rows[1]).toMatchObject({
+      item_id: 'SCF-WL-GRY',
+      product_id: 'SCF-WL-GRY',
+      price: 0,
+      quantity: 1,
+      position: 0,
+    });
+  });
+
+  it('no items → no rows', () => {
+    expect(itemRowsFromEvent(makeEvent())).toEqual([]);
+  });
+});
+
+describe('rowFromEvent — purchase_type default', () => {
+  const item = { item_id: 'SKU-1', price: 10, quantity: 1 };
+
+  it('stores a purchase sent without purchase_type as the main order (initial)', () => {
+    const ev = makeEvent({ event_name: 'purchase', order_id: 'T-1', items: [item] });
+    expect(rowFromEvent(ev).purchase_type).toBe('initial');
+    expect(itemRowsFromEvent(ev)[0]?.purchase_type).toBe('initial');
+  });
+
+  it('keeps an explicit upsell', () => {
+    const ev = makeEvent({ event_name: 'purchase', purchase_type: 'upsell', items: [item] });
+    expect(rowFromEvent(ev).purchase_type).toBe('upsell');
+    expect(itemRowsFromEvent(ev)[0]?.purchase_type).toBe('upsell');
+  });
+
+  it('leaves non-purchase events without a purchase_type', () => {
+    const ev = makeEvent({ event_name: 'add_to_cart', items: [item] });
+    expect(rowFromEvent(ev).purchase_type).toBe('');
+    expect(itemRowsFromEvent(ev)[0]?.purchase_type).toBe('');
   });
 });

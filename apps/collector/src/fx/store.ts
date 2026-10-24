@@ -50,3 +50,14 @@ export async function recentRates(days: number): Promise<FxRow[]> {
     rate: r.rate,
   }));
 }
+
+/** Calendar days in [from, to] that already have USD-based rates. */
+export async function daysWithRates(from: string, to: string): Promise<Set<string>> {
+  const rows = await query<{ d: string }>(
+    `SELECT DISTINCT toString(date) AS d
+     FROM ${TABLE} FINAL
+     WHERE from_ccy = 'USD' AND date >= toDate({from:String}) AND date <= toDate({to:String})`,
+    { from, to },
+  );
+  return new Set(rows.map((r) => r.d));
+}

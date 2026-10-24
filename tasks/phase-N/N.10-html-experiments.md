@@ -20,7 +20,7 @@ files_to_modify:
   - packages/next/tsconfig.json            # DOM.Iterable
 references:
   - packages/dom/src/index.ts
-  - docs/prds/003-nextjs-redirect-middleware.md
+  - docs/prds/003-nextjs-redirect-middleware.md (removed; `git show 2145e3a:docs/prds/003-nextjs-redirect-middleware.md`)
 commits: []
 completed_at: 2026-08-17
 ---

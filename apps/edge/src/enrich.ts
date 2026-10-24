@@ -1,5 +1,7 @@
 import type { EnrichedEvent, PixelEvent } from '@testa-platform/shared-types';
 import { UAParser } from 'ua-parser-js';
+import { deriveChannel, referrerDomain } from './channel.ts';
+import { browserFamily, majorVersion, osFamily } from './ua-family.ts';
 
 /**
  * Geo + UA enrichment for events flowing through the worker.
@@ -59,8 +61,40 @@ export function enrich(inputs: EnrichInputs, ev: PixelEvent): EnrichedEvent {
     device_type: mapDeviceType(result.device.type, userAgent),
     browser,
     os,
+    os_name: osFamily(result.os.name),
+    os_version: osVersion,
+    browser_name: browserFamily(result.browser.name),
+    browser_version: majorVersion(result.browser.version),
+    ...attribution(ev),
     is_bot: 0,
   };
+}
+
+/**
+ * Session-entry attribution → `referrer_domain` + `channel` (PRD-006 §3.6).
+ * Only events that carry entry attribution (the pixel stamps it on
+ * `experiment_view`) get them; other events leave both empty.
+ */
+function attribution(ev: PixelEvent): { referrer_domain: string; channel: string } {
+  const hasEntry =
+    ev.entry_referrer !== undefined ||
+    ev.entry_url !== undefined ||
+    ev.click_id_type !== undefined ||
+    ev.entry_utm_source !== undefined ||
+    ev.entry_utm_medium !== undefined ||
+    ev.entry_utm_campaign !== undefined;
+  if (!hasEntry) return { referrer_domain: '', channel: '' };
+  const referrer_domain = referrerDomain(ev.entry_referrer, ev.entry_url ?? ev.url);
+  const channel = deriveChannel({
+    click_id_type: ev.click_id_type,
+    utm_source: ev.entry_utm_source,
+    utm_medium: ev.entry_utm_medium,
+    utm_campaign: ev.entry_utm_campaign,
+    utm_term: ev.entry_utm_term,
+    utm_content: ev.entry_utm_content,
+    referrer_domain,
+  });
+  return { referrer_domain, channel };
 }
 
 /**

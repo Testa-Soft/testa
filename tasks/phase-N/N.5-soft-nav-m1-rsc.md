@@ -10,7 +10,7 @@ files_to_create:
   - packages/next/src/soft-nav/prefetch-guard.ts
   - packages/next/src/soft-nav/__tests__/rsc-redirect.test.ts
 references:
-  - docs/prds/003-nextjs-redirect-middleware.md
+  - docs/prds/003-nextjs-redirect-middleware.md (removed; `git show 2145e3a:docs/prds/003-nextjs-redirect-middleware.md`)
   - packages/next/src/redirect-loop.ts
 commits: []
 completed_at: 2026-08-05

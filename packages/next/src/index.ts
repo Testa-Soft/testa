@@ -2,7 +2,7 @@
  * @testa/next — Testa split-URL A/B testing for Next.js.
  *
  * v1: server-side, flicker-free split-URL redirects via middleware. No client
- * pixel, no analytics, no consent handling (see docs/prds/003-*).
+ * pixel, no analytics, no consent handling (see PRD 003: `git show 2145e3a:docs/prds/003-nextjs-redirect-middleware.md`).
  */
 
 export {
@@ -72,3 +72,17 @@ export { PUBLIC_HOST_HEADER, PUBLIC_PROTO_HEADER } from './constants.ts';
 // per request, as a console line + the `x-testa-debug` response header.
 export { DEBUG_HEADER } from './debug.ts';
 export type { DebugTrace } from './debug.ts';
+
+// PRD-006 typed tracking helpers (task 5.7) — client-side; posts to the edge `/track`.
+export {
+  DEFAULT_EVENTS_ENDPOINT,
+  track,
+  trackAddToCart,
+  trackBeginCheckout,
+  trackLead,
+  trackPageView,
+  trackPaymentInfo,
+  trackPurchase,
+  trackShippingInfo,
+  trackSignUp,
+} from './track.ts';

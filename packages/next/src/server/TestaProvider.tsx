@@ -30,6 +30,11 @@ interface CommonProps {
   previewApiUrl?: string;
   /** crobot base URL for goal conversions; passed straight to the client. */
   trackingHost?: string;
+  /**
+   * PRD-006: edge worker `/track` URL that `track*` helpers and v2
+   * `experiment_view` events post to. Default same-origin `/track`.
+   */
+  eventsEndpoint?: string;
   /** Next data-cache revalidate window (seconds). Ignored when `config` is inline. */
   revalidateSec?: number;
   /**
@@ -90,6 +95,7 @@ export async function TestaProvider(props: TestaProviderProps): Promise<JSX.Elem
       {...(props.previewApiUrl ? { previewApiUrl: props.previewApiUrl } : {})}
       {...(props.tracking !== undefined ? { tracking: props.tracking } : {})}
       {...(props.trackingHost ? { trackingHost: props.trackingHost } : {})}
+      {...(props.eventsEndpoint ? { eventsEndpoint: props.eventsEndpoint } : {})}
       {...(props.secureCookies !== undefined ? { secureCookies: props.secureCookies } : {})}
       {...(props.cookieDomain ? { cookieDomain: props.cookieDomain } : {})}
       {...(props.legacyCookiesEnabled ? { legacyCookiesEnabled: true } : {})}

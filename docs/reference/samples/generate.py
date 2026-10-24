@@ -672,7 +672,7 @@ def products(M, limit=8, purchase_type="all"):
             "sort": "control_revenue", "limit": limit, "offset": 0, "total_products": len(order), "products": out}
 
 
-def distributions(M, bins=None):
+def distributions(M, bins=None, capped=False):
     var_of = {vid: M["exposed"][vid]["variation_id"] for vid in M["exposed"]}
     D = {k: {str(v): defaultdict(int) for v in M["variations"]} for k in ("payment_type", "coupon", "currency")}
     vals = {str(v): [] for v in M["variations"]}
@@ -699,11 +699,17 @@ def distributions(M, bins=None):
         for x in l:
             i = max(i for i, b in enumerate(bins) if x >= b); cnt[i] += 1
         hist[v] = [{"from": b, "to": bins[i + 1] if i + 1 < len(bins) else None, "count": c, "share": r6(c / len(l)) if l else None} for i, (b, c) in enumerate(zip(bins, cnt))]
-    return {"experiment_id": M["exp_id"], "from": M["frm"], "to": M["to"], "report_currency": M["ccy"],
+    out = {"experiment_id": M["exp_id"], "from": M["frm"], "to": M["to"], "report_currency": M["ccy"],
             "distributions": {"payment_type": {"basis": "add_payment_info events", "by_variation": fmt(D["payment_type"])},
                               "coupon": {"basis": "initial orders", "by_variation": fmt(D["coupon"])},
                               "currency": {"basis": "initial orders", "by_variation": fmt(D["currency"])},
                               "order_value": {"basis": "initial orders", "bins": bins, "by_variation": hist}}}
+    if capped:
+        # R4: initial orders above the pooled p99 cap (M["cap"]), per variation. Opt-in: goldens are uncapped.
+        has_orders = any(vals.values())
+        out["capped"] = {"threshold": round(M["cap"], 2) if has_orders else 0,
+                         "by_variation": {v: sum(1 for x in l if has_orders and x > M["cap"]) for v, l in vals.items()}}
+    return out
 
 
 EVENT_PARAM_SPEC = {
@@ -837,13 +843,14 @@ if __name__ == "__main__":
 # and derives ratios (AOV = Σsum/Σcount of `purchase`, CR = Σconverted/Σvisitors, …).
 
 SUMMARY_KEYS = ["purchase", "upsell", "revenue", "add_to_cart", "begin_checkout", "add_shipping_info", "add_payment_info",
-                "generate_lead", "sign_up", "page_view", "units", "units_added", "units_bought_from_cart", "coupon",
+                "generate_lead", "sign_up", "page_view", "units", "units_upsell", "units_added", "units_bought_from_cart", "coupon",
                 "lead", "lead_purchase", "repeat_purchase", "cart_purchase", "checkout_purchase", "session",
                 "event:size_guide_opened", "goal:12"]
 
 
 def summary_values(M, vid, capped=False):
-    """Per visitor, per metric key: (converted 0/1, count, sum, [per-unit values for sum_sq], visitor total for sum_sq_visitor)."""
+    """Per visitor, per metric key: (converted 0/1, count, sum, [per-unit values for sum_sq], visitor total for sum_sq_visitor).
+    daily_summary also sums count² per visitor into count_sq_visitor (admin v2: stats for `count_mode: every`)."""
     es = M["att"].get(vid, [])
     by = defaultdict(list)
     for e in es: by[e["event_name"]].append(e)
@@ -865,6 +872,8 @@ def summary_values(M, vid, capped=False):
         s0 = e["exp_session_starts"][e["exp_ids"].index(M["exp_id"])]
         sess[s0] = max(sess.get(s0, 0), parse_ts(e["client_ts"]).timestamp() - s0)
     unit_vals = [(it["price"] or 0) * FX[e["currency"]] for e in init for it in M["items"][e["event_id"]] for _ in range(it["quantity"])]
+    # R2: units bought in upsell orders (units keeps its meaning: initial orders only).
+    ups_unit_vals = [(it["price"] or 0) * FX[e["currency"]] for e in ups for it in M["items"][e["event_id"]] for _ in range(it["quantity"])]
     def ev(name, vals=None):
         lst = by[name]; vals = vals if vals is not None else [e["value_native"] * FX[e["currency"]] if e["currency"] else 0 for e in lst]
         return (1 if lst else 0, len(lst), sum(vals), vals)
@@ -876,6 +885,7 @@ def summary_values(M, vid, capped=False):
         "add_shipping_info": ev("add_shipping_info", []), "add_payment_info": ev("add_payment_info", []),
         "generate_lead": ev("generate_lead", []), "sign_up": ev("sign_up", []), "page_view": ev("page_view", []),
         "units": (1 if init else 0, len(unit_vals), sum(unit_vals), unit_vals),
+        "units_upsell": (1 if ups else 0, len(ups_unit_vals), sum(ups_unit_vals), ups_unit_vals),
         "units_added": (1 if carted else 0, sum(carted.values()), 0.0, []),
         "units_bought_from_cart": (1 if any(min(bought[p], carted[p]) for p in carted) else 0, sum(min(bought[p], carted[p]) for p in carted), 0.0, []),
         "coupon": (1 if any(e["props"].get("coupon") for e in init) else 0, sum(1 for e in init if e["props"].get("coupon")), 0.0, []),
@@ -908,15 +918,16 @@ def daily_summary(M, keys=SUMMARY_KEYS, dimension=None, capped=False):
         vals = summary_values(M, vid, capped)
         for k in keys:
             c, n, s, units = vals[k]
-            a = acc.setdefault(g + (k,), [0, 0, 0.0, 0.0, 0.0])
-            a[0] += c; a[1] += n; a[2] += s; a[3] += sum(u * u for u in units); a[4] += s * s
+            a = acc.setdefault(g + (k,), [0, 0, 0.0, 0.0, 0.0, 0])
+            a[0] += c; a[1] += n; a[2] += s; a[3] += sum(u * u for u in units); a[4] += s * s; a[5] += n * n
     rows = []
     order = {v: i for i, v in enumerate(M["variations"])}
     for (d, var, dv, k), a in sorted(acc.items(), key=lambda kv: (kv[0][0], str(kv[0][2]), order[kv[0][1]], keys.index(kv[0][3]))):
         row = {"date": d, "variation_id": var}
         if dimension: row["dimension"] = dimension; row["dimension_value"] = dv
         row.update({"metric_key": k, "visitors": vis[(d, var, dv)], "converted": a[0], "count": a[1],
-                    "sum": round(a[2], 2), "sum_sq": round(a[3], 2), "sum_sq_visitor": round(a[4], 2)})
+                    "sum": round(a[2], 2), "sum_sq": round(a[3], 2), "sum_sq_visitor": round(a[4], 2),
+                    "count_sq_visitor": a[5]})
         rows.append(row)
     return {"experiment_id": M["exp_id"], "from": M["frm"], "to": M["to"], "report_currency": M["ccy"],
             "date_basis": "first_exposure", "cap_outliers": capped, "dimension": dimension,
@@ -940,6 +951,7 @@ if __name__ == "__main__":
     ds = daily_summary(M)
     dump(f"{HERE}/demo/modeled/daily_summary.json", ds)
     dump(f"{HERE}/demo/modeled/daily_summary.device_type.json", daily_summary(M, dimension="device_type"))
+    dump(f"{HERE}/demo/modeled/daily_summary.visitor_type.json", daily_summary(M, dimension="visitor_type"))
     dump(f"{HERE}/demo/modeled/daily_summary.capped.json", daily_summary(M, keys=["purchase", "revenue"], capped=True))
     # crobot storage sample: the same rows as crobot keeps them in `metric_summary`
     dump(f"{HERE}/demo/backend/crobot_metric_summary.sample.json",

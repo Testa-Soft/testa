@@ -1,0 +1,81 @@
+# Staging collector: config API + ingest + sync/stats/query API (app),
+# Redis → ClickHouse writer (consumer) and the PRD-006 modeler (modeler).
+# Separate from the production `testa-collector` app in every way: own config
+# volume, own tokens, own hostname (https://testa-collector-staging.fly.dev).
+#
+# One-time:
+#   fly apps create testa-collector-staging
+#   fly volumes create staging_config --app testa-collector-staging --region fra --size 1
+#   fly secrets set --app testa-collector-staging \
+#     SERVICE_TOKEN=… CONFIG_WRITE_TOKEN=… INGEST_SHARED_SECRET=… CROBOT_WEBHOOK_SECRET=… \
+#     CLICKHOUSE_PASSWORD=… REDIS_URL='redis://default:<REDIS_PASSWORD>@testa-staging-redis.internal:6379?family=6'
+#   (values: ~/.config/testa-staging/secrets.env; deploy/staging/README.md has a script)
+# Deploy (from the repo root):
+#   fly deploy --config deploy/staging/collector.fly.toml
+
+app = "testa-collector-staging"
+primary_region = "fra"
+
+[build]
+  dockerfile = "collector.Dockerfile"
+
+[deploy]
+  # Applies pending ClickHouse migrations (idempotent) before the new version starts.
+  release_command = "bun run src/db/migrate.ts"
+
+[env]
+  ENVIRONMENT = "staging"
+  PORT = "8090"
+  CONFIG_DIR = "/app/.data/configs"
+  # Configs live in the shared Redis (REDIS_URL secret), so the app, the
+  # modeler and any replacement machine all see the same set. CONFIG_DIR is only
+  # the one-time migration source: on startup the app copies volume files that
+  # Redis lacks (idempotent, never overwrites).
+  CONFIG_STORE = "redis"
+  CLICKHOUSE_URL = "http://testa-staging-clickhouse.internal:8123"
+  CLICKHOUSE_USER = "testa"
+  CLICKHOUSE_DATABASE = "testa"
+  # Faster feedback than production's 15 min while people test by hand.
+  MODELER_INTERVAL_SEC = "300"
+  # Set once crobot staging has a URL (Forge); empty disables webhooks and
+  # crobot's cron sync still picks results up.
+  CROBOT_WEBHOOK_URL = ""
+
+[processes]
+  app = "bun run src/index.ts"
+  consumer = "bun run src/consumer/main.ts"
+  modeler = "bun run src/modeler/main.ts"
+
+# Legacy config volume, kept only as the source of the one-time file → Redis
+# migration on the app machine. Configs are served from Redis (CONFIG_STORE).
+[[mounts]]
+  source = "staging_config"
+  destination = "/app/.data/configs"
+  processes = ["app"]
+
+[http_service]
+  internal_port = 8090
+  force_https = true
+  processes = ["app"]
+  # Keep one API machine up: ingest arrives from the edge worker at any time.
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+
+[[http_service.checks]]
+  method = "get"
+  path = "/_internal/live"
+  interval = "30s"
+  timeout = "5s"
+  grace_period = "10s"
+
+[[vm]]
+  # API serves the CPU-bound stats endpoint; modeler runs the ClickHouse rebuilds.
+  size = "shared-cpu-2x"
+  memory = "1gb"
+  processes = ["app", "modeler"]
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
+  processes = ["consumer"]

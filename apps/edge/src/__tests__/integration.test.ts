@@ -84,6 +84,9 @@ function makeEvent(projectId: number, overrides: Partial<PixelEvent> = {}): Pixe
     tracker_version: '4.0.0',
     viewport_w: 1280,
     viewport_h: 720,
+    screen_w: 1920,
+    screen_h: 1080,
+    exp: [],
     ...overrides,
   };
 }

@@ -20,15 +20,32 @@
 
 import type {
   AudienceCondition,
+  ExpSession,
   ExperimentConfig,
+  Item,
   PixelEvent,
   ProjectConfig,
 } from '@testa-platform/shared-types';
 import type { ConsentState } from '@testa-platform/shared-types';
 import { type Teardown, applyVariation } from '@testa-soft/dom';
-import { shuffleForVisitor } from '@testa-soft/experiment-core';
-import type { TestaDebugSnapshot } from '../loader/queue.ts';
+import {
+  type CartOptions,
+  type PaymentInfoOptions,
+  type PurchaseOptions,
+  type TrackCall,
+  addToCart as buildAddToCart,
+  beginCheckout as buildBeginCheckout,
+  lead as buildLead,
+  paymentInfo as buildPaymentInfo,
+  purchase as buildPurchase,
+  shippingInfo as buildShippingInfo,
+  signUp as buildSignUp,
+  matchesPageRule,
+  shuffleForVisitor,
+} from '@testa-soft/experiment-core';
+import { TRACK_HELPERS, type TestaDebugSnapshot } from '../loader/queue.ts';
 import { TRACKER_VERSION } from '../version.ts';
+import { entryFor, readUtms, stripClickIds } from './attribution.ts';
 import * as consentMod from './consent.ts';
 import * as cookies from './cookies.ts';
 import {
@@ -43,6 +60,7 @@ import {
   type GoalController,
   createGoalController,
 } from './experiments/goals.ts';
+import * as expSessions from './experiments/session.ts';
 import {
   type AssignResult,
   type Experiment,
@@ -51,7 +69,7 @@ import {
 } from './experiments/traffic.ts';
 import { pushLeadToDataLayer } from './legacy/data-layer.ts';
 import { fireEvent, installLegacy, publishLoaded, publishUuid } from './legacy/index.ts';
-import { snapshot as healthSnapshot } from './network/health.ts';
+import { snapshot as healthSnapshot, recordDroppedNoSession } from './network/health.ts';
 import { initOutbox, count as outboxCount, enqueue as outboxEnqueue } from './network/outbox.ts';
 import { installTransport, notifyEnqueue, shipEventSync } from './network/transport.ts';
 import { uuidv7 } from './network/uuid7.ts';
@@ -59,7 +77,7 @@ import { maybeEnterPreviewMode } from './preview.ts';
 import { readBreadcrumbs as readRedirectBreadcrumbs } from './redirect/breadcrumbs.ts';
 import { evaluateAndApply as evaluateRedirect } from './redirect/index.ts';
 import { type EvalContext, evaluate } from './rules/audience.ts';
-import { SESSION_ID_COOKIE, getOrCreateSessionId } from './session.ts';
+import { SESSION_ID_COOKIE, getOrCreateSessionId, readVisitNumber } from './session.ts';
 import { installSpaHandler } from './spa.ts';
 import { readValue } from './storage.ts';
 import { detectBrowser, detectOs } from './ua.ts';
@@ -70,6 +88,8 @@ interface PendingEvent {
   name: string;
   props: Record<string, unknown>;
   ts: number;
+  /** The wire payload as sent (absent for synthetic debug entries). Test/inspection hook. */
+  event?: PixelEvent;
 }
 
 interface CfPrefill {
@@ -133,6 +153,7 @@ export function hydrate(): void {
   guardedInit('live_api', installLiveApi);
   guardedInit('spa_listener', installSpaListener);
   guardedInit('network', installNetwork);
+  guardedInit('pixel_health', installHealthFlush);
   guardedInit('debug_polls', startPendingCountPoll);
 
   // First experiment cycle. Drain queue first so any pre-runtime calls
@@ -167,6 +188,10 @@ export function hydrate(): void {
     guardedInit('cross_domain_links', installCrossDomainLinks);
   }
 
+  // Queued tracking calls deferred by drainQueue (v2 pipeline) — after the
+  // first cycle, and also in preview mode so they are never stranded.
+  guardedInit('deferred_tracking', replayDeferredTracking);
+
   // Fire load() once. SPA re-evaluations don't re-fire it.
   guardedInit('fire_ready', fireReady);
 }
@@ -184,13 +209,11 @@ function installLiveApi(): void {
     trackCustomerEvent(name, props);
   };
   stub.trackPurchase = (value, currency, orderId, items) => {
-    trackCustomerEvent('purchase', {
-      value_native: value,
-      currency,
-      order_id: orderId,
-      ...(items !== undefined ? { items_count: items } : {}),
-    });
+    runHelper('trackPurchase', [value, currency, orderId, items]);
   };
+  for (const name of TRACK_HELPERS) {
+    stub[name] = ((...args: unknown[]) => runHelper(name, args)) as never;
+  }
   stub.consent = (state) => {
     consentMod.consent.setState(state);
   };
@@ -274,13 +297,90 @@ async function refreshPendingCount(): Promise<void> {
 
 // ─── queue draining ────────────────────────────────────────────────────────
 
+/** Queued tracking calls held until the first cycle has (re)started sessions. */
+let _deferredTrackCalls: unknown[] = [];
+
+const CONTROL_CALLS = new Set(['consent', 'identify', 'navigate']);
+
+/**
+ * Replay pre-hydration calls. On the PRD-006 pipeline, tracking calls wait for
+ * the first experiment cycle (replayDeferredTracking): it (re)starts the
+ * experiment sessions, without which a queued trackPurchase would be dropped.
+ * Control calls (consent, …) still replay first. Other projects: unchanged.
+ */
 function drainQueue(): void {
   const stub = window._testa;
   if (!stub) return;
   const queued = stub.q.slice();
   stub.q.length = 0;
+  const deferTracking = v2ExperimentIds().size > 0;
   for (const call of queued) {
-    replayCall(call);
+    const method = Array.isArray(call) ? call[0] : undefined;
+    if (deferTracking && typeof method === 'string' && !CONTROL_CALLS.has(method)) {
+      _deferredTrackCalls.push(call);
+    } else {
+      replayCall(call);
+    }
+  }
+}
+
+function replayDeferredTracking(): void {
+  const calls = _deferredTrackCalls;
+  _deferredTrackCalls = [];
+  for (const call of calls) replayCall(call);
+}
+
+/**
+ * PRD-006 typed helpers (§1.8, task 5.7) → experiment-core builders →
+ * `trackCustomerEvent`. Invalid input (e.g. trackPaymentInfo without
+ * payment_type) is reported to __pixel_debug and dropped, never thrown into
+ * the customer's page.
+ */
+function runHelper(name: string, args: unknown[]): void {
+  try {
+    const [a, b, c, d] = args as [unknown, unknown, unknown, unknown];
+    const opts = (x: unknown): Record<string, unknown> =>
+      x !== null && typeof x === 'object' ? (x as Record<string, unknown>) : {};
+    let call: TrackCall | null = null;
+    switch (name) {
+      case 'trackPurchase':
+        if (typeof a === 'object' && a !== null) {
+          call = buildPurchase(a as unknown as PurchaseOptions);
+        } else {
+          // Legacy positional signature (value, currency, orderId, items_count?).
+          call = [
+            'purchase',
+            {
+              value_native: a,
+              currency: b,
+              order_id: c,
+              ...(d !== undefined ? { items_count: d } : {}),
+            },
+          ];
+        }
+        break;
+      case 'trackAddToCart':
+        call = buildAddToCart((a ?? []) as Item[], opts(b) as unknown as CartOptions);
+        break;
+      case 'trackBeginCheckout':
+        call = buildBeginCheckout((a ?? []) as Item[], opts(b) as unknown as CartOptions);
+        break;
+      case 'trackShippingInfo':
+        call = buildShippingInfo(opts(a));
+        break;
+      case 'trackPaymentInfo':
+        call = buildPaymentInfo(opts(a) as unknown as PaymentInfoOptions);
+        break;
+      case 'trackLead':
+        call = buildLead(opts(a));
+        break;
+      case 'trackSignUp':
+        call = buildSignUp(opts(a));
+        break;
+    }
+    if (call) trackCustomerEvent(call[0], call[1]);
+  } catch (err) {
+    pushDebugError(`helper:${name}`, err);
   }
 }
 
@@ -292,12 +392,13 @@ function replayCall(call: unknown): void {
       trackCustomerEvent(args[0] as string, args[1] as Record<string, unknown> | undefined);
       break;
     case 'trackPurchase':
-      trackCustomerEvent('purchase', {
-        value_native: args[0] as number,
-        currency: args[1] as string,
-        order_id: args[2] as string,
-        ...(args[3] !== undefined ? { items_count: args[3] as number } : {}),
-      });
+    case 'trackAddToCart':
+    case 'trackBeginCheckout':
+    case 'trackShippingInfo':
+    case 'trackPaymentInfo':
+    case 'trackLead':
+    case 'trackSignUp':
+      runHelper(method, args);
       break;
     case 'consent':
       consentMod.consent.setState(args[0] as ConsentState);
@@ -360,9 +461,11 @@ export function trackCustomerEvent(name: string, props?: Record<string, unknown>
  */
 function trackSyncForRedirect(name: string, props: Record<string, unknown>): void {
   const ts = Date.now();
-  const event = buildPixelEvent(name, props, ts);
+  const exp = stampOrDrop(name, ts);
+  if (exp === null) return;
+  const event = buildPixelEvent(name, props, ts, exp);
   const payload = JSON.stringify(event);
-  _pendingEvents.push({ name, props, ts });
+  _pendingEvents.push({ name, props, ts, event });
   // Synchronous beacon — must run BEFORE location.replace().
   shipEventSync(payload);
   // Outbox backup — survives if beacon was rejected.
@@ -370,12 +473,70 @@ function trackSyncForRedirect(name: string, props: Record<string, unknown>): voi
 }
 
 function emitTracked(name: string, props: Record<string, unknown> | undefined, ts: number): void {
-  const event = buildPixelEvent(name, props ?? {}, ts);
+  const exp = stampOrDrop(name, ts);
+  if (exp === null) return;
+  const event = buildPixelEvent(name, props ?? {}, ts, exp);
   const payload = JSON.stringify(event);
-  _pendingEvents.push({ name, props: props ?? {}, ts });
+  _pendingEvents.push({ name, props: props ?? {}, ts, event });
   void outboxEnqueue({ event_id: event.event_id, payload }).then(() => {
     notifyEnqueue();
   });
+}
+
+// ─── PRD-006 experiment sessions (v2 experiments only) ────────────────────
+
+/** Events sent even with no active experiment session (PRD §5.3). */
+const SESSIONLESS_EVENTS = new Set(['experiment_view', '_pixel_health']);
+
+/** Active experiments the project runs on the PRD-006 pipeline (`platform_version: 'v2'`). */
+function v2ExperimentIds(project: ProjectConfig | undefined = readProject()): Set<number> {
+  const ids = new Set<number>();
+  for (const e of project?.experiments ?? []) {
+    if (e.status === 'active' && e.platform_version === 'v2') ids.add(e.experiment_id);
+  }
+  return ids;
+}
+
+/**
+ * `exp` for an event about to be sent, or `null` to drop it. A project with no
+ * v2 experiment is untouched (`[]`, nothing dropped). Otherwise the event gets
+ * the active v2 sessions, slides them, and is dropped (and counted) when none
+ * is active — except experiment_view / _pixel_health.
+ */
+function stampOrDrop(name: string, ts: number): ExpSession[] | null {
+  const v2 = v2ExperimentIds();
+  if (v2.size === 0) return [];
+  const exp = expSessions.activeExp(v2, ts);
+  if (exp.length === 0 && !SESSIONLESS_EVENTS.has(name)) {
+    recordDroppedNoSession();
+    return null;
+  }
+  expSessions.touch(exp, ts);
+  return exp;
+}
+
+let _reportedNoSessionDrops = 0;
+let _healthFlushInstalled = false;
+
+/**
+ * PRD §5.3: events dropped for lack of a session "are counted in
+ * `_pixel_health.props.dropped_no_session`". On the v2 pipeline, report the
+ * drops since the last report once per page (on pagehide), shipped
+ * synchronously like the redirect path so it survives the unload.
+ */
+export function reportDroppedNoSession(): void {
+  if (v2ExperimentIds().size === 0) return;
+  const snap = healthSnapshot(0);
+  const delta = (snap.dropped_no_session ?? 0) - _reportedNoSessionDrops;
+  if (delta <= 0) return;
+  _reportedNoSessionDrops += delta;
+  trackSyncForRedirect('_pixel_health', { ...snap, dropped_no_session: delta });
+}
+
+function installHealthFlush(): void {
+  if (_healthFlushInstalled || typeof addEventListener !== 'function') return;
+  _healthFlushInstalled = true;
+  addEventListener('pagehide', reportDroppedNoSession);
 }
 
 // ─── strict-mode held-event replay ────────────────────────────────────────
@@ -428,7 +589,12 @@ function installConsentReplay(): void {
  * fields so the collector can index them without poking into the props bag;
  * everything else stays in `props`.
  */
-function buildPixelEvent(name: string, props: Record<string, unknown>, ts: number): PixelEvent {
+function buildPixelEvent(
+  name: string,
+  props: Record<string, unknown>,
+  ts: number,
+  exp: ExpSession[],
+): PixelEvent {
   const project = readProject();
   const visitorId = cookies.getUuid() ?? generateEphemeralVisitorId();
   const sessionId = getOrCreateSessionId();
@@ -436,7 +602,14 @@ function buildPixelEvent(name: string, props: Record<string, unknown>, ts: numbe
   const consentState = consentMod.consent.getState();
 
   const { lifted, rest } = liftReservedProps(props);
-  const utms = readUtms();
+  const search = typeof location !== 'undefined' ? location.search : '';
+  const utms = readUtms(search);
+  const v2Pipeline = v2ExperimentIds(project).size > 0;
+  // Session-entry attribution: captured on the browsing session's first page
+  // (first event), stamped on experiment_view only (PRD §5.3).
+  const entry = entryFor(sessionId);
+  const visitNumber = readVisitNumber();
+  const href = typeof location !== 'undefined' ? location.href : '';
 
   const event: PixelEvent = {
     event_id: uuidv7(ts),
@@ -445,11 +618,19 @@ function buildPixelEvent(name: string, props: Record<string, unknown>, ts: numbe
     project_id: project?.project_id ?? 0,
     visitor_id: visitorId,
     session_id: sessionId,
-    url: typeof location !== 'undefined' ? location.href : '',
+    // Click-id values never leave the browser on the v2 pipeline (type only).
+    url: v2Pipeline ? stripClickIds(href) : href,
     consent_state: consentState,
     tracker_version: TRACKER_VERSION,
     viewport_w: typeof window !== 'undefined' ? window.innerWidth || 0 : 0,
     viewport_h: typeof window !== 'undefined' ? window.innerHeight || 0 : 0,
+    screen_w: typeof screen !== 'undefined' ? screen.width || 0 : 0,
+    screen_h: typeof screen !== 'undefined' ? screen.height || 0 : 0,
+    exp,
+    // PRD-006: in_experiment = notEmpty(exp), for projects on the v2 pipeline.
+    ...(v2Pipeline ? { in_experiment: exp.length > 0 ? 1 : 0 } : {}),
+    ...(visitNumber > 0 ? { visit_number: visitNumber } : {}),
+    ...(name === 'experiment_view' ? entry : {}),
     ...(typeof document !== 'undefined' && document.referrer
       ? { referrer: document.referrer }
       : {}),
@@ -467,6 +648,11 @@ interface LiftedProps {
   currency?: string;
   order_id?: string;
   items_count?: number;
+  purchase_type?: NonNullable<PixelEvent['purchase_type']>;
+  parent_order_id?: string;
+  cart_id?: string;
+  page_type?: NonNullable<PixelEvent['page_type']>;
+  items?: Item[];
 }
 
 function liftReservedProps(props: Record<string, unknown>): {
@@ -485,30 +671,27 @@ function liftReservedProps(props: Record<string, unknown>): {
           (lifted as Record<string, number>)[key] = value;
         }
         break;
+      case 'purchase_type':
+        if (value === 'initial' || value === 'upsell') lifted.purchase_type = value;
+        break;
       case 'currency':
       case 'order_id':
+      case 'parent_order_id':
+      case 'cart_id':
+      case 'page_type':
         if (typeof value === 'string' && value.length > 0) {
           (lifted as Record<string, string>)[key] = value;
         }
+        break;
+      case 'items':
+        // PRD-006: items ride top-level (props is a flat string map); the edge validates them.
+        if (Array.isArray(value)) lifted.items = value as Item[];
         break;
       default:
         rest[key] = value;
     }
   }
   return { lifted, rest };
-}
-
-function readUtms(): Pick<PixelEvent, 'utm_source' | 'utm_medium' | 'utm_campaign'> {
-  if (typeof location === 'undefined' || !location.search) return {};
-  const params = new URLSearchParams(location.search);
-  const out: { utm_source?: string; utm_medium?: string; utm_campaign?: string } = {};
-  const s = params.get('utm_source');
-  const m = params.get('utm_medium');
-  const c = params.get('utm_campaign');
-  if (s) out.utm_source = s;
-  if (m) out.utm_medium = m;
-  if (c) out.utm_campaign = c;
-  return out;
 }
 
 /** Coerce arbitrary prop values to PixelEvent['props'] shape (string/number/boolean/null). */
@@ -567,6 +750,9 @@ let _crossDomainUninstall: (() => void) | null = null;
 
 /** True when the experiment's session cookie is still within its sliding TTL. */
 function isSessionActive(experimentId: number | string): boolean {
+  if (v2ExperimentIds().has(Number(experimentId))) {
+    return expSessions.isActive(expSessions.readSession(Number(experimentId)), Date.now());
+  }
   const ts = cookies.getSession(experimentId);
   return ts !== null && Date.now() - ts < cookies.SESSION_LENGTH_SEC * 1000;
 }
@@ -668,8 +854,11 @@ export function runExperimentCycle(): void {
 
   // Fire session_start (new session only) + page_view for this URL. These are
   // the raw events goals match against at query time; page_view also re-fires
-  // on every SPA navigation.
-  fireLifecycleEvents();
+  // on every SPA navigation. On the PRD-006 pipeline they fire AFTER the
+  // experiment loop instead, so they land inside the experiment session (§5.3).
+  const v2 = v2ExperimentIds(project);
+  if (v2.size === 0) fireLifecycleEvents();
+  const pageUrl = typeof location !== 'undefined' ? location.href : '';
 
   const ctx = buildEvalContext();
   const stats = { matched: 0, excluded: 0 };
@@ -697,8 +886,11 @@ export function runExperimentCycle(): void {
 
     stats.matched += 1;
 
-    // Bump session cookie + record exposure.
-    cookies.bumpSession(expConfig.experiment_id);
+    // Session + exposure. v2: PRD-006 experiment session (re-init when expired,
+    // §6.1); v1: the legacy session bump.
+    const isV2 = v2.has(expConfig.experiment_id);
+    if (isV2) expSessions.ensureSession(expConfig.experiment_id, result.variationId, Date.now());
+    else cookies.bumpSession(expConfig.experiment_id);
     recordExposure(exp);
 
     const variation = expConfig.variations.find((v) => v.variation_id === result.variationId);
@@ -729,12 +921,17 @@ export function runExperimentCycle(): void {
       !consentMod.consent.isHeld() &&
       typeof location !== 'undefined';
 
-    if (willRedirect) {
+    // experiment_view to the edge: v2 experiments only when the page matches
+    // the experiment (re-init on any page keeps the session, §6.1); v1
+    // experiments of a project on the v2 pipeline send none (R1). Projects
+    // without v2 experiments are unchanged.
+    const sendView = v2.size === 0 || (isV2 && matchesPageRule(pageUrl, expConfig.rules ?? []));
+    if (sendView && willRedirect) {
       trackSyncForRedirect('experiment_view', {
         experiment_id: expConfig.experiment_id,
         variation_id: result.variationId,
       });
-    } else {
+    } else if (sendView) {
       track('experiment_view', {
         experiment_id: expConfig.experiment_id,
         variation_id: result.variationId,
@@ -782,6 +979,8 @@ export function runExperimentCycle(): void {
       variation: result.variationId,
     });
   }
+
+  if (v2.size > 0) fireLifecycleEvents();
 
   // Wire click + page_view goals for every assigned experiment. Click goals
   // attach listeners only to their configured selectors (no click autocapture);
@@ -973,6 +1172,8 @@ function guardedInit(phase: string, fn: () => void): void {
 /** Test reset hook. Forgets `_alreadyHydrated`, clears in-memory state. */
 export function __resetForTests(): void {
   _pendingEvents = [];
+  _deferredTrackCalls = [];
+  _reportedNoSessionDrops = 0;
   _heldEvents = [];
   _consentReplayUnsub?.();
   _consentReplayUnsub = null;

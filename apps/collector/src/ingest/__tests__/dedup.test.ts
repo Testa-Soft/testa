@@ -1,31 +1,24 @@
 import { afterAll, beforeEach, describe, expect, it } from 'bun:test';
-import IORedis, { type Redis } from 'ioredis';
+import type { Redis } from 'ioredis';
+import { openPrefixedTestRedis } from '../../__test-utils__/redis.ts';
 import { dedupGate, dedupKey } from '../dedup.ts';
 
 const liveRedis = process.env.REDIS_URL ?? process.env.RUN_LIVE_REDIS;
-const url = process.env.REDIS_URL ?? 'redis://localhost:6380';
-// Use a high DB number to avoid trampling other dev keys.
-const TEST_DB = 7;
-
-let client: Redis | null = null;
+// One shared test DB (REDIS_TEST_DB) + a key prefix unique to this file run;
+// cleanup deletes only this file's keys (never FLUSHDB — other sessions share Redis).
+const redisTest = liveRedis ? openPrefixedTestRedis('dedup') : null;
 
 function getClient(): Redis {
-  if (!client) {
-    client = new IORedis(url, { db: TEST_DB, lazyConnect: false, maxRetriesPerRequest: 1 });
-  }
-  return client;
+  if (!redisTest) throw new Error('live Redis disabled (set REDIS_URL)');
+  return redisTest.client;
 }
 
 afterAll(async () => {
-  if (client) {
-    await client.flushdb().catch(() => undefined);
-    await client.quit().catch(() => undefined);
-    client = null;
-  }
+  await redisTest?.close();
 });
 
 beforeEach(async () => {
-  if (liveRedis) await getClient().flushdb();
+  await redisTest?.cleanup();
 });
 
 describe('dedupGate (live Redis)', () => {

@@ -1,10 +1,10 @@
 # Collector runtime image (Bun).
 #
 # Bun runs the TypeScript directly — no build/transpile step. The only workspace
-# dependency the collector uses is `@testa-platform/shared-types`, and every
-# import of it is `import type`, which Bun erases at load time. So the image
-# needs NONE of the pnpm workspace — just the real runtime deps below. Small,
-# deployable, no workspace plumbing.
+# dependency is `@testa-platform/shared-types`: TypeScript source with no
+# dependencies of its own. PRD-006 code imports runtime constants from it
+# (EVENT_PARAM_SPEC, BUILTIN_METRIC_KEYS, DIMENSION_KEYS), so its source is
+# copied into node_modules below; the rest of the pnpm workspace isn't needed.
 #
 # Build context = repo root:  docker build -f apps/collector/Dockerfile .
 FROM oven/bun:1-alpine
@@ -18,6 +18,8 @@ RUN bun add \
     ioredis@5.4.1 \
     zod@3.23.8
 
+COPY packages/shared-types/package.json ./node_modules/@testa-platform/shared-types/package.json
+COPY packages/shared-types/src ./node_modules/@testa-platform/shared-types/src
 COPY apps/collector/src ./src
 
 # The config bucket (static {projectId}.json files) lives here; mount a volume.

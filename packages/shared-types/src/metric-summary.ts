@@ -1,4 +1,7 @@
 /**
+ * @deprecated Replaced by `sync.ts` + `report.ts` (PRD-006 §5.8). Kept until
+ * crobot no longer imports it; do not use in new code.
+ *
  * Pre-aggregated metric responses returned by the collector's read API.
  * crobot consumes these via MetricsProxyController -> CollectorClient.
  */

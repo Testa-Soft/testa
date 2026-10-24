@@ -1,0 +1,27 @@
+# Staging Redis (ingest stream, dedup gate, modeler queue + sync state).
+# Private only, reachable as testa-staging-redis.internal:6379 (IPv6, so
+# clients use `?family=6`). AOF on, like the local stack.
+#
+# One-time:
+#   fly apps create testa-staging-redis
+#   fly volumes create redis_data --app testa-staging-redis --region fra --size 1
+#   fly secrets set --app testa-staging-redis REDIS_PASSWORD=<from secrets.env>
+# Deploy:
+#   fly deploy --config deploy/staging/redis.fly.toml
+
+app = "testa-staging-redis"
+primary_region = "fra"
+
+[build]
+  image = "redis:7.4-alpine"
+
+[processes]
+  app = "sh -c 'exec redis-server --appendonly yes --dir /data --requirepass \"$REDIS_PASSWORD\"'"
+
+[[mounts]]
+  source = "redis_data"
+  destination = "/data"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

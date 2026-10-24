@@ -23,6 +23,7 @@ The JSON object crobot publishes to Cloudflare KV per project. The edge worker r
     {
       "experiment_id": 17,
       "status": "active",
+      "platform_version": "v2",
       "traffic_allocation": 100,
       "rules": [
         { "match_type": "contains", "url_pattern": "/products/" }
@@ -126,6 +127,23 @@ mutex_group?: string;   // e.g. "checkout_optimization"
 Persisted in `_testa_mutex_<group_name>` cookie holding the assigned `experiment_id`.
 
 If absent, no mutex constraint.
+
+### `platform_version`
+
+Optional. New in PRD-006 (mailbox R1). Which tracking pipeline the experiment uses, stamped by crobot per experiment (crobot PRD §3a). Projects migrate to v2; old experiments stay v1.
+
+```ts
+platform_version?: 'v1' | 'v2';   // absent = 'v1'
+```
+
+- `v1` (or absent): legacy crobot calls only (`/api/leads`, `/api/leads/convert`). No experiment session, no `exp` stamping.
+- `v2`: PRD-006 tracking. The pixel / `@testa-soft/next` keep an experiment session in `_testa_exp`, stamp `exp` on every event, send `experiment_view` to the edge, and drop events outside a session (PRD-006 §5.3). `exp` lists v2 experiments only.
+- The collector's analytics endpoints (sync API, query views) answer **409 `version_mismatch`** for an experiment that isn't `v2`, and **404 `experiment_not_found`** when it isn't in the config at all.
+- Crobot stamps it per experiment in the published project JSON (`platform_version: "v1" | "v2"`); the collector's config build keeps exactly those two values and drops anything else (absent = v1) — P4-fix1 `b9681b3`.
+
+### Lookup by numeric `project_id` (config alias)
+
+Crobot publishes configs to `POST /api/v1/config/{projectUuid}`, so they are stored under the UUID. Events, subscriptions and the sync API carry the numeric `ProjectConfig.project_id`, so every save also writes an alias (file store: `{CONFIG_DIR}/_by-project-id/{project_id}.json` → `{ "key": "<store key>" }`; Redis store: `testa:config:by-project-id:{project_id}` → `<store key>`), and the collector resolves configs by numeric id through it (falling back to a config stored under the numeric id itself; an alias whose target now has another `project_id` is ignored). `GET /api/v1/config/{numericId}` is unchanged (404 unless stored under that key). Configs published before the alias existed need one re-publish — P4-fix1 `b9681b3`.
 
 ### `weight`
 

@@ -73,3 +73,20 @@ export {
 export type { VariationEvent, VariationHandler, Unsubscribe, TestaGlobal } from '@testa-soft/dom';
 export { resolveExposures } from '@testa-soft/experiment-core';
 export type { Exposure } from '@testa-soft/experiment-core';
+
+// PRD-006 tracking (task 5.7): typed helpers + experiment_view on variation_applied.
+export {
+  DEFAULT_EVENTS_ENDPOINT,
+  ensureV2Sessions,
+  startPrd006Tracking,
+  track,
+  trackAddToCart,
+  trackBeginCheckout,
+  trackLead,
+  trackPageView,
+  trackPaymentInfo,
+  trackPurchase,
+  trackShippingInfo,
+  trackSignUp,
+} from './track.ts';
+export type { Prd006TrackingOptions } from './track.ts';

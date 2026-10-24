@@ -18,7 +18,7 @@ files_to_create:
   - packages/experiment-core/src/store/exp-codec.ts
   - packages/experiment-core/src/__tests__/parity.test.ts
 references:
-  - docs/prds/003-nextjs-redirect-middleware.md
+  - docs/prds/003-nextjs-redirect-middleware.md (removed; `git show 2145e3a:docs/prds/003-nextjs-redirect-middleware.md`)
   - apps/pixel/src/runtime/redirect/index.ts
   - apps/pixel/src/runtime/experiments/traffic.ts
   - tasks/phase-3/3.16-storage-consolidation.md
