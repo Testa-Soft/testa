@@ -264,6 +264,15 @@ Supported change types are crobot-native and applied by the shared DOM engine:
 > `307` is already flicker-free. The shield only matters when you apply DOM
 > changes on top of server-rendered content.
 
+### Links inside experiment markup
+
+A same-origin `<a href>` inside `change_html` / `append_html` / `prepend_html`
+markup navigates through the Next router, like a `<Link>` — no full page
+reload. Nothing to configure, on either router; `basePath` is read from the
+Next build. Modifier-clicks, `target="_blank"`, `download`, `#hash` links and
+other origins stay with the browser. `routeLinks={false}` on the App Router
+`<TestaProvider/>` turns it off.
+
 ## Preview mode
 
 Editors can preview **unpublished** variation drafts live, without them going to

@@ -48,6 +48,10 @@ export {
 export { eachMatching, safeQuerySelectorAll } from './apply/dom.ts';
 export type { EachMatchingOptions } from './apply/dom.ts';
 export { stripScriptTags } from './apply/html.ts';
+// Client-side routing for links inside injected markup — the React/Next
+// providers install it with the host app's router.
+export { installLinkRouter, historyNavigate } from './links/link-router.ts';
+export type { Navigate } from './links/link-router.ts';
 export {
   testa,
   onVariationApplied,

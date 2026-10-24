@@ -46,16 +46,25 @@ import {
   TestaProvider as TestaClientProvider,
   type TestaProviderProps as TestaClientProviderProps,
 } from '@testa-soft/react';
+import { useRouter } from 'next/compat/router.js';
 import type { JSX } from 'react';
+import { nextLinkNavigate } from '../link-navigate.ts';
 import { HeadShield } from './HeadShield.tsx';
 
 export type TestaProviderProps = TestaClientProviderProps;
 
 export function TestaProvider(props: TestaProviderProps): JSX.Element {
   const { children, ...rest } = props;
+  // Links inside injected markup navigate like a `<Link>`. `compat/router` is
+  // null outside a Pages Router (SSR, a mis-mount in the App Router): then no
+  // navigate is passed and those links keep their ordinary full navigation.
+  const router = useRouter();
+  const navigate =
+    props.navigate ??
+    (router ? nextLinkNavigate((href) => router.push(href), router.basePath) : undefined);
 
   return (
-    <TestaClientProvider {...rest}>
+    <TestaClientProvider {...rest} {...(navigate ? { navigate } : {})}>
       {/* Rendered inside the client provider so it can read `settled` from its
           context — and so the shield goes down the moment the variant is on. */}
       <HeadShield

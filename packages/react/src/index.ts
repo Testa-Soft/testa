@@ -55,6 +55,9 @@ export {
   PREVIEW_VARIATION_ID,
 } from './preview.ts';
 export { installSpaNav, LOCATION_CHANGE_EVENT } from './spa-nav.ts';
+export { linkNavigator } from './link-routing.ts';
+export { installLinkRouter, historyNavigate } from '@testa-soft/dom';
+export type { Navigate } from '@testa-soft/dom';
 
 // Client-side event bus (3.3.3 parity) — `testa.onVariationApplied(...)`,
 // standalone fns, or `window.testa`. Same surface as `@testa-soft/next`.

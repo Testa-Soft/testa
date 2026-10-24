@@ -17,6 +17,7 @@
 import type { VariationChange } from '@testa-platform/shared-types';
 import { type EachMatchingOptions, eachMatching } from './dom.ts';
 import { stripScriptTags } from './html.ts';
+import { markInjected } from './injected.ts';
 
 export type AppendChange = Extract<VariationChange, { type: 'append_html' }>;
 export type PrependChange = Extract<VariationChange, { type: 'prepend_html' }>;
@@ -39,7 +40,9 @@ function applyInsert(
       const before = new Set(el.childNodes);
       el.insertAdjacentHTML(position, sanitized);
       for (const node of el.childNodes) {
-        if (!before.has(node)) inserted.push(node);
+        if (before.has(node)) continue;
+        inserted.push(node);
+        markInjected(node);
       }
     },
     opts,
