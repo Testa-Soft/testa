@@ -71,6 +71,34 @@ describe('generateTraffic', () => {
     expect(ratio).toBeLessThan(1.45);
   });
 
+  test('click goals convert through conversion events, with the lift', () => {
+    const { events } = generateTraffic(opts({ visitorsPerVariation: 5000, goalIds: [11] }));
+    const converters = (variation: number) =>
+      new Set(
+        events
+          .filter((e) => e.event_name === 'conversion' && e.goal_id === 11)
+          .filter((e) => e.exp_var_ids[0] === variation)
+          .map((e) => e.visitor_id),
+      ).size;
+    expect(converters(0)).toBeGreaterThan(200);
+    expect(converters(1) / converters(0)).toBeGreaterThan(1.1);
+  });
+
+  test('page_view goals are reached by visiting their page, with the lift', () => {
+    const url = 'https://staging-shop.example/thank-you';
+    const { events } = generateTraffic(opts({ visitorsPerVariation: 5000, pageGoalUrls: [url] }));
+    const visitors = (variation: number) =>
+      new Set(
+        events
+          .filter((e) => e.event_name === 'page_view' && e.url === url)
+          .filter((e) => e.exp_var_ids[0] === variation)
+          .map((e) => e.visitor_id),
+      ).size;
+    expect(visitors(0)).toBeGreaterThan(200);
+    expect(visitors(1) / visitors(0)).toBeGreaterThan(1.1);
+    expect(events.some((e) => e.event_name === 'conversion')).toBe(false);
+  });
+
   test('purchases carry items, upsells point at their parent order', () => {
     const { events, items } = generateTraffic(opts());
     const purchases = events.filter((e) => e.event_name === 'purchase');
