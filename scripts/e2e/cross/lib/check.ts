@@ -9,9 +9,17 @@
 
 import type { HarnessConfig } from './config.ts';
 
-export type Layer = 'infra' | 'smoke' | 'contract' | 'sync' | 'ui' | 'lifecycle';
+export type Layer = 'infra' | 'smoke' | 'contract' | 'sync' | 'ui' | 'lifecycle' | 'admin-v2';
 
-export const LAYERS: readonly Layer[] = ['infra', 'smoke', 'contract', 'sync', 'ui', 'lifecycle'];
+export const LAYERS: readonly Layer[] = [
+  'infra',
+  'smoke',
+  'contract',
+  'sync',
+  'ui',
+  'lifecycle',
+  'admin-v2',
+];
 
 export type Status = 'pass' | 'fail' | 'pending';
 

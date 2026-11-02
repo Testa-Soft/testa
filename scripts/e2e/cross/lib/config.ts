@@ -2,7 +2,7 @@
  * Every port, name and secret of the live cross-repo topology, in one place.
  *
  * Isolation (PACKAGES.md "Shared local resources"):
- *   - ClickHouse  tp-clickhouse :8123, database `prd006_x0` only (dropped + re-migrated per run)
+ *   - ClickHouse  tp-clickhouse :8123, database `prd006_x0` (or `admin_v2_x0` via E2E_CROSS_CH_DATABASE) only (dropped + re-migrated per run)
  *   - Redis       tp-redis :6380, DB index 13 (reserved for X0; collector tests flush 7–11, P5 uses 12) + stream key prefix `prd006:x0:`
  *   - Collector   bun on the host, :8091 (8090 belongs to the tp-collector container)
  *   - Edge        wrangler dev, :8792 (inspector :9339)
@@ -72,6 +72,17 @@ export interface HarnessConfig {
 const COLLECTOR_PORT = 8091;
 const EDGE_PORT = 8792;
 const CROBOT_PORT = 8188;
+/** ClickHouse databases the harness may drop + re-create (`E2E_CROSS_CH_DATABASE`). */
+export const ALLOWED_CH_DATABASES = ['prd006_x0', 'admin_v2_x0'] as const;
+
+function chDatabase(): string {
+  const db = process.env.E2E_CROSS_CH_DATABASE ?? 'prd006_x0';
+  if (!(ALLOWED_CH_DATABASES as readonly string[]).includes(db)) {
+    throw new Error(`E2E_CROSS_CH_DATABASE=${db} is not one of ${ALLOWED_CH_DATABASES.join(', ')}`);
+  }
+  return db;
+}
+
 const REDIS_DB = 13; // reserved for X0 (reset at stack start). Collector live tests share REDIS_TEST_DB (default 7) under per-file key prefixes and never FLUSHDB; P5 uses 12
 
 function generateSecrets(): Secrets {
@@ -116,7 +127,7 @@ export function buildConfig(args: CliArgs): HarnessConfig {
     edge: { port: EDGE_PORT, inspectorPort: 9339, url: `http://localhost:${EDGE_PORT}` },
     clickhouse: {
       url: 'http://localhost:8123',
-      database: 'prd006_x0',
+      database: chDatabase(),
       user: 'default',
       password: '',
     },

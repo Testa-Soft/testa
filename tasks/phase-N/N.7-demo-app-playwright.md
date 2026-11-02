@@ -13,7 +13,7 @@ files_to_create:
   - demo/next-app/e2e/no-control-paint.spec.ts
   - demo/next-app/playwright.config.ts
 references:
-  - docs/prds/003-nextjs-redirect-middleware.md
+  - docs/prds/003-nextjs-redirect-middleware.md (removed; `git show 2145e3a:docs/prds/003-nextjs-redirect-middleware.md`)
   - packages/next/src/create-middleware.ts
 commits: []
 completed_at: null

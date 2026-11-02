@@ -38,6 +38,7 @@ import {
   applyVariation,
   emitVariationApplied,
   emitVariationAssigned,
+  installLinkRouter,
   installTestaGlobal,
 } from '@testa-soft/dom';
 import { ASSIGNMENT_COOKIE, UUID_COOKIE, resolveExposures } from '@testa-soft/experiment-core';
@@ -49,10 +50,11 @@ import {
   startPrd006Tracking,
   trackPageView,
 } from '@testa-soft/react';
-import { usePathname } from 'next/navigation.js';
+import { usePathname, useRouter } from 'next/navigation.js';
 import { useEffect, useRef, useState } from 'react';
 import { readClientCookie } from '../client-cookie.ts';
 import { DEFAULT_TRACKING_HOST } from '../constants.ts';
+import { nextLinkNavigate, readNextBasePath } from '../link-navigate.ts';
 import { applyAssignedExperiments, revealShield } from './apply-assignments.ts';
 import { clientOwnsDecision } from './cold-decision.ts';
 import { startGoalTracking } from './goal-tracking.ts';
@@ -126,11 +128,23 @@ export interface TestaProviderProps {
    * `experiment-core/legacy-migration.ts` for what it reads and when it stops.
    */
   legacyCookiesEnabled?: boolean;
+  /**
+   * Route same-origin links inside experiment-injected markup through the App
+   * Router (`router.push`), like a `<Link>`, instead of reloading the document.
+   * Default true; false leaves every click to the browser.
+   */
+  routeLinks?: boolean;
+  /**
+   * The app's `basePath` from `next.config`. Detected automatically from the
+   * Next build; pass it only to override.
+   */
+  basePath?: string;
 }
 
 export function TestaProvider(props: TestaProviderProps): null {
   const { config: serverConfig, projectId, host, previewApiUrl, trackingHost } = props;
   const pathname = usePathname();
+  const router = useRouter();
   // Only the FIRST cycle of a page load may redirect — see `allowRedirect`.
   // The effect re-runs per soft navigation; this ref does not.
   const firstCycle = useRef(true);
@@ -322,6 +336,15 @@ export function TestaProvider(props: TestaProviderProps): null {
     // re-render doesn't re-run the effect and stack duplicate inserts. Re-runs
     // only on a real config change or route change (pathname).
   }, [serverConfig?.config_hash, projectId, pathname, previewApiUrl, trackingHost]);
+
+  // Links inside injected markup navigate like a `<Link>`. The App Router's
+  // instance is stable across renders, so this installs once per mount.
+  const { routeLinks, basePath } = props;
+  useEffect(() => {
+    if (routeLinks === false) return;
+    const base = basePath ?? readNextBasePath();
+    return installLinkRouter(nextLinkNavigate((href) => router.push(href), base));
+  }, [router, routeLinks, basePath]);
 
   return null;
 }

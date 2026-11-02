@@ -1,6 +1,7 @@
 /** The full check catalogue, in execution order (layer order, then listed order). */
 
 import type { CheckDef } from '../lib/check.ts';
+import { adminV2Checks } from './admin-v2/index.ts';
 import { contractIngestChecks } from './contract-ingest.ts';
 import { contractSyncChecks } from './contract-sync.ts';
 import { contractTenantChecks } from './contract-tenant.ts';
@@ -21,4 +22,5 @@ export const ALL_CHECKS: readonly CheckDef[] = [
   ...syncChecks,
   ...uiChecks,
   ...lifecycleChecks,
+  ...adminV2Checks,
 ];

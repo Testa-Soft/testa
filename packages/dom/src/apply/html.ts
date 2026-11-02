@@ -10,6 +10,7 @@
 
 import type { VariationChange } from '@testa-platform/shared-types';
 import { type EachMatchingOptions, eachMatching } from './dom.ts';
+import { markInjected } from './injected.ts';
 
 export type ChangeHtmlChange = Extract<VariationChange, { type: 'change_html' }>;
 
@@ -92,7 +93,10 @@ export function applyChangeHtml(
 /** Write the authored markup and remember the nodes it produced as ours. */
 function write(el: Element, sanitized: string): void {
   el.innerHTML = sanitized;
-  for (const child of Array.from(el.children)) injected.add(child);
+  for (const child of Array.from(el.children)) {
+    injected.add(child);
+    markInjected(child);
+  }
 }
 
 /**

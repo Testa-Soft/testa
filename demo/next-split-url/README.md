@@ -13,7 +13,7 @@ An active 50/50 split-URL experiment on `/pricing`:
   first-party (`_testa_uuid`), both set by the middleware.
 
 Config is inline in `testa.config.ts`. In production it comes from crobot (CDN
-hashed JSON / Edge Config) — see `docs/prds/003-nextjs-redirect-middleware.md`.
+hashed JSON / Edge Config) — see PRD 003 (removed; `git show 2145e3a:docs/prds/003-nextjs-redirect-middleware.md`).
 
 ## Run
 

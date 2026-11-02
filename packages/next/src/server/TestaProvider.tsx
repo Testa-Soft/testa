@@ -64,6 +64,13 @@ interface CommonProps {
    * `experiment-core/legacy-migration.ts` for what it reads and when it stops.
    */
   legacyCookiesEnabled?: boolean;
+  /**
+   * Route same-origin links inside experiment-injected markup through the App
+   * Router, like a `<Link>`, instead of reloading the document. Default true.
+   */
+  routeLinks?: boolean;
+  /** The app's `basePath` from `next.config`. Detected automatically; pass to override. */
+  basePath?: string;
 }
 
 /**
@@ -99,6 +106,8 @@ export async function TestaProvider(props: TestaProviderProps): Promise<JSX.Elem
       {...(props.secureCookies !== undefined ? { secureCookies: props.secureCookies } : {})}
       {...(props.cookieDomain ? { cookieDomain: props.cookieDomain } : {})}
       {...(props.legacyCookiesEnabled ? { legacyCookiesEnabled: true } : {})}
+      {...(props.routeLinks !== undefined ? { routeLinks: props.routeLinks } : {})}
+      {...(props.basePath ? { basePath: props.basePath } : {})}
     />
   );
 }

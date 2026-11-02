@@ -11,7 +11,7 @@ files_to_create:
   - "(crobot repo) Vercel Edge Config writer (O2 adapter)"
   - "(crobot repo) tests for publish + pointer flip"
 references:
-  - docs/prds/003-nextjs-redirect-middleware.md
+  - docs/prds/003-nextjs-redirect-middleware.md (removed; `git show 2145e3a:docs/prds/003-nextjs-redirect-middleware.md`)
   - packages/shared-types/src/project-config.ts
 commits: []
 completed_at: null

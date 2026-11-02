@@ -10,7 +10,7 @@ files_to_create:
   - packages/next/src/router-guard/use-cookie-assignment.ts
   - packages/next/src/router-guard/__tests__/TestaRouterGuard.test.tsx
 references:
-  - docs/prds/003-nextjs-redirect-middleware.md
+  - docs/prds/003-nextjs-redirect-middleware.md (removed; `git show 2145e3a:docs/prds/003-nextjs-redirect-middleware.md`)
   - packages/experiment-core/src/index.ts
 commits: []
 completed_at: 2026-08-05

@@ -126,7 +126,7 @@ Implements `docs/prds/006-ecommerce-events-and-metric-modeling.md` (**Parts 5–
 
 ## Phase N — Next.js split-URL middleware (`@testa/next`)
 
-Server-side, flicker-free split-URL redirects for Next.js customers (PRD [003](../docs/prds/003-nextjs-redirect-middleware.md)). **Scope grew well past the original v1** during the 2026-08-04 build: full split_url parity (traffic split + the `/100` bucketing bug fixed, targeting, rule exclusions, cross-domain inbound), the pixel⇄`experiment-core` merge (one shared impl — bucketing, packed cookie, redirect engine, cross-domain), `onVariationApplied`, and pre-prod hardening (see **Phase P**).
+Server-side, flicker-free split-URL redirects for Next.js customers (PRD 003 (removed; `git show 2145e3a:docs/prds/003-nextjs-redirect-middleware.md`)). **Scope grew well past the original v1** during the 2026-08-04 build: full split_url parity (traffic split + the `/100` bucketing bug fixed, targeting, rule exclusions, cross-domain inbound), the pixel⇄`experiment-core` merge (one shared impl — bucketing, packed cookie, redirect engine, cross-domain), `onVariationApplied`, and pre-prod hardening (see **Phase P**).
 
 | ID | Task | Status | Blocked by |
 |---|---|---|---|

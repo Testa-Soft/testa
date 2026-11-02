@@ -169,6 +169,25 @@ In preview mode the provider **skips normal assignment** and instead fetches the
 
 The provider installs a framework-agnostic navigation detector — it patches `history.pushState`/`replaceState` and listens to `popstate` — so the engine re-runs on every soft navigation. It works with React Router, TanStack Router, Wouter, or hand-rolled `history` navigation, disposing the previous route's DOM changes before applying the next.
 
+### Links inside HTML experiments
+
+A link in experiment markup (`change_html`, `append_html`, `prepend_html`) is a plain `<a href>`, so by default clicking it reloads the page. Give the provider your router's navigate and same-origin links route client-side instead, like your own `<Link>`:
+
+```tsx
+// Provider mounted INSIDE the router: use the router's own navigate.
+function Root() {
+  const navigate = useNavigate();
+  return <TestaProvider projectId="…" navigate={(href) => navigate(href)}>…</TestaProvider>;
+}
+
+// Provider mounted OUTSIDE <BrowserRouter> (useNavigate isn't available there):
+// History-API navigation, which BrowserRouter and TanStack Router follow.
+import { historyNavigate } from '@testa-soft/react';
+<TestaProvider projectId="…" navigate={historyNavigate}>…</TestaProvider>;
+```
+
+Do **not** pass `historyNavigate` with `HashRouter`, or on a multi-page site that only uses React for widgets: their routers don't follow `popstate`. With React Router `basename`, pass the router's `navigate` — `historyNavigate` uses the path as written. Modifier-clicks, `target="_blank"`, `download`, `#hash` links and other origins always stay with the browser.
+
 ## `<TestaProvider>` props
 
 | Prop            | Type            | Default                          | Description                                                                    |
@@ -182,6 +201,7 @@ The provider installs a framework-agnostic navigation detector — it patches `h
 | `secureCookies` | `boolean`       | `true`                           | Emit `Secure` cookies. Set `false` for local http dev.                         |
 | `cookieDomain`  | `string`        | —                                | Cookie `Domain` for cross-subdomain sharing (e.g. `.acme.com`).                |
 | `shield`        | `boolean \| ShieldOptions` | `true`                | Smart anti-flicker overlay on initial load. `false` to disable; options object to customize selector/timeout/mode. |
+| `navigate`      | `(href: string) => void` | —                       | Routes same-origin links inside experiment markup client-side (see above). Without it they reload the page. |
 
 ## How it works
 

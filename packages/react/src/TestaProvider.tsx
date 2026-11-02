@@ -25,10 +25,12 @@
 
 import type { ProjectConfig } from '@testa-platform/shared-types';
 import {
+  type Navigate,
   SHIELD_CSS_STYLE_ID,
   type Shield,
   type ShieldOptions,
   type Teardown,
+  installLinkRouter,
   raiseShield,
 } from '@testa-soft/dom';
 import { ASSIGNMENT_COOKIE } from '@testa-soft/experiment-core';
@@ -51,6 +53,7 @@ import { preloadConfig } from './config.ts';
 import { TestaContext, type TestaContextValue } from './context.ts';
 import { DocumentCookieStore } from './cookie-store.ts';
 import { initTesta } from './init.ts';
+import { linkNavigator } from './link-routing.ts';
 import { configNeedsShield, readShieldHint, writeShieldHint } from './shield-hint.ts';
 import { installSpaNav } from './spa-nav.ts';
 import { startPrd006Tracking, trackPageView } from './track.ts';
@@ -98,6 +101,15 @@ export interface TestaProviderProps {
    * visitors the proxy would have carried over.
    */
   legacyCookiesEnabled?: boolean;
+  /**
+   * The app router's navigate. When given, a same-origin link inside markup an
+   * experiment injected routes through it instead of reloading the document.
+   * With React Router pass `useNavigate()`'s result (from a component inside
+   * the router). Without it, those links reload the page — the provider can't
+   * know how this app routes, and guessing wrong breaks the link.
+   * `historyNavigate` is available for routers that follow `popstate`.
+   */
+  navigate?: Navigate;
 }
 
 export function TestaProvider(props: TestaProviderProps): JSX.Element {
@@ -107,6 +119,12 @@ export function TestaProvider(props: TestaProviderProps): JSX.Element {
   });
   const [settled, setSettled] = useState(false);
   const shieldHandleRef = useRef<Shield | null>(null);
+  // Latest `navigate`, read at click time — the router function may change
+  // identity between renders while the link router stays installed.
+  const navigateRef = useRef(props.navigate);
+  useBeforePaint(() => {
+    navigateRef.current = props.navigate;
+  });
 
   // EAGER FETCH: kick the request off during first render (before children
   // render, before effects) so config resolution overlaps React's initial work.
@@ -243,6 +261,15 @@ export function TestaProvider(props: TestaProviderProps): JSX.Element {
       uninstallNav();
     };
   }, []);
+
+  // Links inside injected markup route through the app's router instead of
+  // reloading the document — only when the app gave us its router. Independent
+  // of the config cycle: a click can only land on markup a cycle injected.
+  const routesLinks = props.navigate !== undefined;
+  useEffect(() => {
+    if (!routesLinks) return;
+    return installLinkRouter(linkNavigator(() => navigateRef.current));
+  }, [routesLinks]);
 
   // Reveal the shield only AFTER the assigned variant has been committed +
   // painted (a synchronous reveal races the code-based useTestaVariant render).

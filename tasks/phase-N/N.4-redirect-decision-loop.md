@@ -9,7 +9,7 @@ files_to_create:
   - packages/next/src/redirect-loop.ts
   - packages/next/src/__tests__/redirect-loop.test.ts
 references:
-  - docs/prds/003-nextjs-redirect-middleware.md
+  - docs/prds/003-nextjs-redirect-middleware.md (removed; `git show 2145e3a:docs/prds/003-nextjs-redirect-middleware.md`)
   - apps/pixel/src/runtime/redirect/index.ts
   - packages/experiment-core/src/redirect/index.ts
 commits: []
