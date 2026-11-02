@@ -44,9 +44,8 @@ Platform data stack (Fly): **done** — `testa-staging-clickhouse`, `testa-stagi
    - [ ] Queue worker: connection `redis`, queue `default` (not Horizon: it has no `staging` supervisor).
    - [ ] Scheduler: `php artisan schedule:run` every minute.
    - [ ] First deploy, then `php artisan db:seed --class=StagingSeeder --force`.
-2. **Point the collector's webhooks at crobot** (once the Forge URL exists): set `CROBOT_WEBHOOK_URL` in
-   `collector.fly.toml` to the crobot `APP_URL`, then `deploy/staging/provision.sh collector`. Optional: without it
-   crobot's 15-minute cron still syncs.
+2. **Point the collector's webhooks at crobot**: **done**, `CROBOT_WEBHOOK_URL` in `collector.fly.toml` is
+   https://testa-staging.on-forge.com (crobot's 15-minute cron still syncs as a fallback).
 3. **Edge worker**: **done** (`testa-edge-staging`, see "Edge worker" below); the simulator still posts straight to the collector.
 
 ## Test run with simulated traffic

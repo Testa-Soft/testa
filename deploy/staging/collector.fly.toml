@@ -39,7 +39,7 @@ primary_region = "fra"
   MODELER_INTERVAL_SEC = "300"
   # Set once crobot staging has a URL (Forge); empty disables webhooks and
   # crobot's cron sync still picks results up.
-  CROBOT_WEBHOOK_URL = ""
+  CROBOT_WEBHOOK_URL = "https://testa-staging.on-forge.com"
 
 [processes]
   app = "bun run src/index.ts"
