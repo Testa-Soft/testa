@@ -22,6 +22,11 @@ primary_region = "fra"
   CLICKHOUSE_USER = "testa"
   CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT = "1"
 
+# Quiet logging; see clickhouse-staging.xml.
+[[files]]
+  guest_path = "/etc/clickhouse-server/config.d/zz-staging.xml"
+  local_path = "clickhouse-staging.xml"
+
 [[mounts]]
   source = "ch_data"
   destination = "/var/lib/clickhouse"
