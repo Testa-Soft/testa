@@ -34,6 +34,10 @@ export interface TrafficOptions {
   readonly nowMs: number;
   /** Funnel-entry multiplier per variation id (default 1). */
   readonly lift: Readonly<Record<number, number>>;
+  /** click goal ids; each converts ~6% of sessions, scaled by `lift`. */
+  readonly goalIds?: readonly number[];
+  /** page_view goal URLs; each is visited in ~6% of sessions, scaled by `lift`. */
+  readonly pageGoalUrls?: readonly string[];
   readonly seed: number;
   /** Host used in page URLs, e.g. `staging-shop.testa-soft.tech`. */
   readonly domain: string;
@@ -41,6 +45,8 @@ export interface TrafficOptions {
 
 /** Share of visitors who start the funnel at lift 1. */
 const BASE_FUNNEL_RATE = 0.24;
+/** Share of visitors who reach each click / page_view goal at lift 1. */
+const GOAL_RATE = 0.06;
 const DAY_MS = 86_400_000;
 
 type ExpTuple = readonly [number, number, number];
@@ -233,10 +239,16 @@ export function generateTraffic(o: TrafficOptions): Sim {
     const pages = 1 + Math.floor(-Math.log(1 - rand()) * 2);
     for (let p = 0; p < pages; p++)
       add(v, next(15, 120), 'page_view', exp, sid, { url: `https://${o.domain}/p${p}` });
-    if (rand() < 0.03)
+    const lift = o.lift[v.variation] ?? 1;
+    if (rand() < 0.03 * lift)
       add(v, next(30, 1), 'generate_lead', exp, sid, { props: { lead_type: 'newsletter' } });
-    if (rand() < 0.01) add(v, next(30, 1), 'sign_up', exp, sid);
-    if (rand() >= BASE_FUNNEL_RATE * (o.lift[v.variation] ?? 1)) return;
+    if (rand() < 0.01 * lift) add(v, next(30, 1), 'sign_up', exp, sid);
+    for (const goalId of o.goalIds ?? [])
+      if (rand() < GOAL_RATE * lift)
+        add(v, next(5, 30), 'conversion', exp, sid, { goal_id: goalId });
+    for (const url of o.pageGoalUrls ?? [])
+      if (rand() < GOAL_RATE * lift) add(v, next(5, 30), 'page_view', exp, sid, { url });
+    if (rand() >= BASE_FUNNEL_RATE * lift) return;
     funnel(v, vi, exp, sid, () => next(30, 60));
   }
 

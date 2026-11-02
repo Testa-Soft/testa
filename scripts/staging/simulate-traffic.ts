@@ -31,6 +31,26 @@ interface ServedExperiment {
   readonly experiment_id: number;
   readonly platform_version?: string;
   readonly variations: readonly { readonly variation_id: number }[];
+  readonly goals?: readonly ServedGoal[];
+}
+
+interface ServedGoal {
+  readonly goal_id: number;
+  readonly type: string;
+  readonly action?: string;
+  readonly match_type?: string;
+}
+
+/**
+ * A URL that matches a page_view goal: the collector counts page_view events
+ * whose `url` matches `action` by `match_type`. A regex goal has no URL to
+ * derive, so it gets none.
+ */
+function pageGoalUrl(goal: ServedGoal, domain: string): string | undefined {
+  const action = goal.action ?? '';
+  if (!action || goal.match_type === 'regex') return undefined;
+  if (/^https?:\/\//.test(action)) return action;
+  return `https://${domain}${action.startsWith('/') ? '' : '/'}${action}`;
 }
 
 interface ServedConfig {
@@ -130,6 +150,8 @@ async function main(): Promise<void> {
   const variations = findExperiment(config, experiment);
   const nowMs = Date.now();
   const seed = positiveInt(values.seed, Math.floor(nowMs / 60_000) % 1_000_000_000, 'seed');
+  const goals = config.experiments.find((e) => e.experiment_id === experiment)?.goals ?? [];
+  const domain = values.domain ?? 'testa-web-native-landing-env-staging-testa-8da30fbe.vercel.app';
   const sim = generateTraffic({
     projectId: config.project_id,
     experimentId: experiment,
@@ -138,8 +160,15 @@ async function main(): Promise<void> {
     days: positiveInt(values.days, 14, 'days'),
     nowMs,
     lift: parseLift(values.lift, variations),
+    // click goals convert through `conversion` events carrying goal_id;
+    // page_view goals through a page_view of a matching URL.
+    goalIds: goals.filter((g) => g.type === 'click').map((g) => g.goal_id),
+    pageGoalUrls: goals
+      .filter((g) => g.type === 'page_view')
+      .map((g) => pageGoalUrl(g, domain))
+      .filter((url): url is string => url !== undefined),
     seed,
-    domain: values.domain ?? 'testa-web-native-landing-env-staging-testa-8da30fbe.vercel.app',
+    domain,
   });
   console.log(
     `project ${config.project_id} (${project}) · experiment ${experiment} · variations ${variations.join(', ')} (control ${variations[0]}) · seed ${seed}`,
