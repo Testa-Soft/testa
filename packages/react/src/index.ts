@@ -27,6 +27,7 @@ export type {
   VariationAppliedEvent,
 } from '@testa-soft/experiment-core';
 export { DocumentCookieStore } from './cookie-store.ts';
+export { getConsent, onConsentChange, setConsent, watchConsent } from './consent.ts';
 export type { DocumentCookieStoreOptions } from './cookie-store.ts';
 export { ConfigClient, DEFAULT_CONFIG_HOST, preloadConfig, resolveConfigUrl } from './config.ts';
 export { REFRESH_FLAG, isRefreshRequested } from './refresh-flag.ts';

@@ -8,7 +8,8 @@ import type { Env } from './types.ts';
  *   - generating a fresh UUIDv4 when absent
  *   - deciding the `Domain=` attribute (CNAME mode → customer's domain;
  *     shared mode → COOKIE_FALLBACK_DOMAIN)
- *   - building the refresh `Set-Cookie` header (2-year Max-Age, SameSite=Lax, Secure)
+ *   - building the refresh `Set-Cookie` header (SameSite=Lax, Secure): 2-year
+ *     Max-Age only with the visitor's consent, a SESSION cookie otherwise (GDPR)
  *
  * Does NOT own:
  *   - denied-consent visitor_id rotation (Phase 2.3 enrich)
@@ -36,7 +37,12 @@ export interface VisitorIdResult {
  * On a new visitor: mints a UUIDv4 (`crypto.randomUUID()` is built into the
  * Workers runtime and Node 19+; we never fall back to weak randomness).
  */
-export async function getOrCreateVisitorId(request: Request, env: Env): Promise<VisitorIdResult> {
+export async function getOrCreateVisitorId(
+  request: Request,
+  env: Env,
+  /** The visitor granted consent — only then does the id outlive the session. */
+  persistent = false,
+): Promise<VisitorIdResult> {
   const cookies = parseCookies(request.headers.get('cookie') ?? '');
   const existing = cookies[UUID_COOKIE];
 
@@ -52,7 +58,11 @@ export async function getOrCreateVisitorId(request: Request, env: Env): Promise<
 
   const host = new URL(request.url).hostname;
   const domain = await domainForHost(host, env);
-  const set_cookie_header = buildSetCookie(visitor_id, domain, TWO_YEARS_SECONDS);
+  const set_cookie_header = buildSetCookie(
+    visitor_id,
+    domain,
+    persistent ? TWO_YEARS_SECONDS : undefined,
+  );
 
   return { visitor_id, is_new, set_cookie_header };
 }
@@ -144,11 +154,12 @@ function decodeCookieValue(v: string): string {
  *   - Secure  (Workers-served cookies are always over TLS in production)
  *   - no HttpOnly (pixel runtime reads it; revisit per Phase 3.3 if that changes)
  */
-function buildSetCookie(value: string, domain: string, maxAgeSec: number): string {
+/** `maxAgeSec` undefined → a session cookie (no `Max-Age`). */
+function buildSetCookie(value: string, domain: string, maxAgeSec: number | undefined): string {
   return [
     `${UUID_COOKIE}=${value}`,
     `Domain=${domain}`,
-    `Max-Age=${maxAgeSec}`,
+    ...(maxAgeSec === undefined ? [] : [`Max-Age=${maxAgeSec}`]),
     'Path=/',
     'SameSite=Lax',
     'Secure',

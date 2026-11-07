@@ -73,6 +73,9 @@ export { PUBLIC_HOST_HEADER, PUBLIC_PROTO_HEADER } from './constants.ts';
 export { DEBUG_HEADER } from './debug.ts';
 export type { DebugTrace } from './debug.ts';
 
+// GDPR consent (client-side) — see track.ts.
+export { getConsent, onConsentChange, setConsent } from './track.ts';
+
 // PRD-006 typed tracking helpers (task 5.7) — client-side; posts to the edge `/track`.
 export {
   DEFAULT_EVENTS_ENDPOINT,

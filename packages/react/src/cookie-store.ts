@@ -31,7 +31,15 @@
  * SSR-safe: every method is a no-op / null when there is no `document`.
  */
 
-import { type CookieSetOptions, type CookieStore, UUID_COOKIE } from '@testa-soft/experiment-core';
+import {
+  type CookieSetOptions,
+  type CookieStore,
+  PERSISTENCE_COOKIE,
+  type Persistence,
+  UUID_COOKIE,
+  cookieMaxAge,
+} from '@testa-soft/experiment-core';
+import { currentPersistence } from './consent.ts';
 
 /**
  * Keys whose value is an IDENTITY: established once, never legitimately
@@ -57,6 +65,13 @@ export interface DocumentCookieStoreOptions {
    * cookie-only (e.g. a consent mode that treats Web Storage separately).
    */
   mirrorToStorage?: boolean;
+  /**
+   * Storage lifetime. Default: whatever the visitor's consent allows (see
+   * consent.ts), re-read on every access so a consent change applies at once.
+   * `session` writes session cookies and mirrors to sessionStorage only;
+   * `persistent` is the full-lifetime cookie + localStorage behaviour.
+   */
+  persistence?: Persistence | (() => Persistence);
 }
 
 interface Held {
@@ -154,6 +169,7 @@ export class DocumentCookieStore implements CookieStore {
   private readonly secure: boolean;
   private readonly domain: string | undefined;
   private readonly mirror: boolean;
+  private readonly persistence: () => Persistence;
   private cookieWriteFailures = 0;
   private promotions = 0;
 
@@ -161,6 +177,17 @@ export class DocumentCookieStore implements CookieStore {
     this.secure = opts.secure ?? true;
     this.domain = opts.domain;
     this.mirror = opts.mirrorToStorage ?? true;
+    // Read the marker straight from the jar: `get` consults the mirror, whose
+    // tiers depend on this very answer.
+    const p = opts.persistence ?? (() => currentPersistence(this.readCookie(PERSISTENCE_COOKIE)));
+    this.persistence = typeof p === 'function' ? p : () => p;
+  }
+
+  /** Web Storage areas this store may use: no localStorage without consent. */
+  private areas(): ReadonlyArray<'localStorage' | 'sessionStorage'> {
+    return this.persistence() === 'persistent'
+      ? ['localStorage', 'sessionStorage']
+      : ['sessionStorage'];
   }
 
   /**
@@ -236,7 +263,7 @@ export class DocumentCookieStore implements CookieStore {
       if (name) found.add(name);
     }
     if (this.mirror) {
-      for (const area of ['localStorage', 'sessionStorage'] as const) {
+      for (const area of this.areas()) {
         try {
           const storage = globalThis[area];
           if (!storage) continue;
@@ -254,11 +281,9 @@ export class DocumentCookieStore implements CookieStore {
   }
 
   private readMirror(name: string): Held | undefined {
-    return (
-      live(memory.get(name)) ??
-      live(decodeHeld(rawStorage('localStorage', name))) ??
-      live(decodeHeld(rawStorage('sessionStorage', name)))
-    );
+    let held = live(memory.get(name));
+    for (const area of this.areas()) held ??= live(decodeHeld(rawStorage(area, name)));
+    return held;
   }
 
   set(name: string, value: string, opts: CookieSetOptions): void {
@@ -285,7 +310,14 @@ export class DocumentCookieStore implements CookieStore {
       firstSeenAt: prior && prior.value === value ? (prior.firstSeenAt ?? nowMs()) : nowMs(),
     };
     memory.set(name, held);
-    writeStorage('localStorage', name, held) || writeStorage('sessionStorage', name, held);
+    if (this.persistence() === 'persistent') {
+      writeStorage('localStorage', name, held) || writeStorage('sessionStorage', name, held);
+      return;
+    }
+    // Session-scoped: never leave a persistent copy behind (this is also what
+    // clears an earlier grant's copy on revoke).
+    removeStorage('localStorage', name);
+    writeStorage('sessionStorage', name, held);
   }
 
   /** Write a recovered value back into every tier above the one it came from. */
@@ -302,12 +334,11 @@ export class DocumentCookieStore implements CookieStore {
   private writeCookie(name: string, value: string, maxAgeSec: number): void {
     // No cookie is HttpOnly — a pure client SDK could not write one anyway, and
     // the assignment/uuid cookies must stay readable by this very code.
-    const parts = [
-      `${name}=${encodeURIComponent(value)}`,
-      'path=/',
-      `max-age=${maxAgeSec}`,
-      'SameSite=Lax',
-    ];
+    // No `max-age` at all = a session cookie (no consent to persist).
+    const maxAge = cookieMaxAge(maxAgeSec, this.persistence());
+    const parts = [`${name}=${encodeURIComponent(value)}`, 'path=/'];
+    if (maxAge !== undefined) parts.push(`max-age=${maxAge}`);
+    parts.push('SameSite=Lax');
     if (this.secure) parts.push('Secure');
     if (this.domain) parts.push(`domain=${this.domain}`);
     document.cookie = parts.join('; ');

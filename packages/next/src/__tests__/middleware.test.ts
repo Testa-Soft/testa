@@ -4,7 +4,12 @@
  * through, prefetch is a no-op.
  */
 
-import { ASSIGNMENT_COOKIE, UUID_BACKUP_COOKIE, UUID_COOKIE } from '@testa-soft/experiment-core';
+import {
+  ASSIGNMENT_COOKIE,
+  PERSISTENCE_COOKIE,
+  UUID_BACKUP_COOKIE,
+  UUID_COOKIE,
+} from '@testa-soft/experiment-core';
 import { NextRequest, NextResponse } from 'next/server.js';
 import { describe, expect, it, vi } from 'vitest';
 import { createTestaProxy } from '../middleware.ts';
@@ -744,7 +749,7 @@ describe('createTestaProxy', () => {
       expect(control.posted[0]?.body).toMatchObject({ experiment: 101, variation: 1 });
     });
 
-    it("forwards the VISITOR user agent and IP, not the runtime's", async () => {
+    it("forwards the VISITOR user agent, not the runtime's — and never the IP (GDPR)", async () => {
       const headers: Array<Record<string, string>> = [];
       vi.stubGlobal(
         'fetch',
@@ -766,7 +771,8 @@ describe('createTestaProxy', () => {
         }),
       );
       expect(headers[0]?.['user-agent']).toBe('Mozilla/5.0 (Macintosh)');
-      expect(headers[0]?.['x-forwarded-for']).toBe('203.0.113.9');
+      expect(headers[0]?.['x-forwarded-for']).toBeUndefined();
+      expect(headers[0]?.['x-real-ip']).toBeUndefined();
       vi.unstubAllGlobals();
     });
 
@@ -1166,7 +1172,11 @@ describe('createTestaProxy', () => {
     });
 
     it('leaves both alone when they already agree', async () => {
-      const res = await mw()(req(`${UUID_COOKIE}=v1; ${UUID_BACKUP_COOKIE}=v1`));
+      // With the persistence marker already matching — see the consent tests
+      // for the one-time demotion of cookies carried without it.
+      const res = await mw()(
+        req(`${UUID_COOKIE}=v1; ${UUID_BACKUP_COOKIE}=v1; ${PERSISTENCE_COOKIE}=s`),
+      );
       expect(setCookies(res)).not.toContain(`${UUID_COOKIE}=v1`);
     });
   });

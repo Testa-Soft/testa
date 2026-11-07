@@ -125,10 +125,16 @@ describe('getOrCreateVisitorId', () => {
       /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
     );
     expect(res.set_cookie_header).toContain(`${UUID_COOKIE}=${res.visitor_id}`);
-    expect(res.set_cookie_header).toContain(`Max-Age=${TWO_YEARS_SECONDS}`);
+    // GDPR: no consent reported → a session cookie.
+    expect(res.set_cookie_header).not.toContain('Max-Age');
     expect(res.set_cookie_header).toContain('SameSite=Lax');
     expect(res.set_cookie_header).toContain('Secure');
     expect(res.set_cookie_header).toContain('Domain=.testa.com');
+  });
+
+  it('persists for two years only with consent', async () => {
+    const res = await getOrCreateVisitorId(new Request(`${URL_BASE}/track`), makeEnv(), true);
+    expect(res.set_cookie_header).toContain(`Max-Age=${TWO_YEARS_SECONDS}`);
   });
 
   it('reuses the visitor_id from an inbound Cookie header', async () => {

@@ -8,6 +8,8 @@
  * complete even when the SDK immediately triggers a client-side redirect.
  */
 
+import { redactText, scrubUrl } from '@testa-soft/experiment-core';
+
 /** Default host for exposure/conversion tracking (crobot's `/api/leads`). */
 export const DEFAULT_TRACKING_HOST = 'https://new.testa-soft.tech';
 
@@ -59,12 +61,21 @@ export function emitExposure(trackingHost: string, payload: ExposurePayload): Pr
   return fetch(url, {
     method: 'POST',
     headers: { 'content-type': 'application/json', accept: 'application/json' },
-    body: JSON.stringify(payload),
+    body: JSON.stringify(scrubExposure(payload)),
     keepalive: true,
   }).then(
     () => undefined,
     () => undefined,
   );
+}
+
+/** GDPR: no personal data in the page URL or title we report. */
+export function scrubExposure(payload: ExposurePayload): ExposurePayload {
+  return {
+    ...payload,
+    url: scrubUrl(payload.url),
+    ...(payload.title !== undefined ? { title: redactText(payload.title) } : {}),
+  };
 }
 
 /** Test hook — clear the once-per-load guard. */

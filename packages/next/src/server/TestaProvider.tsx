@@ -19,7 +19,7 @@
  * path is in the exports map at all — it is not a public API.
  */
 
-import type { ProjectConfig } from '@testa-platform/shared-types';
+import type { ConsentState, ProjectConfig } from '@testa-platform/shared-types';
 import { TestaProvider as TestaProviderClient } from '@testa-soft/next/_internal/experiments';
 import { loadTestaConfig } from './load-config.ts';
 
@@ -71,6 +71,12 @@ interface CommonProps {
   routeLinks?: boolean;
   /** The app's `basePath` from `next.config`. Detected automatically; pass to override. */
   basePath?: string;
+  /**
+   * The visitor's tracking consent (e.g. read from your CMP cookie with
+   * `cookies()`). Until `'granted'` everything Testa stores is session-scoped.
+   * Can also be set client-side with `setConsent()`.
+   */
+  consent?: ConsentState;
 }
 
 /**
@@ -108,6 +114,7 @@ export async function TestaProvider(props: TestaProviderProps): Promise<JSX.Elem
       {...(props.legacyCookiesEnabled ? { legacyCookiesEnabled: true } : {})}
       {...(props.routeLinks !== undefined ? { routeLinks: props.routeLinks } : {})}
       {...(props.basePath ? { basePath: props.basePath } : {})}
+      {...(props.consent ? { consent: props.consent } : {})}
     />
   );
 }
