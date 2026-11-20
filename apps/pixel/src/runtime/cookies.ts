@@ -97,6 +97,25 @@ export function getUuid(): string | null {
   return readValue(UUID_COOKIE);
 }
 
+/** 3.3.3 `_testa_uuid` lifetime (30 days). */
+export const UUID_TTL_SEC = 30 * SECONDS_PER_DAY;
+
+/**
+ * The visitor id, minting + persisting one when the edge did not set it (the
+ * script served from a host whose cookie the browser rejects or never sent —
+ * e.g. a third-party script host). Without a persisted id every pageview gets a
+ * fresh ephemeral id: re-bucketed each load, and an exposure lead and its
+ * conversion never share a uuid. Returns `null` when storage refuses the write
+ * (the caller then decides nothing — see the SDKs' `ensureVisitorId`).
+ */
+export function ensureUuid(): string | null {
+  const existing = getUuid();
+  if (existing) return existing;
+  if (typeof crypto === 'undefined' || typeof crypto.randomUUID !== 'function') return null;
+  writeValue(UUID_COOKIE, crypto.randomUUID(), { maxAgeSec: UUID_TTL_SEC });
+  return getUuid();
+}
+
 // ─── assignment / session / exclusion — all packed into `_testa_exp` ─────────
 
 export function getAssignment(experimentId: number | string): number | null {
