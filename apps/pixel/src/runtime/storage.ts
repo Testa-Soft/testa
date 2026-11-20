@@ -2,7 +2,8 @@
  * Low-level storage helpers used by the cookies module.
  *
  * Strategy mirrors 3.6: document.cookie is the canonical store, but every
- * write is mirrored to localStorage. Reads check document.cookie first,
+ * persistent write is mirrored to localStorage WITH the cookie's expiry (a
+ * session write to sessionStorage). Reads check document.cookie first,
  * then localStorage, then sessionStorage. This survives Safari ITP's
  * 7-day cap on JS-set cookies — the localStorage mirror keeps the value
  * accessible even after the cookie has been silently dropped.
@@ -37,10 +38,33 @@ export function readValue(name: string): string | null {
   const fromCookie = readCookie(name);
   if (fromCookie !== null) return fromCookie;
 
-  const fromLocal = safeStorageGet(localStorageRef(), name);
+  const fromLocal = readLocalMirror(name);
   if (fromLocal !== null) return fromLocal;
 
   return safeStorageGet(sessionStorageRef(), name);
+}
+
+/**
+ * Companion key holding a mirrored value's expiry (epoch ms). The mirror must
+ * die with the cookie it stands in for: an expiry-less mirror turned every
+ * short-lived value (the 15 s redirect loop-breaker, session markers) into a
+ * permanent one the moment the cookie expired.
+ */
+const EXPIRY_SUFFIX = '__exp';
+
+/** localStorage mirror read; an expired entry is removed and reads as absent. */
+function readLocalMirror(name: string): string | null {
+  const store = localStorageRef();
+  const value = safeStorageGet(store, name);
+  if (value === null) return null;
+  const expiry = Number(safeStorageGet(store, name + EXPIRY_SUFFIX));
+  // No stamp = a mirror from an older build (or an ITP-era value): keep it.
+  if (expiry > 0 && Date.now() >= expiry) {
+    safeStorageRemove(store, name);
+    safeStorageRemove(store, name + EXPIRY_SUFFIX);
+    return null;
+  }
+  return value;
 }
 
 /**
@@ -50,7 +74,23 @@ export function readValue(name: string): string | null {
  */
 export function writeValue(name: string, value: string, opts: StorageOptions = {}): void {
   writeCookie(name, value, opts);
-  safeStorageSet(localStorageRef(), name, value);
+  const local = localStorageRef();
+  const maxAge = opts.maxAgeSec;
+  if (maxAge !== undefined && maxAge > 0) {
+    // Persistent: mirrored with the same lifetime as the cookie.
+    safeStorageSet(local, name, value);
+    safeStorageSet(local, name + EXPIRY_SUFFIX, String(Date.now() + maxAge * 1000));
+    return;
+  }
+  safeStorageRemove(local, name);
+  safeStorageRemove(local, name + EXPIRY_SUFFIX);
+  if (maxAge === 0) {
+    // An erase-by-expiry write: nothing may survive in any mirror.
+    safeStorageRemove(sessionStorageRef(), name);
+  } else {
+    // Session value: a tab-session mirror only, never long-lived storage.
+    safeStorageSet(sessionStorageRef(), name, value);
+  }
 }
 
 /**
@@ -59,6 +99,7 @@ export function writeValue(name: string, value: string, opts: StorageOptions = {
 export function eraseValue(name: string, opts: StorageOptions = {}): void {
   writeCookie(name, '', { ...opts, maxAgeSec: 0 });
   safeStorageRemove(localStorageRef(), name);
+  safeStorageRemove(localStorageRef(), name + EXPIRY_SUFFIX);
   safeStorageRemove(sessionStorageRef(), name);
 }
 
