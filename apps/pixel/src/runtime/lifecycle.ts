@@ -659,6 +659,8 @@ function buildPixelEvent(
 interface LiftedProps {
   experiment_id?: number;
   variation_id?: number;
+  /** Goal conversions: the crobot goal id is a top-level ClickHouse column. */
+  goal_id?: number;
   value_native?: number;
   currency?: string;
   order_id?: string;
@@ -680,6 +682,7 @@ function liftReservedProps(props: Record<string, unknown>): {
     switch (key) {
       case 'experiment_id':
       case 'variation_id':
+      case 'goal_id':
       case 'value_native':
       case 'items_count':
         if (typeof value === 'number' && Number.isFinite(value)) {

@@ -164,3 +164,16 @@ function resetRuntimeOnly(): void {
   // Re-arm hydrate() without clearing cookies (a new page, same visitor).
   resetLifecycle();
 }
+
+describe('conversion events on the /track pipe', () => {
+  it('carry goal_id top-level (the ClickHouse column v2 goal results join on)', async () => {
+    const { __getPendingEventsForTests } = await import('../lifecycle.ts');
+    boot('/landing', [exp(11, { platform_version: 'v2' })]);
+    window._testa?.track('signup', { plan: 'pro' });
+    const conv = __getPendingEventsForTests().find(
+      (e) => e.event?.event_name === 'conversion',
+    )?.event;
+    expect(conv?.goal_id).toBe(502);
+    expect(conv?.props?.goal_id).toBeUndefined();
+  });
+});
