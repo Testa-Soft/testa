@@ -28,6 +28,16 @@ export type ChangeHtmlChange = Extract<VariationChange, { type: 'change_html' }>
  */
 const injected = new WeakSet<Element>();
 
+/**
+ * Which applier last wrote each element. Two `change_html` changes on the same
+ * element (two experiments on one `h1`) would otherwise see each other's write
+ * as framework drift and re-assert forever — a MutationObserver storm that locks
+ * the tab. A keeper only re-asserts an element it was the LAST to write: the
+ * later change wins, and a real framework clobber (which never goes through
+ * `write`) is still repaired by that winner.
+ */
+const lastWriter = new WeakMap<Element, object>();
+
 export function applyChangeHtml(
   change: ChangeHtmlChange,
   opts: EachMatchingOptions = {},
@@ -39,12 +49,13 @@ export function applyChangeHtml(
   // React won't reset a mutation it doesn't know about — and (b) the observer
   // can hit the next page's element before the caller's cleanup runs.
   const originals = new Map<Element, string>();
+  const owner = {};
 
   const stop = eachMatching(
     change.selector,
     (el) => {
       if (!originals.has(el)) originals.set(el, el.innerHTML);
-      write(el, sanitized);
+      write(el, sanitized, owner);
     },
     opts,
   );
@@ -66,9 +77,10 @@ export function applyChangeHtml(
       for (const el of originals.keys()) {
         if (!el.isConnected) continue;
         if (stillApplied(el, sanitized)) continue;
+        if (lastWriter.get(el) !== owner) continue; // another change took it over
         if (guard && !guard()) continue; // off-page: the app's content stands
         originals.set(el, el.innerHTML);
-        write(el, sanitized);
+        write(el, sanitized, owner);
       }
     });
     keeper.observe(document.documentElement, {
@@ -91,7 +103,8 @@ export function applyChangeHtml(
 }
 
 /** Write the authored markup and remember the nodes it produced as ours. */
-function write(el: Element, sanitized: string): void {
+function write(el: Element, sanitized: string, owner: object): void {
+  lastWriter.set(el, owner);
   el.innerHTML = sanitized;
   for (const child of Array.from(el.children)) {
     injected.add(child);
