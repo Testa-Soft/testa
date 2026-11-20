@@ -143,6 +143,17 @@ function onTransportFailure(eventCount: number): void {
 }
 
 /**
+ * Beacon body. `sendBeacon` always sends credentials; with an `application/json`
+ * type that is a PREFLIGHTED credentialed request, which a cross-origin edge
+ * answering `Access-Control-Allow-Origin: *` can never pass — the browser drops
+ * it. `text/plain` is CORS-safelisted (no preflight) and the edge parses the
+ * body as JSON regardless of its content type.
+ */
+function beaconBlob(body: string): Blob {
+  return new Blob([body], { type: 'text/plain;charset=UTF-8' });
+}
+
+/**
  * Synchronously ship a SINGLE event via `navigator.sendBeacon`. Used right
  * before a programmatic redirect to close the SRM gap: if we waited for the
  * normal IDB-backed flush, the page would unload before the `experiment_view`
@@ -161,7 +172,7 @@ export function shipEventSync(payload: string): boolean {
   }
   const body = `[${payload}]`;
   try {
-    return navigator.sendBeacon(_config.endpoint, new Blob([body], { type: 'application/json' }));
+    return navigator.sendBeacon(_config.endpoint, beaconBlob(body));
   } catch {
     return false;
   }
@@ -180,10 +191,7 @@ function flushSync(): void {
   void pending(MAX_BATCH_SIZE).then((events) => {
     if (events.length === 0) return;
     const body = `[${events.map((e) => e.payload).join(',')}]`;
-    const ok = navigator.sendBeacon(
-      _config?.endpoint ?? '',
-      new Blob([body], { type: 'application/json' }),
-    );
+    const ok = navigator.sendBeacon(_config?.endpoint ?? '', beaconBlob(body));
     if (ok) {
       // Beacon accepted → mark sent. The browser may still drop it; we accept
       // that risk on tab close (this is the last flush before the page dies).

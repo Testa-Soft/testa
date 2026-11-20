@@ -140,3 +140,28 @@ describe('drain after success', () => {
     expect(await count()).toBe(0);
   });
 });
+
+describe('sendBeacon — cross-origin edge', () => {
+  // A beacon is sent with credentials. An `application/json` body makes it a
+  // preflighted request, and the edge's `Access-Control-Allow-Origin: *` cannot
+  // satisfy a credentialed preflight — Chrome blocks it (found live: the
+  // pre-redirect experiment_view and the pagehide flush never reached the edge,
+  // and the pagehide flush had already marked them sent). A CORS-safelisted
+  // text/plain body needs no preflight; the edge parses JSON regardless.
+  it('ships with a CORS-safelisted content type (no preflight)', async () => {
+    const types: string[] = [];
+    Object.defineProperty(navigator, 'sendBeacon', {
+      configurable: true,
+      writable: true,
+      value: (_url: string, body: Blob) => {
+        types.push(body.type);
+        return true;
+      },
+    });
+    installTransport({ endpoint: ENDPOINT });
+    const { shipEventSync } = await import('../transport.ts');
+    expect(shipEventSync('{"id":"x"}')).toBe(true);
+    expect(types).toHaveLength(1);
+    expect(types[0]?.startsWith('text/plain')).toBe(true);
+  });
+});
