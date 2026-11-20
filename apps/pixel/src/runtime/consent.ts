@@ -45,6 +45,8 @@ interface ConsentModule {
 
 let _state: ConsentState = DEFAULT_STATE;
 let _strict = false;
+/** True once anyone (customer API, CMP event) reported a consent state. */
+let _explicit = false;
 const _subscribers: Subscriber[] = [];
 
 let _heldResolvers: (() => void)[] = [];
@@ -68,6 +70,7 @@ function getState(): ConsentState {
 
 function setState(next: ConsentState): void {
   if (!VALID_STATES.has(next)) return;
+  _explicit = true;
   if (next === _state) return;
   const prev = _state;
   _state = next;
@@ -89,6 +92,11 @@ function subscribe(handler: Subscriber): () => void {
 
 function setStrictMode(strict: boolean): void {
   _strict = strict;
+  // Strict = "no tracking without an explicit grant": the industry-baseline
+  // `granted` default only applies in aware mode. Without this a strict
+  // project tracked from the first pageview unless a CMP happened to report
+  // 'unknown' first. An explicit state reported earlier is kept.
+  if (strict && !_explicit) _state = 'unknown';
   // If we're flipping out of strict, release any held callers.
   if (!strict) drainHold();
 }
@@ -136,6 +144,7 @@ function drainHold(): void {
 
 function __resetForTests(): void {
   _state = DEFAULT_STATE;
+  _explicit = false;
   _strict = false;
   _subscribers.length = 0;
   _heldResolvers = [];
