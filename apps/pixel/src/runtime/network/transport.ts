@@ -85,7 +85,7 @@ export async function flush(): Promise<void> {
   _flushing = true;
   _enqueueSinceLastFlush = 0;
   try {
-    const events = await pending(MAX_BATCH_SIZE);
+    const events = await dropBeaconed(await pending(MAX_BATCH_SIZE));
     if (events.length === 0) {
       _backoffMs = 0;
       return;
@@ -106,6 +106,7 @@ export async function flush(): Promise<void> {
     }
 
     if (res.status >= 200 && res.status < 300) {
+      for (const e of events) _sentIds.add(e.event_id);
       await markSent(events.map((e) => e.event_id));
       recordSent(events.length);
       _backoffMs = 0;
@@ -172,7 +173,9 @@ export function shipEventSync(payload: string): boolean {
   }
   const body = `[${payload}]`;
   try {
-    return navigator.sendBeacon(_config.endpoint, beaconBlob(body));
+    const ok = navigator.sendBeacon(_config.endpoint, beaconBlob(body));
+    if (ok) recordBeaconed(idsOf([payload]));
+    return ok;
   } catch {
     return false;
   }
@@ -188,13 +191,15 @@ export function shipEventSync(payload: string): boolean {
 function flushSync(): void {
   if (!_config) return;
   if (typeof navigator === 'undefined' || typeof navigator.sendBeacon !== 'function') return;
-  void pending(MAX_BATCH_SIZE).then((events) => {
+  void pending(MAX_BATCH_SIZE).then((all) => {
+    const events = all.filter((e) => !_sentIds.has(e.event_id));
     if (events.length === 0) return;
     const body = `[${events.map((e) => e.payload).join(',')}]`;
     const ok = navigator.sendBeacon(_config?.endpoint ?? '', beaconBlob(body));
     if (ok) {
       // Beacon accepted → mark sent. The browser may still drop it; we accept
       // that risk on tab close (this is the last flush before the page dies).
+      recordBeaconed(events.map((e) => e.event_id));
       void markSent(events.map((e) => e.event_id));
       recordSent(events.length);
     }
@@ -213,7 +218,101 @@ function pushDebugError(phase: string, message: string): void {
   w.__pixel_debug.errors.push({ ts: Date.now(), phase: `transport.${phase}`, message });
 }
 
+// ─── unload safety net ────────────────────────────────────────────────────
+//
+// An event fired right before a navigation (an "Add to cart" button that also
+// goes to /cart) is enqueued to IndexedDB asynchronously and flushed after a
+// debounce — the page is gone before either completes, and the async
+// pagehide flush cannot read IndexedDB in time either. Found live: no
+// add_to_cart / begin_checkout ever reached ClickHouse from such buttons.
+//
+// So on pagehide the lifecycle hands over the events it emitted on this page;
+// the ones not confirmed sent go out in ONE synchronous beacon. Their ids are
+// recorded synchronously in localStorage, and the next page's flush drops
+// those outbox entries instead of shipping them a second time (the collector
+// only dedups `purchase`).
+
+const BEACONED_KEY = '_testa_beaconed';
+const MAX_BEACONED = 300;
+/** Event ids confirmed delivered from this page (flush 2xx or accepted beacon). */
+const _sentIds = new Set<string>();
+
+function idsOf(payloads: readonly string[]): string[] {
+  const out: string[] = [];
+  for (const p of payloads) {
+    try {
+      const parsed = JSON.parse(p) as { event_id?: unknown };
+      if (typeof parsed.event_id === 'string') out.push(parsed.event_id);
+    } catch {
+      // not an event payload — nothing to record
+    }
+  }
+  return out;
+}
+
+function readBeaconed(): string[] {
+  try {
+    const raw = localStorage.getItem(BEACONED_KEY);
+    const parsed: unknown = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeBeaconed(ids: readonly string[]): void {
+  try {
+    if (ids.length === 0) localStorage.removeItem(BEACONED_KEY);
+    else localStorage.setItem(BEACONED_KEY, JSON.stringify(ids.slice(-MAX_BEACONED)));
+  } catch {
+    // storage blocked: worst case the next page re-sends (at-least-once)
+  }
+}
+
+function recordBeaconed(ids: readonly string[]): void {
+  if (ids.length === 0) return;
+  for (const id of ids) _sentIds.add(id);
+  writeBeaconed([...readBeaconed(), ...ids]);
+}
+
+/** Outbox entries already delivered by a beacon are marked sent, not re-shipped. */
+async function dropBeaconed(entries: OutboxEntry[]): Promise<OutboxEntry[]> {
+  const beaconed = new Set(readBeaconed());
+  if (beaconed.size === 0) return entries;
+  const done = entries.filter((e) => beaconed.has(e.event_id));
+  if (done.length === 0) return entries;
+  await markSent(done.map((e) => e.event_id));
+  const doneIds = new Set(done.map((e) => e.event_id));
+  writeBeaconed([...beaconed].filter((id) => !doneIds.has(id)));
+  return entries.filter((e) => !doneIds.has(e.event_id));
+}
+
+/**
+ * Synchronously beacon this page's events that were not confirmed sent.
+ * Call from `pagehide`. Returns how many were shipped.
+ */
+export function shipUnsentSync(entries: readonly OutboxEntry[]): number {
+  if (!_config) return 0;
+  if (typeof navigator === 'undefined' || typeof navigator.sendBeacon !== 'function') return 0;
+  const unsent = entries.filter((e) => !_sentIds.has(e.event_id)).slice(-MAX_BATCH_SIZE);
+  if (unsent.length === 0) return 0;
+  try {
+    const ok = navigator.sendBeacon(
+      _config.endpoint,
+      beaconBlob(`[${unsent.map((e) => e.payload).join(',')}]`),
+    );
+    if (!ok) return 0;
+    recordBeaconed(unsent.map((e) => e.event_id));
+    recordSent(unsent.length);
+    return unsent.length;
+  } catch {
+    return 0;
+  }
+}
+
 export function __resetForTests(): void {
+  _sentIds.clear();
+  writeBeaconed([]);
   _config = null;
   if (_flushTimer !== null) {
     clearTimeout(_flushTimer);

@@ -78,7 +78,12 @@ import { pushLeadToDataLayer } from './legacy/data-layer.ts';
 import { fireEvent, installLegacy, publishLoaded, publishUuid } from './legacy/index.ts';
 import { snapshot as healthSnapshot, recordDroppedNoSession } from './network/health.ts';
 import { initOutbox, count as outboxCount, enqueue as outboxEnqueue } from './network/outbox.ts';
-import { installTransport, notifyEnqueue, shipEventSync } from './network/transport.ts';
+import {
+  installTransport,
+  notifyEnqueue,
+  shipEventSync,
+  shipUnsentSync,
+} from './network/transport.ts';
 import { uuidv7 } from './network/uuid7.ts';
 import { maybeEnterPreviewMode } from './preview.ts';
 import { readBreadcrumbs as readRedirectBreadcrumbs } from './redirect/breadcrumbs.ts';
@@ -1186,6 +1191,17 @@ function installNetwork(): void {
   if (!apiUrl) return;
   const endpoint = `${apiUrl.replace(/\/$/, '')}/track`;
   installTransport({ endpoint });
+  // Events emitted right before a navigation never reach IndexedDB / the
+  // debounced flush; beacon whatever this page emitted and did not confirm.
+  if (typeof addEventListener === 'function') addEventListener('pagehide', shipPageEventsSync);
+}
+
+function shipPageEventsSync(): void {
+  const entries = [];
+  for (const p of _pendingEvents) {
+    if (p.event) entries.push({ event_id: p.event.event_id, payload: JSON.stringify(p.event) });
+  }
+  shipUnsentSync(entries);
 }
 
 // ─── consent mode ──────────────────────────────────────────────────────────
