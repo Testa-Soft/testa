@@ -875,6 +875,9 @@ export function runExperimentCycle(): void {
   // on every SPA navigation. On the PRD-006 pipeline they fire AFTER the
   // experiment loop instead, so they land inside the experiment session (§5.3).
   const v2 = v2ExperimentIds(project);
+  // Persist the visitor id before any event is built, so even the first
+  // page's events carry the id the next pages will use.
+  cookies.ensureUuid();
   // Read BEFORE anything mints the session cookie (session_start detection).
   const hadSession = Boolean(readValue(SESSION_ID_COOKIE));
   // Capture the browsing session's entry attribution on its FIRST page, even
@@ -885,7 +888,6 @@ export function runExperimentCycle(): void {
   if (v2.size === 0) fireLifecycleEvents(hadSession);
   const pageUrl = typeof location !== 'undefined' ? location.href : '';
 
-  cookies.ensureUuid();
   const ctx = buildEvalContext();
   const targetingCtx = buildTargetingContext(ctx);
   const stats = { matched: 0, excluded: 0 };
