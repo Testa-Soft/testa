@@ -168,7 +168,7 @@ export interface RunEnvelope {
   /** Run the rows come from; `null` until a run finished (`not_ready`). */
   run_id: string | null;
   computed_at: string | null;
-  /** Newest ingested event the run saw. */
+  /** The run counts every event ingested at or before this instant (run start − MODELER_SETTLE_SEC). */
   data_through: string | null;
   next_run_at: string | null;
   /** Seconds; also sent as the `Retry-After` header. */

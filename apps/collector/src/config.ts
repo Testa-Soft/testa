@@ -66,6 +66,14 @@ const envSchema = z.object({
   MODELER_INTERVAL_SEC: z.coerce.number().int().positive().default(900),
   /** Force a refresh when the last finished run is older than this (seconds). */
   MODELER_MAX_RUN_AGE_SEC: z.coerce.number().int().positive().default(86_400),
+  /**
+   * How long after an event's `server_ts` it is guaranteed to be readable in
+   * `events` (and its MVs: `exposures`, `event_items`). Must cover the
+   * `events_buffer` max_time (30 s, migration 002) plus the ingest → Redis
+   * stream → consumer lag. A run's `data_through` never passes
+   * `run start − this`, so rows still in a Buffer layer are re-counted later.
+   */
+  MODELER_SETTLE_SEC: z.coerce.number().int().min(0).default(60),
   /** Per-experiment lock TTL (seconds). */
   MODELER_LOCK_TTL_SEC: z.coerce.number().int().positive().default(600),
   /** ClickHouse `max_execution_time` per modeler query (seconds). */
@@ -155,6 +163,7 @@ export const config = {
     concurrency: parsed.MODELER_CONCURRENCY,
     intervalSec: parsed.MODELER_INTERVAL_SEC,
     maxRunAgeSec: parsed.MODELER_MAX_RUN_AGE_SEC,
+    settleSec: parsed.MODELER_SETTLE_SEC,
     lockTtlSec: parsed.MODELER_LOCK_TTL_SEC,
     maxExecutionSec: parsed.MODELER_MAX_EXECUTION_SEC,
     retryDelaysSec: parseDelays(parsed.MODELER_RETRY_DELAYS_SEC, 'MODELER_RETRY_DELAYS_SEC'),

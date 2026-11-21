@@ -90,6 +90,7 @@ describe.skipIf(!liveRedis)('admin v2 page keys via sync API (live CH + Redis, H
         retryDelaysSec: [0],
         queryTtlSec: 3600,
         maxRunAgeSec: 86_400,
+        settleSec: 0,
         pollMs: 50,
       },
       now: Date.now,

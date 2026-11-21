@@ -684,7 +684,7 @@ GET /api/v1/experiments/{experiment_id}/daily-summary?project_id=42[&since_run_i
   "status": "running",
   "run_id": "r_8f2c",                     // run the rows come from
   "computed_at": "2026-10-15T09:30:12Z",
-  "data_through": "2026-10-15T09:29:58Z", // newest ingested event the run saw
+  "data_through": "2026-10-15T09:29:58Z", // run counts every event ingested at or before this (run start − MODELER_SETTLE_SEC)
   "next_run_at": "2026-10-15T09:45:00Z",
   "retry_after": 60,
   "from": "2026-10-01", "to": "2026-10-15", "report_currency": "EUR",

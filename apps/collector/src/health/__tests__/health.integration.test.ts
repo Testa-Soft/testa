@@ -68,6 +68,7 @@ function makeContext(): SyncContext {
       retryDelaysSec: [0, 0, 0],
       queryTtlSec: 3600,
       maxRunAgeSec: 86_400,
+      settleSec: 0,
       pollMs: 50,
     },
     now: Date.now,

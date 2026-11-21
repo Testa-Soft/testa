@@ -8,21 +8,11 @@ import { computeDailyRows } from './daily-rows.ts';
 import { configForProject } from './project-config.ts';
 import { recordDuration } from './queue.ts';
 import { writeRunState } from './run-state.ts';
+import { settledWatermark, stopSettled } from './settle.ts';
 import { chDateTime, readSubscription } from './subscriptions.ts';
 import { newRunId } from './ulid.ts';
 
 const todayUtc = (nowMs: number): string => new Date(nowMs).toISOString().slice(0, 10);
-
-/** `YYYY-MM-DD hh:mm:ss.sss` (UTC) → ISO-8601. */
-export const chToIso = (s: string): string => new Date(`${s.replace(' ', 'T')}Z`).toISOString();
-
-async function newestEvent(ctx: ModelerContext, projectId: number): Promise<string> {
-  const [row] = await ctx.query<{ newest: string; n: string }>(
-    'SELECT toString(max(server_ts)) AS newest, count() AS n FROM events WHERE project_id = {p:UInt64}',
-    { p: projectId },
-  );
-  return row && Number(row.n) > 0 ? chToIso(row.newest) : '';
-}
 
 async function variationOrder(ctx: ModelerContext, projectId: number, experimentId: number) {
   const config = await configForProject(ctx.configStore, projectId).catch(() => null);
@@ -51,10 +41,7 @@ export async function runRefresh(
   });
 
   const to = sub.to ?? todayUtc(startedMs);
-  const [dataThrough, order] = await Promise.all([
-    newestEvent(ctx, projectId),
-    variationOrder(ctx, projectId, experimentId),
-  ]);
+  const order = await variationOrder(ctx, projectId, experimentId);
   const result = await computeDailyRows(ctx.query, {
     projectId,
     experimentId,
@@ -65,8 +52,14 @@ export async function runRefresh(
     ...(order ? { variationOrder: order } : {}),
   });
 
+  // Rows still in an events_buffer layer are invisible to this run: vouch only
+  // for events older than the settle window (see settle.ts).
+  const dataThrough = settledWatermark(startedMs, ctx.settings.settleSec);
   const computedMs = ctx.now();
-  const isFinal = sub.status === 'stopped' ? 1 : 0;
+  const isFinal =
+    sub.status === 'stopped' && stopSettled(sub.updatedAt, startedMs, ctx.settings.settleSec)
+      ? 1
+      : 0;
   await ctx.insert(
     'metric_daily',
     result.rows.map((r) => ({
@@ -109,7 +102,7 @@ export async function runRefresh(
     experiment_id: experimentId,
     run_id: runId,
     computed_at: computedAt,
-    data_through: dataThrough || computedAt,
+    data_through: dataThrough,
   });
   return 'ready';
 }

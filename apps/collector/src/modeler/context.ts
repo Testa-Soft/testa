@@ -14,6 +14,8 @@ export interface ModelerSettings {
   retryDelaysSec: readonly number[];
   queryTtlSec: number;
   maxRunAgeSec: number;
+  /** MODELER_SETTLE_SEC: events younger than this may still sit in `events_buffer`. */
+  settleSec: number;
   pollMs: number;
 }
 

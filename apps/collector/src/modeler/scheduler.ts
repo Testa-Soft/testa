@@ -3,13 +3,16 @@
  *  - running: enqueue when the project has events newer than the last run's
  *    `data_through`, when no run ever finished or the last one failed, or when
  *    the last finished run is older than MODELER_MAX_RUN_AGE_SEC (24 h);
- *  - stopped: one final run (`is_final = 1`) per stop, at high priority.
+ *    (`data_through` lags the newest event until the settle window has passed,
+ *    so a run that missed rows still in `events_buffer` is re-run; settle.ts);
+ *  - stopped: one final run (`is_final = 1`) per stop, at high priority, once
+ *    MODELER_SETTLE_SEC has passed since the stop.
  * Experiments already queued, waiting for a retry, or running are skipped.
  */
 import type { ModelerContext } from './context.ts';
 import { PRIORITY, type Priority, enqueue, isDelayed, position } from './queue.ts';
-import { chToIso } from './refresh.ts';
 import { readRunState, writeRunState } from './run-state.ts';
+import { chToIso, stopSettled } from './settle.ts';
 import { type Subscription, listSchedulable } from './subscriptions.ts';
 
 /** An experiment is identified by both ids (R3: experiment ids repeat across projects). */
@@ -76,7 +79,8 @@ export async function tick(ctx: ModelerContext): Promise<ExperimentRef[]> {
     const state = await readRunState(ctx.redis, ctx.keys.run(sub.projectId, sub.experimentId));
     let priority: Priority | null = null;
     if (sub.status === 'stopped') {
-      if (state.final_for !== sub.updatedAt) priority = PRIORITY.high;
+      const due = stopSettled(sub.updatedAt, nowMs, ctx.settings.settleSec);
+      if (state.final_for !== sub.updatedAt && due) priority = PRIORITY.high;
     } else {
       const latest = newest.get(sub.projectId) ?? '';
       const stale =

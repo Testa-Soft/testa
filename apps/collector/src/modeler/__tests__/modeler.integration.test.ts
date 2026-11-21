@@ -103,6 +103,7 @@ function makeCtx(overrides: Partial<ModelerContext> = {}): ModelerContext {
       retryDelaysSec: [0, 0, 0],
       queryTtlSec: 3600,
       maxRunAgeSec: 86_400,
+      settleSec: 0,
       pollMs: 50,
     },
     now: Date.now,
@@ -218,6 +219,7 @@ describe.skipIf(!liveRedis)(`modeler (live ClickHouse db=${database} + Redis)`, 
     const ctx = makeCtx();
     const { projectId, experimentId } = await f1Experiment();
     await subscribe(projectId, experimentId);
+    const before = new Date().toISOString();
 
     expect(await tick(ctx)).toContainEqual({ projectId, experimentId });
     expect((await readRunState(redis, ctx.keys.run(projectId, experimentId))).status).toBe(
@@ -229,7 +231,9 @@ describe.skipIf(!liveRedis)(`modeler (live ClickHouse db=${database} + Redis)`, 
     expect(state.status).toBe('ready');
     expect(state.last_ready_run_id).toMatch(/^r_[0-9A-Z]{26}$/);
     expect(state.quality).toEqual(F1.quality);
-    expect(state.data_through).toBe('2026-10-03T09:20:00.180Z');
+    // settleSec 0: complete through the run start.
+    expect(state.data_through >= before).toBe(true);
+    expect(state.data_through <= new Date().toISOString()).toBe(true);
     expect(sortRows(await storedRows(projectId, state.last_ready_run_id))).toEqual(
       sortRows(F1.rows),
     );
