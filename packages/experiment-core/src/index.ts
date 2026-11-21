@@ -18,7 +18,12 @@ export {
   redirectedName,
 } from './cookie-store.ts';
 
-export { passesTargeting, isExcludedByRules } from './targeting.ts';
+export {
+  exclusionsOf,
+  isExcludedByRules,
+  passesTargeting,
+  targetingOf,
+} from './targeting.ts';
 export type { TargetingContext } from './targeting.ts';
 export { decodeCrossDomain, encodeCrossDomainData, CROSS_DOMAIN_PARAM } from './cross-domain.ts';
 export type { CrossDomainPayload, CrossDomainAssignment } from './cross-domain.ts';

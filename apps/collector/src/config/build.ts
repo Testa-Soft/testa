@@ -12,6 +12,10 @@
  * change's (or variation's) match type. Control is identifier === 0.
  */
 
+import {
+  RULE_GROUPS_EXCLUSION_SENTINEL,
+  RULE_GROUPS_TARGETING_SENTINEL,
+} from '@testa-platform/shared-types';
 import type {
   ExperimentConfig,
   GoalConfig,
@@ -106,7 +110,13 @@ export interface TestaConfigOptions {
   consentMode?: ProjectConfig['consent_mode'];
   /** ISO timestamp for `published_at`; defaults to ''. */
   publishedAt?: string;
+  /** Sink for non-fatal build warnings (e.g. a dropped malformed rule group). Defaults to console.warn. */
+  warn?: (message: string, detail: Record<string, unknown>) => void;
 }
+
+type Warn = NonNullable<TestaConfigOptions['warn']>;
+
+const defaultWarn: Warn = (message, detail) => console.warn(`[config] ${message}`, detail);
 
 const REDIRECT_MODES = new Set<RedirectMode>(['exact', 'contains', 'query', 'regex']);
 
@@ -117,7 +127,7 @@ export function buildTestaConfig(
 ): ProjectConfig {
   const experiments = (source.experiments ?? [])
     .filter((e) => e.type === 'split_url' || e.type === 'copy')
-    .map(buildExperiment);
+    .map((e) => buildExperiment(e, opts.warn ?? defaultWarn));
 
   return {
     project_id: source.id,
@@ -130,11 +140,7 @@ export function buildTestaConfig(
   };
 }
 
-function buildExperiment(e: SourceExperiment): ExperimentConfig {
-  // Rule groups are v2-only: a v1 experiment never ships them, even if the source had one.
-  const grouped = e.platform_version === 'v2';
-  const targeting = mapConditions(e.targeting, grouped);
-  const exclusions = mapConditions(e.exclusions, grouped);
+function buildExperiment(e: SourceExperiment, warn: Warn): ExperimentConfig {
   return {
     experiment_id: e.identifier,
     ...(e.title ? { title: e.title } : {}),
@@ -144,11 +150,44 @@ function buildExperiment(e: SourceExperiment): ExperimentConfig {
     goals: mapGoals(e.goals),
     variations: (e.variations ?? []).map((v) => buildVariation(v, e)),
     ...(e.cross_domain ? { cross_domain: true } : {}),
-    ...(targeting.length > 0 ? { targeting } : {}),
-    ...(exclusions.length > 0 ? { exclusions } : {}),
+    ...buildRules(e, warn),
     ...(e.platform_version === 'v1' || e.platform_version === 'v2'
       ? { platform_version: e.platform_version }
       : {}),
+  };
+}
+
+type RuleFields = Pick<
+  ExperimentConfig,
+  'targeting' | 'exclusions' | 'targeting_groups' | 'exclusion_groups'
+>;
+
+/**
+ * Targeting + exclusions. Flat lists ship under `targeting` / `exclusions`
+ * exactly as before. Rule groups are v2-only; when a v2 experiment's targeting
+ * or exclusions carry a group, the real lists ship under `targeting_groups` /
+ * `exclusion_groups` and the legacy fields get sentinels, so an SDK that
+ * predates groups (and would flatten them, widening the audience) never runs
+ * the experiment instead.
+ */
+function buildRules(e: SourceExperiment, warn: Warn): RuleFields {
+  // A v1 experiment never ships groups, even if the source had one.
+  const groupsAllowed = e.platform_version === 'v2';
+  const ctx = { experiment: e.identifier, warn };
+  const targeting = mapConditions(e.targeting, groupsAllowed, ctx);
+  const exclusions = mapConditions(e.exclusions, groupsAllowed, ctx);
+  const grouped = [...targeting, ...exclusions].some((c) => c.group !== undefined);
+  if (grouped) {
+    return {
+      targeting: [{ ...RULE_GROUPS_TARGETING_SENTINEL }],
+      exclusions: [{ ...RULE_GROUPS_EXCLUSION_SENTINEL }],
+      targeting_groups: targeting,
+      exclusion_groups: exclusions,
+    };
+  }
+  return {
+    ...(targeting.length > 0 ? { targeting } : {}),
+    ...(exclusions.length > 0 ? { exclusions } : {}),
   };
 }
 
@@ -201,7 +240,11 @@ function goalMatch(
   };
 }
 
-function mapConditions(rules: SourceRule[] | undefined, grouped: boolean): TargetingCondition[] {
+function mapConditions(
+  rules: SourceRule[] | undefined,
+  groupsAllowed: boolean,
+  ctx: { experiment: number; warn: Warn },
+): TargetingCondition[] {
   return (rules ?? [])
     .filter((r) => typeof r.type === 'string' && r.type.length > 0)
     .map((r) => ({
@@ -210,10 +253,25 @@ function mapConditions(rules: SourceRule[] | undefined, grouped: boolean): Targe
         ? (r.operator as TargetingCondition['operator'])
         : 'contains',
       value: r.value ?? '',
-      ...(grouped && Number.isInteger(r.group) && (r.group as number) >= 0
-        ? { group: r.group as number }
-        : {}),
+      ...(groupsAllowed ? groupOf(r, ctx) : {}),
     }));
+}
+
+/**
+ * A valid group is a non-negative integer. `null`/absent = ungrouped. Anything
+ * else is dropped (the rule becomes a group of its own) with a warning, since
+ * it means the upstream sent something its validation should have refused.
+ */
+function groupOf(r: SourceRule, ctx: { experiment: number; warn: Warn }): { group?: number } {
+  const g: unknown = r.group;
+  if (g === undefined || g === null) return {};
+  if (typeof g === 'number' && Number.isInteger(g) && g >= 0) return { group: g };
+  ctx.warn('dropped a malformed rule group', {
+    experiment: ctx.experiment,
+    dimension: r.type,
+    group: g,
+  });
+  return {};
 }
 
 function buildVariation(v: SourceVariation, e: SourceExperiment): VariationConfig {

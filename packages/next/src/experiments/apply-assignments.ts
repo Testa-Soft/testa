@@ -16,6 +16,7 @@ import type { ExperimentRule, ProjectConfig, VariationChange } from '@testa-plat
 import { type Teardown, applyVariation } from '@testa-soft/dom';
 import {
   type TargetingContext,
+  exclusionsOf,
   isExcludedByRules,
   matchesPageRule,
   parsePacked,
@@ -56,7 +57,7 @@ export function resolveAssignedExperiments(
     // exclusions re-evaluate on EVERY pageview, assigned or not: a match
     // suppresses the apply without touching the sticky assignment. Enforces
     // `dimension: 'experiment'` mutual exclusion at apply time.
-    if (exclusionCtx && isExcludedByRules(experiment.exclusions, exclusionCtx)) continue;
+    if (exclusionCtx && isExcludedByRules(exclusionsOf(experiment), exclusionCtx)) continue;
 
     const state = map.get(Number(experiment.experiment_id));
     // Skip excluded + the eligible-but-unassigned sentinel (both variation < 0).

@@ -20,9 +20,11 @@
 import type { ExperimentConfig } from '@testa-platform/shared-types';
 import {
   type TargetingContext,
+  exclusionsOf,
   isExcludedByRules,
   matchesPageRule,
   passesTargeting,
+  targetingOf,
 } from '@testa-soft/experiment-core';
 
 export type Eligibility = 'off_page' | 'not_targeted' | 'excluded' | 'audience' | 'eligible';
@@ -38,8 +40,8 @@ export function eligibilityOf(
   deps: EligibilityDeps,
 ): Eligibility {
   if (!matchesPageRule(ctx.url, experiment.rules ?? [])) return 'off_page';
-  if (!passesTargeting(experiment.targeting, ctx)) return 'not_targeted';
-  if (isExcludedByRules(experiment.exclusions, ctx)) return 'excluded';
+  if (!passesTargeting(targetingOf(experiment), ctx)) return 'not_targeted';
+  if (isExcludedByRules(exclusionsOf(experiment), ctx)) return 'excluded';
   if (experiment.audience !== undefined && !deps.audience(experiment)) return 'audience';
   return 'eligible';
 }

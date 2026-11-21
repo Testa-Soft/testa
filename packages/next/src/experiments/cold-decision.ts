@@ -40,6 +40,7 @@ import type { ProjectConfig } from '@testa-platform/shared-types';
 import {
   ASSIGNMENT_COOKIE,
   type TargetingContext,
+  exclusionsOf,
   isAssigned,
   isExcludedByRules,
   matchesPageRule,
@@ -95,7 +96,7 @@ export function clientOwnsDecision(input: ClientDecisionInput): boolean {
       experiment.status === 'active' &&
       matchesPageRule(currentUrl, experiment.rules) &&
       !isAssigned(decided.get(Number(experiment.experiment_id))) &&
-      !isExcludedByRules(experiment.exclusions, exclusionCtx),
+      !isExcludedByRules(exclusionsOf(experiment), exclusionCtx),
   );
   if (gap) return true;
 

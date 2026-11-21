@@ -21,6 +21,7 @@ import {
   type RedirectChange,
   type TargetingContext,
   canonicalize,
+  exclusionsOf,
   isExcludedByRules,
   matchesPageRule,
   parsePacked,
@@ -79,7 +80,7 @@ export function resolveGuardRedirect(input: GuardResolveInput): string | null {
     // middleware entirely. Without this, an already-assigned variant visitor was
     // redirected past every exclusion rule on every soft nav, while the same
     // visitor on a hard load was correctly held back by the proxy.
-    if (isExcludedByRules(experiment.exclusions, exclusionCtx)) continue;
+    if (isExcludedByRules(exclusionsOf(experiment), exclusionCtx)) continue;
     const state = assignments.get(Number(experiment.experiment_id));
     if (!state || state.excluded || state.variation === EXCLUDED_VARIATION_ID) continue;
 

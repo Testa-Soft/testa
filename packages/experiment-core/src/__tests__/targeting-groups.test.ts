@@ -1,6 +1,7 @@
 import type { TargetingCondition } from '@testa-platform/shared-types';
 import { describe, expect, it } from 'vitest';
 import { type TargetingContext, isExcludedByRules, passesTargeting } from '../targeting.ts';
+import { beginUrlTrace, endUrlTrace } from '../trace.ts';
 
 /**
  * v2 rule groups: a condition with `group` belongs to that group. Conditions in
@@ -141,5 +142,36 @@ describe('grouped exclusions (v2)', () => {
   it('flat exclusions keep the 3.3.3 any-match rule', () => {
     const flat = [cond('utm_source', 'equals', 'a'), cond('utm_medium', 'equals', 'b')];
     expect(isExcludedByRules(flat, ctx('https://s.test/?utm_source=a'))).toBe(true);
+  });
+
+  it('names the matching group in the exclusion trace', () => {
+    const rules = [
+      cond('utm_source', 'equals', 'a', 0),
+      cond('utm_medium', 'equals', 'b', 0),
+      cond('url', 'contains', '/x', 1),
+    ];
+    beginUrlTrace();
+    try {
+      isExcludedByRules(rules, ctx('https://s.test/?utm_source=a&utm_medium=b'));
+      isExcludedByRules(rules, ctx('https://s.test/'));
+    } finally {
+      const [hit, miss] = endUrlTrace();
+      expect(hit?.detail).toEqual({
+        excluded: true,
+        grouped: true,
+        matchedBy: 'utm_source equals a AND utm_medium equals b',
+      });
+      expect(miss?.detail).toEqual({ excluded: false, grouped: true, evaluated: 3 });
+    }
+  });
+});
+
+describe('query-param conditions', () => {
+  it('re-read the URL when the same context object is reused with a new URL', () => {
+    const c: TargetingContext = { url: 'https://s.test/?utm_source=a', getCookie: () => null };
+    const rule = [cond('utm_source', 'equals', 'a')];
+    expect(passesTargeting(rule, c)).toBe(true);
+    c.url = 'https://s.test/?utm_source=b';
+    expect(passesTargeting(rule, c)).toBe(false);
   });
 });

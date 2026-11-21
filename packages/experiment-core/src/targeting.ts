@@ -1,9 +1,17 @@
 /**
- * Split-URL targeting + exclusion evaluation.
+ * Targeting + exclusion evaluation (all experiment types).
  *
- *   - targeting: ALL conditions must be satisfied (AND) for the visitor to be
- *     eligible for the experiment.
- *   - exclusions: if ANY condition matches (OR), the visitor is excluded.
+ * Two list shapes:
+ *   - FLAT (no condition carries `group`; v1 and ungrouped v2) — crobot 3.3.3:
+ *       targeting  → conditions bucketed by dimension, OR within a dimension,
+ *                    AND across dimensions.
+ *       exclusions → excluded if ANY condition matches.
+ *   - GROUPED (v2 rule groups) — passes / fires when EVERY condition of at
+ *     least one group matches; an ungrouped condition is a group of its own.
+ *     Served under `targeting_groups` / `exclusion_groups`; read the lists via
+ *     {@link targetingOf} / {@link exclusionsOf}, which prefer those keys over
+ *     the legacy fields (which then only hold fail-closed sentinels for older
+ *     SDKs).
  *
  * Dimensions the middleware can evaluate server-side:
  *   - url            → the full request URL
@@ -24,7 +32,7 @@
  *   - exclusion  → treat as NOT matching (don't over-exclude on unverifiable data).
  */
 
-import type { TargetingCondition } from '@testa-platform/shared-types';
+import type { ExperimentConfig, TargetingCondition } from '@testa-platform/shared-types';
 import { ASSIGNMENT_COOKIE } from './cookie-store.ts';
 import { parsePacked } from './packed-cookie.ts';
 import { safeUrl } from './redirect/url.ts';
@@ -36,6 +44,24 @@ export interface TargetingContext {
   userAgent?: string;
   /** ISO country code (e.g. "US"), when the host provides a geo signal. */
   country?: string;
+}
+
+/**
+ * The experiment's effective targeting list: `targeting_groups` when the
+ * experiment uses v2 rule groups (the legacy `targeting` then only holds the
+ * sentinel that keeps older SDKs out), else the flat `targeting`.
+ */
+export function targetingOf(
+  experiment: Pick<ExperimentConfig, 'targeting' | 'targeting_groups'>,
+): TargetingCondition[] | undefined {
+  return experiment.targeting_groups ?? experiment.targeting;
+}
+
+/** The experiment's effective exclusion list — see {@link targetingOf}. */
+export function exclusionsOf(
+  experiment: Pick<ExperimentConfig, 'exclusions' | 'exclusion_groups'>,
+): TargetingCondition[] | undefined {
+  return experiment.exclusion_groups ?? experiment.exclusions;
 }
 
 interface Resolved {
@@ -62,8 +88,19 @@ function resolveDimension(dimension: string, ctx: TargetingContext): Resolved {
   // Any other dimension is a URL query parameter looked up BY NAME (utm_source,
   // utm_medium, gclid, …) — 3.3.3 `handleURLParameter` is the `default:` case
   // of its rule switch, so every unrecognized rule type resolves this way.
-  const u = safeUrl(ctx.url);
+  const u = parsedUrl(ctx);
   return { supported: true, value: u ? u.searchParams.get(dimension) : null };
+}
+
+// One parse per context (and URL), not one per query-param condition.
+const urlCache = new WeakMap<TargetingContext, { url: string; parsed: URL | null }>();
+
+function parsedUrl(ctx: TargetingContext): URL | null {
+  const hit = urlCache.get(ctx);
+  if (hit && hit.url === ctx.url) return hit.parsed;
+  const parsed = safeUrl(ctx.url);
+  urlCache.set(ctx, { url: ctx.url, parsed });
+  return parsed;
 }
 
 function deviceOf(ua: string): string {
@@ -134,18 +171,20 @@ function evaluate(
 }
 
 /**
- * True when the visitor is eligible. Mirrors crobot 3.3.3 `shouldTarget`:
- * conditions are grouped by dimension, **OR within a group** (any rule of that
- * dimension may pass), **AND across groups** (every dimension must pass). An
- * unsupported/unmatched condition just doesn't count toward its group's OR; a
- * group with no passing rule fails the whole check.
+ * True when the visitor is eligible. A FLAT list mirrors crobot 3.3.3
+ * `shouldTarget`: conditions are bucketed by dimension, **OR within a
+ * dimension** (any rule of it may pass), **AND across dimensions** (every
+ * dimension must pass). A GROUPED list (any condition has `group`) passes when
+ * every condition of at least one group matches. Either way an unsupported
+ * condition doesn't match. Pass {@link targetingOf}(experiment), not the raw
+ * `targeting` field.
  */
 export function passesTargeting(
   targeting: TargetingCondition[] | undefined,
   ctx: TargetingContext,
 ): boolean {
   if (!targeting || targeting.length === 0) return true;
-  if (isGrouped(targeting)) return anyGroupMatches(targeting, ctx);
+  if (isGrouped(targeting)) return firstMatchingGroup(targeting, ctx) !== undefined;
 
   const groups = new Map<string, TargetingCondition[]>();
   for (const c of targeting) {
@@ -155,11 +194,7 @@ export function passesTargeting(
   }
 
   for (const conditions of groups.values()) {
-    const anyPass = conditions.some((c) => {
-      const { matched, supported } = evaluate(c, ctx);
-      return supported && matched;
-    });
-    if (!anyPass) return false;
+    if (!conditions.some((c) => matches(c, ctx))) return false;
   }
   return true;
 }
@@ -169,25 +204,36 @@ function isGrouped(conditions: TargetingCondition[]): boolean {
   return conditions.some((c) => c.group !== undefined);
 }
 
+function matches(condition: TargetingCondition, ctx: TargetingContext): boolean {
+  const { matched, supported } = evaluate(condition, ctx);
+  return supported && matched;
+}
+
 /**
- * v2 rule groups: true when every condition of at least one group matches.
- * A condition without a group forms its own group. A condition we can't
- * evaluate doesn't match, so it fails its group (the same fail policy as flat).
+ * v2 rule groups: the first group (in list order) whose conditions ALL match,
+ * or undefined. A condition without a group forms its own group. A condition
+ * we can't evaluate doesn't match, so it fails its group (the same fail policy
+ * as flat).
  */
-function anyGroupMatches(conditions: TargetingCondition[], ctx: TargetingContext): boolean {
+function firstMatchingGroup(
+  conditions: TargetingCondition[],
+  ctx: TargetingContext,
+): TargetingCondition[] | undefined {
   const groups = new Map<string, TargetingCondition[]>();
   conditions.forEach((c, i) => {
     const key = c.group === undefined ? `solo:${i}` : `g:${c.group}`;
-    groups.set(key, [...(groups.get(key) ?? []), c]);
+    const group = groups.get(key);
+    if (group) group.push(c);
+    else groups.set(key, [c]);
   });
   for (const group of groups.values()) {
-    const all = group.every((c) => {
-      const { matched, supported } = evaluate(c, ctx);
-      return supported && matched;
-    });
-    if (all) return true;
+    if (group.every((c) => matches(c, ctx))) return group;
   }
-  return false;
+  return undefined;
+}
+
+function describeCondition(c: TargetingCondition): string {
+  return `${c.dimension} ${c.operator} ${c.value}`;
 }
 
 /**
@@ -213,7 +259,11 @@ function matchExperiment(
   };
 }
 
-/** True when the visitor is excluded (ANY exclusion matches). Unsupported → not excluding. */
+/**
+ * True when the visitor is excluded. FLAT: ANY condition matches. GROUPED:
+ * every condition of some group matches. Unsupported → not excluding. Pass
+ * {@link exclusionsOf}(experiment), not the raw `exclusions` field.
+ */
 export function isExcludedByRules(
   exclusions: TargetingCondition[] | undefined,
   ctx: TargetingContext,
@@ -221,9 +271,18 @@ export function isExcludedByRules(
   if (!exclusions || exclusions.length === 0) return false;
 
   if (isGrouped(exclusions)) {
-    const excluded = anyGroupMatches(exclusions, ctx);
-    traceUrl({ stage: 'exclusion', in: ctx.url, detail: { excluded, grouped: true } });
-    return excluded;
+    const group = firstMatchingGroup(exclusions, ctx);
+    traceUrl({
+      stage: 'exclusion',
+      in: ctx.url,
+      detail: {
+        excluded: group !== undefined,
+        grouped: true,
+        ...(group ? { matchedBy: group.map(describeCondition).join(' AND ') } : {}),
+        ...(group ? {} : { evaluated: exclusions.length }),
+      },
+    });
+    return group !== undefined;
   }
 
   let hit: TargetingCondition | undefined;
@@ -232,21 +291,18 @@ export function isExcludedByRules(
   // stopping at the first match.
   const excluded = isUrlTracing()
     ? exclusions.reduce((acc, c) => {
-        const { matched, supported } = evaluate(c, ctx);
-        if (supported && matched && !hit) hit = c;
-        return acc || (supported && matched);
+        const matched = matches(c, ctx);
+        if (matched && !hit) hit = c;
+        return acc || matched;
       }, false)
-    : exclusions.some((c) => {
-        const { matched, supported } = evaluate(c, ctx);
-        return supported && matched;
-      });
+    : exclusions.some((c) => matches(c, ctx));
 
   traceUrl({
     stage: 'exclusion',
     in: ctx.url,
     detail: {
       excluded,
-      ...(hit ? { matchedBy: `${hit.dimension} ${hit.operator} ${hit.value}` } : {}),
+      ...(hit ? { matchedBy: describeCondition(hit) } : {}),
       // Which rules COULD have matched had the URL carried what they look for —
       // the fast way to see that a rule is inert because the value never arrives.
       ...(excluded ? {} : { evaluated: exclusions.length }),

@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'bun:test';
+import {
+  RULE_GROUPS_EXCLUSION_SENTINEL,
+  RULE_GROUPS_TARGETING_SENTINEL,
+} from '@testa-platform/shared-types';
 import { loadPixelUrlMatch } from '../../__test-utils__/pixel-url-match.ts';
-import { buildTestaConfig } from '../build.ts';
+import { type TestaConfigOptions, buildTestaConfig } from '../build.ts';
+
+type Warn = NonNullable<TestaConfigOptions['warn']>;
 
 // A trimmed copy of the real `GET /projects/12345.json` payload.
 const baseExp = {
@@ -48,10 +54,11 @@ describe('buildTestaConfig', () => {
     expect(cfg.experiments.slice(2).every((e) => !('platform_version' in e))).toBe(true);
   });
 
-  it('passes rule groups through for v2 experiments only', () => {
-    const rules = {
+  describe('v2 rule groups', () => {
+    const grouped = {
       targeting: [
-        { type: 'device', operator: 'equals', value: 'mobile', group: 0 },
+        { type: 'region_country', operator: 'not_equals', value: 'DE', group: 0 },
+        { type: 'region_country', operator: 'not_equals', value: 'AT', group: 0 },
         { type: 'utm_source', operator: 'contains', value: 'fb', group: 1 },
       ],
       exclusions: [
@@ -59,21 +66,106 @@ describe('buildTestaConfig', () => {
         { type: 'experiment', operator: 'equals', value: '12', group: null },
       ],
     };
-    const cfg = buildTestaConfig({
-      ...sourceProject,
-      experiments: [
-        { ...baseExp, identifier: 1, platform_version: 'v2', ...rules },
-        { ...baseExp, identifier: 2, platform_version: 'v1', ...rules },
-      ],
+    const build = (exps: Record<string, unknown>[], warn: Warn = () => {}) =>
+      buildTestaConfig(
+        {
+          ...sourceProject,
+          experiments: exps.map((e, i) => ({ ...baseExp, identifier: 1 + i, ...e })),
+        },
+        { warn },
+      ).experiments;
+
+    it('ships grouped lists under the new keys and sentinels in the legacy fields', () => {
+      const [v2] = build([{ platform_version: 'v2', ...grouped }]);
+      expect(v2?.targeting).toEqual([RULE_GROUPS_TARGETING_SENTINEL]);
+      expect(v2?.exclusions).toEqual([RULE_GROUPS_EXCLUSION_SENTINEL]);
+      expect(v2?.targeting_groups).toEqual([
+        { dimension: 'region_country', operator: 'not_equals', value: 'DE', group: 0 },
+        { dimension: 'region_country', operator: 'not_equals', value: 'AT', group: 0 },
+        { dimension: 'utm_source', operator: 'contains', value: 'fb', group: 1 },
+      ]);
+      expect(v2?.exclusion_groups).toEqual([
+        { dimension: 'url', operator: 'contains', value: '/checkout', group: 0 },
+        { dimension: 'experiment', operator: 'equals', value: '12' },
+      ]);
     });
-    const [v2, v1] = cfg.experiments;
-    expect(v2?.targeting?.map((c) => c.group)).toEqual([0, 1]);
-    expect(v2?.exclusions).toEqual([
-      { dimension: 'url', operator: 'contains', value: '/checkout', group: 0 },
-      { dimension: 'experiment', operator: 'equals', value: '12' },
-    ]);
-    expect(v1?.targeting?.some((c) => 'group' in c)).toBe(false);
-    expect(v1?.exclusions?.some((c) => 'group' in c)).toBe(false);
+
+    it('a group on either list alone moves both lists (the other may be flat or empty)', () => {
+      const [onlyTargeting, onlyExclusions] = build([
+        { platform_version: 'v2', targeting: grouped.targeting },
+        { platform_version: 'v2', exclusions: grouped.exclusions, targeting: [] },
+      ]);
+      expect(onlyTargeting?.targeting).toEqual([RULE_GROUPS_TARGETING_SENTINEL]);
+      expect(onlyTargeting?.exclusion_groups).toEqual([]);
+      expect(onlyExclusions?.targeting).toEqual([RULE_GROUPS_TARGETING_SENTINEL]);
+      expect(onlyExclusions?.targeting_groups).toEqual([]);
+      expect(onlyExclusions?.exclusion_groups?.[0]?.group).toBe(0);
+    });
+
+    it('keeps an ungrouped v2 experiment flat, on the legacy fields only', () => {
+      const [v2] = build([
+        {
+          platform_version: 'v2',
+          targeting: [{ type: 'device', operator: 'equals', value: 'mobile', group: null }],
+        },
+      ]);
+      expect(v2?.targeting).toEqual([{ dimension: 'device', operator: 'equals', value: 'mobile' }]);
+      expect(v2 && 'targeting_groups' in v2).toBe(false);
+      expect(v2 && 'exclusion_groups' in v2).toBe(false);
+    });
+
+    it('never ships groups for v1 (or unversioned) experiments', () => {
+      for (const exp of build([{ platform_version: 'v1', ...grouped }, { ...grouped }])) {
+        expect(exp.targeting?.some((c) => 'group' in c)).toBe(false);
+        expect(exp.exclusions?.some((c) => 'group' in c)).toBe(false);
+        expect('targeting_groups' in exp).toBe(false);
+        expect(exp.targeting?.[0]?.dimension).toBe('region_country');
+      }
+    });
+
+    it('drops a malformed group with a warning, keeping the rule as its own group', () => {
+      const warnings: unknown[] = [];
+      const [v2] = build(
+        [
+          {
+            platform_version: 'v2',
+            targeting: [
+              { type: 'device', operator: 'equals', value: 'mobile', group: 0 },
+              { type: 'utm_source', operator: 'equals', value: 'a', group: -1 },
+              { type: 'utm_source', operator: 'equals', value: 'b', group: '2' },
+              { type: 'utm_source', operator: 'equals', value: 'c', group: 1.5 },
+              { type: 'utm_source', operator: 'equals', value: 'd', group: null },
+            ],
+          },
+        ],
+        (_m, detail) => {
+          warnings.push(detail);
+        },
+      );
+      expect(v2?.targeting_groups?.map((c) => c.group)).toEqual([
+        0,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+      ]);
+      expect(warnings).toEqual([
+        { experiment: 1, dimension: 'utm_source', group: -1 },
+        { experiment: 1, dimension: 'utm_source', group: '2' },
+        { experiment: 1, dimension: 'utm_source', group: 1.5 },
+      ]);
+    });
+
+    it('an experiment whose only groups are malformed stays flat', () => {
+      const [v2] = build([
+        {
+          platform_version: 'v2',
+          targeting: [{ type: 'device', operator: 'equals', value: 'mobile', group: -3 }],
+        },
+      ]);
+      expect(v2?.targeting).toEqual([{ dimension: 'device', operator: 'equals', value: 'mobile' }]);
+      expect(v2 && 'targeting_groups' in v2).toBe(false);
+    });
   });
 
   it('maps a split_url experiment to ProjectConfig', () => {

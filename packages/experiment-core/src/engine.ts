@@ -20,7 +20,8 @@
  *         verdict cached, so the visitor stays eligible on a later, UTM-less page.
  *         A fail is a flat exclusion cooldown; both verdicts carry a sliding
  *         window (`sessionLengthSec`, default 30m) and recompute once it expires.
- *         Targeting is grouped: OR within a dimension, AND across dimensions.
+ *         Flat targeting: OR within a dimension, AND across dimensions; v2
+ *         rule groups (`targeting_groups`): any group whose conditions all match.
  *      b. Page gate — only ENROLL on the experiment's own page (eligibility is
  *         already cached above, so being off-page never loses it).
  *      c. Exclusion rules (`exclusions[]` list) — on-page entry gate for new
@@ -60,7 +61,13 @@ import {
   isFresh,
   refreshSession,
 } from './session.ts';
-import { type TargetingContext, isExcludedByRules, passesTargeting } from './targeting.ts';
+import {
+  type TargetingContext,
+  exclusionsOf,
+  isExcludedByRules,
+  passesTargeting,
+  targetingOf,
+} from './targeting.ts';
 import { queryKeysOf, traceUrl } from './trace.ts';
 
 /** Payload passed to the `onVariationApplied` listener when a visitor is enrolled. */
@@ -189,12 +196,12 @@ export function runExperiments(ctx: EngineContext, store: CookieStore): EngineRe
       const eligibleCached =
         state?.variation === ELIGIBLE_PENDING_VARIATION_ID && isFresh(state, nowSec);
       if (!eligibleCached) {
-        if (!passesTargeting(experiment.targeting, targetingCtx)) {
+        if (!passesTargeting(targetingOf(experiment), targetingCtx)) {
           cacheExclusion(store, id, expiresSec);
           note({
             ...base,
             reason: 'targeting_failed',
-            detail: describeTargeting(experiment.targeting),
+            detail: describeTargeting(targetingOf(experiment)),
           });
           continue;
         }
@@ -220,7 +227,7 @@ export function runExperiments(ctx: EngineContext, store: CookieStore): EngineRe
     // applies again once the exclusion stops matching. This is what makes
     // `dimension: 'experiment'` a real mutual exclusion — being in the other
     // experiment suppresses this one no matter when either was assigned.
-    if (isExcludedByRules(experiment.exclusions, targetingCtx)) {
+    if (isExcludedByRules(exclusionsOf(experiment), targetingCtx)) {
       note({ ...base, reason: 'excluded_by_rules' });
       continue;
     }

@@ -80,18 +80,69 @@ export interface ExperimentConfig {
   /**
    * Targeting conditions (crobot `experiment_rules` type `targeting`),
    * gating ALL experiment types (split-URL and DOM/copy alike) before
-   * assignment. Grouped by dimension: OR within a group, AND across groups.
-   * Flat list, distinct from the 4.0 `audience` tree. See `runtime` targeting eval.
+   * assignment. Flat 3.3.3 semantics: conditions are bucketed by dimension, OR
+   * within a dimension, AND across dimensions. Distinct from the 4.0 `audience`
+   * tree. Never carries `group`.
+   *
+   * When the experiment uses v2 rule groups, this holds ONLY
+   * {@link RULE_GROUPS_TARGETING_SENTINEL} (an SDK that predates
+   * `targeting_groups` can never satisfy it, so it never enrolls anyone) and
+   * the real list ships in {@link targeting_groups}.
    */
   targeting?: TargetingCondition[];
   /**
    * Exclusion conditions (crobot `experiment_rules` type `exclusion`),
    * gating ALL experiment types. If ANY matches, the visitor is excluded (OR).
+   *
+   * When the experiment uses v2 rule groups, this holds ONLY
+   * {@link RULE_GROUPS_EXCLUSION_SENTINEL} (matches every visitor on an SDK
+   * that predates `exclusion_groups`, so an already-assigned visitor isn't
+   * served either) and the real list ships in {@link exclusion_groups}.
    */
   exclusions?: TargetingCondition[];
+  /**
+   * v2 rule-grouped targeting (added with experiment-core 1.6). Present (with
+   * {@link exclusion_groups}) exactly when the experiment uses rule groups; it
+   * then REPLACES `targeting`. Conditions carry `group`: the visitor qualifies
+   * when every condition of at least one group matches; a condition without a
+   * group is a group of its own. Empty = no targeting.
+   */
+  targeting_groups?: TargetingCondition[];
+  /**
+   * v2 rule-grouped exclusions, the counterpart of {@link targeting_groups}:
+   * REPLACES `exclusions` when present. The visitor is excluded when every
+   * condition of at least one group matches. A list without any `group` is
+   * evaluated flat (ANY matches). Empty = no exclusions.
+   */
+  exclusion_groups?: TargetingCondition[];
 }
 
-/** A single flat targeting/exclusion condition (split-URL). */
+/**
+ * Legacy-field placeholder for a rule-grouped experiment's `targeting`. SDKs
+ * that predate `targeting_groups` evaluate it flat: an unknown dimension is a
+ * URL query parameter (absent → no match), and the `(?!)` regex can never
+ * match even if a visitor adds the parameter. So those SDKs fail CLOSED (never
+ * enroll) instead of widening the audience by flattening the groups.
+ */
+export const RULE_GROUPS_TARGETING_SENTINEL: Readonly<TargetingCondition> = Object.freeze({
+  dimension: 'testa_rule_groups_required',
+  operator: 'regex',
+  value: '(?!)testa_rule_groups_required',
+});
+
+/**
+ * Legacy-field placeholder for a rule-grouped experiment's `exclusions`: a
+ * `url` regex that matches every URL, so an SDK that predates
+ * `exclusion_groups` suppresses the experiment for everyone (assigned visitors
+ * included; exclusions are re-evaluated per pageview and never persisted).
+ */
+export const RULE_GROUPS_EXCLUSION_SENTINEL: Readonly<TargetingCondition> = Object.freeze({
+  dimension: 'url',
+  operator: 'regex',
+  value: '^(?:testa_rule_groups_required)?',
+});
+
+/** A single targeting/exclusion condition. */
 export interface TargetingCondition {
   /**
    * Dimension key: `utm_source` | `utm_medium` | `utm_campaign` | `utm_term` |
@@ -103,10 +154,11 @@ export interface TargetingCondition {
   operator: 'exact' | 'equals' | 'contains' | 'not_contains' | 'regex' | 'not_equals';
   value: string;
   /**
-   * v2 rule group. When any condition in a list has one, the list is
-   * "any group whose conditions ALL match" (targeting passes / exclusion fires);
-   * a condition without a group is then a group of its own. Absent everywhere =
-   * the flat 3.3.3 semantics above. Older SDKs ignore it.
+   * v2 rule group (non-negative integer). When any condition in a list has
+   * one, the list is "any group whose conditions ALL match" (targeting passes /
+   * exclusion fires); a condition without a group is then a group of its own.
+   * Absent everywhere = the flat 3.3.3 semantics. Only ever served inside
+   * `targeting_groups` / `exclusion_groups`, which older SDKs don't read.
    */
   group?: number;
 }

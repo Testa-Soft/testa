@@ -10,6 +10,11 @@ export { isAllNode, isAnyNode, isNotNode } from './audience.ts';
 // PRD-006 allowlists — runtime constants.
 export { BUILTIN_METRIC_KEYS, DIMENSION_KEYS } from './sync.ts';
 export { EVENT_PARAM_SPEC } from './report.ts';
+// v2 rule groups — legacy-field sentinels (fail closed on older SDKs).
+export {
+  RULE_GROUPS_EXCLUSION_SENTINEL,
+  RULE_GROUPS_TARGETING_SENTINEL,
+} from './project-config.ts';
 // GDPR scrubbing — runtime helpers shared by the SDKs, edge and collector.
 export {
   REDACTED,
