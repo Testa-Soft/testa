@@ -3,8 +3,11 @@
  *
  * When the page is opened with `?testa_preview=true&testa_preview_token=<t>`,
  * the pixel does NOT run the normal experiment cycle. Instead it fetches the
- * draft changes for that preview session from the backend and applies them,
- * so an editor can see un-published variation changes live.
+ * draft changes for that preview session from the backend
+ * (`GET {apiUrl}/api/preview/{token}?project={project}`) and applies them, so
+ * an editor can see un-published variation changes live. crobot binds a token
+ * to one project and answers 404 when `project` is missing or another
+ * project's; any non-OK response means "no preview".
  *
  * Reference: 3.3.3 `script.js` bottom IIFE guard (~1064-1074) + `handleCopyFields`.
  */
@@ -19,6 +22,8 @@ const PREVIEW_VARIATION_ID = -1;
 export interface PreviewDeps {
   /** Backend base URL (`cfPrefill.apiUrl`). */
   apiUrl: string | undefined;
+  /** Project uuid or numeric id (`cfPrefill.project`); crobot accepts either. */
+  project: string | number | undefined;
   /** Applies the fetched changes (the lifecycle passes its `applyVariation`). */
   apply: (variationId: number, changes: VariationChange[]) => void;
   /** Injectable for tests; defaults to global `fetch`. */
@@ -43,13 +48,16 @@ export function maybeEnterPreviewMode(deps: PreviewDeps): boolean {
 
   const params = new URLSearchParams(location.search);
   const token = params.get(PREVIEW_TOKEN);
-  if (!token || !deps.apiUrl) return true; // preview requested but unfulfillable → still skip normal cycle
+  const project = deps.project === undefined ? '' : String(deps.project);
+  // Preview requested but unfulfillable → still skip the normal cycle.
+  if (!token || !deps.apiUrl || !project) return true;
 
   const base = deps.apiUrl.replace(/\/$/, '');
   const doFetch = deps.fetchImpl ?? (typeof fetch !== 'undefined' ? fetch : undefined);
   if (!doFetch) return true;
 
-  void loadAndApply(doFetch, `${base}/api/preview/${encodeURIComponent(token)}`, deps.apply);
+  const url = `${base}/api/preview/${encodeURIComponent(token)}?project=${encodeURIComponent(project)}`;
+  void loadAndApply(doFetch, url, deps.apply);
   return true;
 }
 

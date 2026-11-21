@@ -27,7 +27,9 @@ describe('maybeEnterPreviewMode', () => {
     setUrl('?foo=bar');
     const fetchImpl = vi.fn();
     const apply = vi.fn();
-    expect(maybeEnterPreviewMode({ apiUrl: 'https://api.example', apply, fetchImpl })).toBe(false);
+    expect(
+      maybeEnterPreviewMode({ apiUrl: 'https://api.example', project: 4, apply, fetchImpl }),
+    ).toBe(false);
     expect(fetchImpl).not.toHaveBeenCalled();
   });
 
@@ -37,12 +39,18 @@ describe('maybeEnterPreviewMode', () => {
     const fetchImpl = vi.fn(async () => jsonResponse({ changes }));
     const apply = vi.fn();
 
-    const handled = maybeEnterPreviewMode({ apiUrl: 'https://api.example/', apply, fetchImpl });
+    const handled = maybeEnterPreviewMode({
+      apiUrl: 'https://api.example/',
+      project: 4,
+      apply,
+      fetchImpl,
+    });
     expect(handled).toBe(true);
     // let the fetch promise + apply microtasks settle
     await new Promise<void>((r) => setTimeout(r, 0));
 
-    expect(fetchImpl).toHaveBeenCalledWith('https://api.example/api/preview/tok-9');
+    // crobot binds the token to a project: the request must name it.
+    expect(fetchImpl).toHaveBeenCalledWith('https://api.example/api/preview/tok-9?project=4');
     expect(apply).toHaveBeenCalledWith(-1, changes);
   });
 
@@ -50,7 +58,9 @@ describe('maybeEnterPreviewMode', () => {
     setUrl('?testa_preview=true');
     const fetchImpl = vi.fn();
     const apply = vi.fn();
-    expect(maybeEnterPreviewMode({ apiUrl: 'https://api.example', apply, fetchImpl })).toBe(true);
+    expect(
+      maybeEnterPreviewMode({ apiUrl: 'https://api.example', project: 4, apply, fetchImpl }),
+    ).toBe(true);
     expect(fetchImpl).not.toHaveBeenCalled();
   });
 
@@ -60,8 +70,47 @@ describe('maybeEnterPreviewMode', () => {
       jsonResponse({ changes: [{ type: 'hide', selector: '.x' }] }, false),
     );
     const apply = vi.fn();
-    maybeEnterPreviewMode({ apiUrl: 'https://api.example', apply, fetchImpl });
+    maybeEnterPreviewMode({ apiUrl: 'https://api.example', project: 4, apply, fetchImpl });
     await new Promise<void>((r) => setTimeout(r, 0));
+    expect(apply).not.toHaveBeenCalled();
+  });
+
+  it('names a uuid project url-encoded', async () => {
+    setUrl('?testa_preview=true&testa_preview_token=tok');
+    const fetchImpl = vi.fn(async () => jsonResponse({ changes: [] }));
+    maybeEnterPreviewMode({
+      apiUrl: 'https://api.example',
+      project: 'ab c',
+      apply: vi.fn(),
+      fetchImpl,
+    });
+    await new Promise<void>((r) => setTimeout(r, 0));
+    expect(fetchImpl).toHaveBeenCalledWith('https://api.example/api/preview/tok?project=ab%20c');
+  });
+
+  it('skips the normal cycle but fetches nothing when the project is unknown', () => {
+    setUrl('?testa_preview=true&testa_preview_token=tok');
+    const fetchImpl = vi.fn();
+    const apply = vi.fn();
+    expect(
+      maybeEnterPreviewMode({
+        apiUrl: 'https://api.example',
+        project: undefined,
+        apply,
+        fetchImpl,
+      }),
+    ).toBe(true);
+    expect(fetchImpl).not.toHaveBeenCalled();
+    expect(apply).not.toHaveBeenCalled();
+  });
+
+  it('applies nothing on a 404 (token bound to another project)', async () => {
+    setUrl('?testa_preview=true&testa_preview_token=tok');
+    const fetchImpl = vi.fn(async () => jsonResponse({ message: 'Not Found' }, false));
+    const apply = vi.fn();
+    maybeEnterPreviewMode({ apiUrl: 'https://api.example', project: 999, apply, fetchImpl });
+    await new Promise<void>((r) => setTimeout(r, 0));
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
     expect(apply).not.toHaveBeenCalled();
   });
 });

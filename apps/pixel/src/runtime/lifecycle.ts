@@ -187,6 +187,7 @@ export function hydrate(): void {
   guardedInit('preview_mode', () => {
     _previewActive = maybeEnterPreviewMode({
       apiUrl: window.cfPrefill?.apiUrl,
+      project: readProject()?.project_id,
       apply: (variationId, changes) => {
         _activeTeardowns.push(...applyVariation(variationId, changes));
       },

@@ -95,8 +95,11 @@ describe('initTesta — preview mode', () => {
     document.body.innerHTML = '<div id="hero">CONTROL</div>';
     const store = memoryStore({ [UUID_COOKIE]: 'v' });
     const changes = [{ type: 'change_html', selector: '#hero', content: 'DRAFT' }];
-    const fetchImpl = (async () =>
-      new Response(JSON.stringify({ changes }), { status: 200 })) as unknown as typeof fetch;
+    const urls: string[] = [];
+    const fetchImpl = (async (url: string) => {
+      urls.push(url);
+      return new Response(JSON.stringify({ changes }), { status: 200 });
+    }) as unknown as typeof fetch;
     const res = await initTesta({
       config: splitUrlConfig(),
       currentUrl: `${AT_PAGE}?testa_preview=true&testa_preview_token=tok`,
@@ -107,6 +110,10 @@ describe('initTesta — preview mode', () => {
       fetchImpl,
     });
     expect(res.applied).toHaveLength(0);
+    // The token is bound to a project in crobot: the request names the config's project.
+    expect(urls).toEqual([
+      `https://app.testa-soft.tech/api/preview/tok?project=${splitUrlConfig().project_id}`,
+    ]);
     expect(document.querySelector('#hero')?.innerHTML).toBe('DRAFT');
     // No assignment cookie written in preview mode.
     expect(store.get(ASSIGNMENT_COOKIE)).toBeNull();

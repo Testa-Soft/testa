@@ -65,6 +65,7 @@ import {
   fetchPreviewChanges,
   getPreviewToken,
   isPreviewRequested,
+  previewProject,
 } from './preview.ts';
 
 /**
@@ -87,7 +88,7 @@ export interface TestaProviderProps {
   /** Config host for that fetch. Defaults to the SDK's config host. */
   host?: string;
   /**
-   * Backend base URL for preview mode (crobot) — where `/api/preview/{token}`
+   * Backend base URL for preview mode (crobot) — where `/api/preview/{token}?project=`
    * lives. Required for `?testa_preview` to fetch drafts; ignored otherwise.
    */
   previewApiUrl?: string;
@@ -210,8 +211,10 @@ export function TestaProvider(props: TestaProviderProps): null {
     if (isPreviewRequested(search)) {
       // Preview: skip assignment, fetch + apply drafts. Best-effort.
       const token = getPreviewToken(search);
-      if (token && previewApiUrl) {
-        void fetchPreviewChanges(previewApiUrl, token).then((changes) => {
+      // crobot binds the token to a project: the uuid prop, else the inline config's id.
+      const project = previewProject(projectId, serverConfig);
+      if (token && previewApiUrl && project) {
+        void fetchPreviewChanges(previewApiUrl, token, project).then((changes) => {
           if (!cancelled && changes.length > 0) {
             teardowns.push(...applyVariation(PREVIEW_VARIATION_ID, changes));
           }

@@ -291,7 +291,9 @@ https://yoursite.com/pricing?testa_preview=true&testa_preview_token=<token>
 
 In preview mode `<TestaProvider/>` **skips normal cookie assignment** and
 instead fetches the draft changes for that session from
-`{previewApiUrl}/api/preview/{token}` and applies them. The fetched changes are
+`{previewApiUrl}/api/preview/{token}?project={project}` (`project` = the
+`projectId` prop, else the inline config's `project_id`; crobot binds preview
+tokens to a project and answers 404 otherwise) and applies them. The fetched changes are
 the same crobot-native `VariationChange` shapes as real variations, so a draft
 renders identically to how it will ship. A failed or malformed response applies
 nothing and reveals the shield (fail-safe).

@@ -5,7 +5,9 @@
  * When the page is opened with `?testa_preview=true&testa_preview_token=<t>`,
  * the SDK does NOT run the normal cookie-first assignment. Instead it fetches
  * the draft changes for that preview session from the backend
- * (`GET {apiUrl}/api/preview/{token}` → `{ changes: VariationChange[] }`) and
+ * (`GET {apiUrl}/api/preview/{token}?project={project}` → `{ changes:
+ * VariationChange[] }`; crobot binds a token to one project and answers 404
+ * when `project` is missing or names another project) and
  * applies them, so an editor can see un-published variation changes live.
  *
  * The fetched changes are crobot-native `VariationChange` shapes — the same the
@@ -31,17 +33,21 @@ export function getPreviewToken(search: string): string | null {
 
 /**
  * Fetch the draft changes for a preview session. Never throws — a failed /
- * malformed response yields an empty list (apply nothing). `apiUrl` is the
- * backend base (crobot); `fetchImpl` is injectable for tests.
+ * non-OK / malformed response yields an empty list (apply nothing). `apiUrl` is
+ * the backend base (crobot); `project` is the project's uuid or numeric id
+ * (crobot accepts either); `fetchImpl` is injectable for tests.
  */
 export async function fetchPreviewChanges(
   apiUrl: string,
   token: string,
+  project: string,
   fetchImpl: typeof fetch = fetch,
 ): Promise<VariationChange[]> {
+  if (!project) return [];
   const base = apiUrl.replace(/\/+$/, '');
+  const url = `${base}/api/preview/${encodeURIComponent(token)}?project=${encodeURIComponent(project)}`;
   try {
-    const res = await fetchImpl(`${base}/api/preview/${encodeURIComponent(token)}`);
+    const res = await fetchImpl(url);
     if (!res.ok) return [];
     const json = (await res.json()) as { changes?: unknown };
     return normalizeChanges(json.changes);

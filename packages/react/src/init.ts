@@ -55,7 +55,7 @@ export interface InitOptions {
   currentUrl: string;
   store: CookieStore;
   /**
-   * Backend base URL for preview mode (`/api/preview/<token>`). Defaults to
+   * Backend base URL for preview mode (`/api/preview/<token>?project=<config.project_id>`). Defaults to
    * the tracking host — the same crobot backend exposures are posted to — so
    * `?testa_preview` works without configuration, matching the pixel (which
    * reads it from `cfPrefill.apiUrl`). Override only for a self-hosted backend.
@@ -174,7 +174,12 @@ export async function initTesta(opts: InitOptions): Promise<InitResult> {
     // pixel gets the same URL from `cfPrefill.apiUrl`.
     const previewApiUrl = opts.previewApiUrl ?? opts.trackingHost ?? DEFAULT_TRACKING_HOST;
     if (token) {
-      const changes = await fetchPreviewChanges(previewApiUrl, token, opts.fetchImpl ?? fetch);
+      const changes = await fetchPreviewChanges(
+        previewApiUrl,
+        token,
+        String(config.project_id),
+        opts.fetchImpl ?? fetch,
+      );
       if (changes.length > 0) teardowns.push(...applyVariation(PREVIEW_VARIATION_ID, changes));
     } else {
       // Preview mode suppresses the normal cycle, so an unusable preview would

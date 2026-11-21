@@ -252,7 +252,8 @@ Editors preview unpublished drafts live. Pass
 `previewApiUrl="https://new.testa-soft.tech"` (your crobot backend), then open
 any page with `?testa_preview=true&testa_preview_token=<token>`. The provider
 skips normal assignment, fetches the session's draft changes from
-`{previewApiUrl}/api/preview/{token}`, and applies them. Failures apply nothing
+`{previewApiUrl}/api/preview/{token}?project={project}` (the config's
+`project_id`; crobot binds preview tokens to a project), and applies them. Failures apply nothing
 (fail-safe).
 
 ## SPA navigation

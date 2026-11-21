@@ -46,28 +46,40 @@ describe('normalizeChanges', () => {
 describe('fetchPreviewChanges', () => {
   const changes: VariationChange[] = [{ type: 'change_html', selector: '#h', content: 'variant' }];
 
-  it('fetches + normalizes draft changes from /api/preview/{token}', async () => {
+  it('fetches + normalizes draft changes from /api/preview/{token}?project=', async () => {
     let calledUrl = '';
     const fetchImpl = (async (url: string) => {
       calledUrl = url;
       return new Response(JSON.stringify({ changes }), { status: 200 });
     }) as unknown as typeof fetch;
-    const out = await fetchPreviewChanges('https://app.testa-soft.tech/', 'tok/1', fetchImpl);
+    const out = await fetchPreviewChanges(
+      'https://app.testa-soft.tech/',
+      'tok/1',
+      '6b01d34a8071a',
+      fetchImpl,
+    );
     expect(out).toEqual(changes);
-    expect(calledUrl).toBe('https://app.testa-soft.tech/api/preview/tok%2F1');
+    // Trailing slash trimmed, token url-encoded, project named (crobot binds tokens to it).
+    expect(calledUrl).toBe('https://app.testa-soft.tech/api/preview/tok%2F1?project=6b01d34a8071a');
   });
 
   it('returns [] on a non-ok response', async () => {
     const fetchImpl = vi.fn(
       async () => new Response('', { status: 404 }),
     ) as unknown as typeof fetch;
-    expect(await fetchPreviewChanges('https://x', 'tok', fetchImpl)).toEqual([]);
+    expect(await fetchPreviewChanges('https://x', 'tok', '4', fetchImpl)).toEqual([]);
   });
 
   it('returns [] and never throws on a network error', async () => {
     const fetchImpl = vi.fn(async () => {
       throw new Error('offline');
     }) as unknown as typeof fetch;
-    await expect(fetchPreviewChanges('https://x', 'tok', fetchImpl)).resolves.toEqual([]);
+    await expect(fetchPreviewChanges('https://x', 'tok', '4', fetchImpl)).resolves.toEqual([]);
+  });
+
+  it('fetches nothing without a project (crobot would 404)', async () => {
+    const fetchImpl = vi.fn() as unknown as typeof fetch;
+    expect(await fetchPreviewChanges('https://x', 'tok', '', fetchImpl)).toEqual([]);
+    expect(fetchImpl).not.toHaveBeenCalled();
   });
 });
