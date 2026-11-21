@@ -145,6 +145,7 @@ export function passesTargeting(
   ctx: TargetingContext,
 ): boolean {
   if (!targeting || targeting.length === 0) return true;
+  if (isGrouped(targeting)) return anyGroupMatches(targeting, ctx);
 
   const groups = new Map<string, TargetingCondition[]>();
   for (const c of targeting) {
@@ -161,6 +162,32 @@ export function passesTargeting(
     if (!anyPass) return false;
   }
   return true;
+}
+
+/** v2 lists carry `group` on their conditions; v1 lists never do. */
+function isGrouped(conditions: TargetingCondition[]): boolean {
+  return conditions.some((c) => c.group !== undefined);
+}
+
+/**
+ * v2 rule groups: true when every condition of at least one group matches.
+ * A condition without a group forms its own group. A condition we can't
+ * evaluate doesn't match, so it fails its group (the same fail policy as flat).
+ */
+function anyGroupMatches(conditions: TargetingCondition[], ctx: TargetingContext): boolean {
+  const groups = new Map<string, TargetingCondition[]>();
+  conditions.forEach((c, i) => {
+    const key = c.group === undefined ? `solo:${i}` : `g:${c.group}`;
+    groups.set(key, [...(groups.get(key) ?? []), c]);
+  });
+  for (const group of groups.values()) {
+    const all = group.every((c) => {
+      const { matched, supported } = evaluate(c, ctx);
+      return supported && matched;
+    });
+    if (all) return true;
+  }
+  return false;
 }
 
 /**
@@ -192,6 +219,12 @@ export function isExcludedByRules(
   ctx: TargetingContext,
 ): boolean {
   if (!exclusions || exclusions.length === 0) return false;
+
+  if (isGrouped(exclusions)) {
+    const excluded = anyGroupMatches(exclusions, ctx);
+    traceUrl({ stage: 'exclusion', in: ctx.url, detail: { excluded, grouped: true } });
+    return excluded;
+  }
 
   let hit: TargetingCondition | undefined;
   // `some` short-circuits, which is what we want in production; the tracing

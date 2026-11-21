@@ -299,7 +299,12 @@ function describeRules(rules: ExperimentRule[]): string {
 /** Human-readable targeting summary for the debug trace. */
 function describeTargeting(targeting: TargetingCondition[] | undefined): string {
   if (!targeting || targeting.length === 0) return '(no targeting)';
-  return targeting.map((t) => `${t.dimension} ${t.operator} "${t.value}"`).join(', ');
+  return targeting
+    .map(
+      (t) =>
+        `${t.group === undefined ? '' : `[group ${t.group}] `}${t.dimension} ${t.operator} "${t.value}"`,
+    )
+    .join(', ');
 }
 
 function applyInboundCrossDomain(url: string, config: ProjectConfig, store: CookieStore): void {

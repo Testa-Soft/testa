@@ -102,6 +102,13 @@ export interface TargetingCondition {
   dimension: string;
   operator: 'exact' | 'equals' | 'contains' | 'not_contains' | 'regex' | 'not_equals';
   value: string;
+  /**
+   * v2 rule group. When any condition in a list has one, the list is
+   * "any group whose conditions ALL match" (targeting passes / exclusion fires);
+   * a condition without a group is then a group of its own. Absent everywhere =
+   * the flat 3.3.3 semantics above. Older SDKs ignore it.
+   */
+  group?: number;
 }
 
 export interface ExperimentRule {

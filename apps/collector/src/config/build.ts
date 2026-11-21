@@ -47,6 +47,8 @@ interface SourceRule {
   type: string; // dimension, e.g. utm_source / device / url
   value?: string;
   operator?: string;
+  /** v2 rule group (crobot `experiment_rules.group_index`); absent on v1. */
+  group?: number | null;
 }
 
 /** crobot goal `match_type` values (admin v2 adds `starts_with`). */
@@ -129,8 +131,10 @@ export function buildTestaConfig(
 }
 
 function buildExperiment(e: SourceExperiment): ExperimentConfig {
-  const targeting = mapConditions(e.targeting);
-  const exclusions = mapConditions(e.exclusions);
+  // Rule groups are v2-only: a v1 experiment never ships them, even if the source had one.
+  const grouped = e.platform_version === 'v2';
+  const targeting = mapConditions(e.targeting, grouped);
+  const exclusions = mapConditions(e.exclusions, grouped);
   return {
     experiment_id: e.identifier,
     ...(e.title ? { title: e.title } : {}),
@@ -197,7 +201,7 @@ function goalMatch(
   };
 }
 
-function mapConditions(rules: SourceRule[] | undefined): TargetingCondition[] {
+function mapConditions(rules: SourceRule[] | undefined, grouped: boolean): TargetingCondition[] {
   return (rules ?? [])
     .filter((r) => typeof r.type === 'string' && r.type.length > 0)
     .map((r) => ({
@@ -206,6 +210,9 @@ function mapConditions(rules: SourceRule[] | undefined): TargetingCondition[] {
         ? (r.operator as TargetingCondition['operator'])
         : 'contains',
       value: r.value ?? '',
+      ...(grouped && Number.isInteger(r.group) && (r.group as number) >= 0
+        ? { group: r.group as number }
+        : {}),
     }));
 }
 

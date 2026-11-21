@@ -48,6 +48,34 @@ describe('buildTestaConfig', () => {
     expect(cfg.experiments.slice(2).every((e) => !('platform_version' in e))).toBe(true);
   });
 
+  it('passes rule groups through for v2 experiments only', () => {
+    const rules = {
+      targeting: [
+        { type: 'device', operator: 'equals', value: 'mobile', group: 0 },
+        { type: 'utm_source', operator: 'contains', value: 'fb', group: 1 },
+      ],
+      exclusions: [
+        { type: 'url', operator: 'contains', value: '/checkout', group: 0 },
+        { type: 'experiment', operator: 'equals', value: '12', group: null },
+      ],
+    };
+    const cfg = buildTestaConfig({
+      ...sourceProject,
+      experiments: [
+        { ...baseExp, identifier: 1, platform_version: 'v2', ...rules },
+        { ...baseExp, identifier: 2, platform_version: 'v1', ...rules },
+      ],
+    });
+    const [v2, v1] = cfg.experiments;
+    expect(v2?.targeting?.map((c) => c.group)).toEqual([0, 1]);
+    expect(v2?.exclusions).toEqual([
+      { dimension: 'url', operator: 'contains', value: '/checkout', group: 0 },
+      { dimension: 'experiment', operator: 'equals', value: '12' },
+    ]);
+    expect(v1?.targeting?.some((c) => 'group' in c)).toBe(false);
+    expect(v1?.exclusions?.some((c) => 'group' in c)).toBe(false);
+  });
+
   it('maps a split_url experiment to ProjectConfig', () => {
     const cfg = buildTestaConfig(sourceProject, { slug: '12345' });
     expect(cfg.slug).toBe('12345');
