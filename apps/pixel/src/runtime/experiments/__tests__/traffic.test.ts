@@ -115,6 +115,71 @@ describe('assign — distribution check', () => {
   });
 });
 
+/** Deterministic v4-format UUIDs (mulberry32), so the split is reproducible. */
+function seededUuids(n: number, seed: number): string[] {
+  let a = seed;
+  const next = (): number => {
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  const hex = (len: number) =>
+    Array.from({ length: len }, () => Math.floor(next() * 16).toString(16)).join('');
+  return Array.from(
+    { length: n },
+    () => `${hex(8)}-${hex(4)}-4${hex(3)}-${'89ab'[Math.floor(next() * 4)]}${hex(3)}-${hex(12)}`,
+  );
+}
+
+describe('assign — UUID visitors, variation ids 0/1 (leadcheck exp 26)', () => {
+  // Config shape of the leadcheck mixed project: exp 26, 50/50, ids 0 and 1.
+  const exp26: Experiment = {
+    experiment_id: 26,
+    traffic_allocation: 100,
+    variations: [
+      { variation_id: 0, weight: 50 },
+      { variation_id: 1, weight: 50 },
+    ],
+  };
+
+  it('splits 10k UUID visitors 50/50 (no skew; 4.5σ bounds)', () => {
+    const counts = new Map<number, number>();
+    for (const id of seededUuids(10_000, 26)) {
+      cookies.clearExperiment(26);
+      const r = assign(exp26, { visitorId: id });
+      counts.set(r.variationId, (counts.get(r.variationId) ?? 0) + 1);
+    }
+    expect([...counts.keys()].sort()).toEqual([0, 1]);
+    expect(counts.get(0)).toBeGreaterThan(4775);
+    expect(counts.get(0)).toBeLessThan(5225);
+  });
+
+  it('the 6 leadcheck v2 visitors really all hash to variation 1 (buckets 59–99)', () => {
+    const ids = [
+      '7ad58819-4a4f-4cad-94bb-451976c8cce6',
+      '62e3dc6f-3fbc-4879-85d7-c6a40c45dcf9',
+      '7c90f7e1-1c8b-462c-8693-845cb027e440',
+      '103a8317-fc5d-4377-a7ad-f788f9225fca',
+      'e0dba774-6fa8-43a1-a29d-f667c31bf2d8',
+      '631c80c6-096d-419a-880c-16d2ae5fa24a',
+    ];
+    expect(ids.map((id) => bucketOf(id, 26))).toEqual([74, 99, 69, 97, 59, 89]);
+    for (const id of ids) {
+      cookies.clearExperiment(26);
+      expect(assign(exp26, { visitorId: id }).variationId).toBe(1);
+    }
+  });
+
+  it('variation 0 is sticky like any other (cookie-first, no falsy-id re-bucket)', () => {
+    const id = seededUuids(200, 7).find((v) => bucketOf(v, 26) < 50) as string;
+    expect(assign(exp26, { visitorId: id }).variationId).toBe(0);
+    expect(cookies.getAssignment(26)).toBe(0);
+    // A different visitor id on the same browser still gets the stored 0.
+    expect(assign(exp26, { visitorId: 'someone-else' }).variationId).toBe(0);
+  });
+});
+
 describe('assign — mutex group', () => {
   it('blocks enrollment when another experiment holds the group', () => {
     cookies.setMutex('checkout', 99); // some other experiment owns it
