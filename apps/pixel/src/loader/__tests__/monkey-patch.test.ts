@@ -147,3 +147,44 @@ describe('framework wrap order — wrapping preserves our event', () => {
     expect(handler).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('framework assigns history.pushState (Next.js App Router)', () => {
+  it('plain assignment does not throw, the framework function runs, and the event fires once', async () => {
+    installMonkeyPatch();
+
+    // Next does exactly this in strict mode: read the current method, then assign its own.
+    const previous = history.pushState.bind(history);
+    const framework = vi.fn((...args: Parameters<History['pushState']>) => previous(...args));
+    expect(() => {
+      history.pushState = framework;
+    }).not.toThrow();
+
+    const handler = vi.fn();
+    window.addEventListener(LOCATIONCHANGE_EVENT, handler);
+    history.pushState({}, '', '/assigned-by-framework');
+    await flushMicrotasks();
+    window.removeEventListener(LOCATIONCHANGE_EVENT, handler);
+
+    expect(framework).toHaveBeenCalledTimes(1);
+    expect(location.pathname).toBe('/assigned-by-framework');
+    expect(handler).toHaveBeenCalledTimes(1);
+  });
+
+  it('replaceState takes an assignment the same way', async () => {
+    installMonkeyPatch();
+    const previous = history.replaceState.bind(history);
+    const framework = vi.fn((...args: Parameters<History['replaceState']>) => previous(...args));
+    expect(() => {
+      history.replaceState = framework;
+    }).not.toThrow();
+
+    const handler = vi.fn();
+    window.addEventListener(LOCATIONCHANGE_EVENT, handler);
+    history.replaceState({}, '', '/replaced-by-framework');
+    await flushMicrotasks();
+    window.removeEventListener(LOCATIONCHANGE_EVENT, handler);
+
+    expect(framework).toHaveBeenCalledTimes(1);
+    expect(handler).toHaveBeenCalledTimes(1);
+  });
+});

@@ -49,23 +49,19 @@ export function installMonkeyPatch(): void {
 }
 
 function patchHistoryMethod(name: 'pushState' | 'replaceState'): void {
-  const original = history[name];
-
-  // Use defineProperty with non-writable so the framework can't silently
-  // unwrap us — they'd have to throw. Frameworks that patch first see our
-  // wrapper as the "original" they wrap, which is fine.
-  const wrapped: HistoryFn = function (this: History, ...args) {
-    const result = (original as HistoryFn).apply(this, args as Parameters<HistoryFn>);
-    // Schedule as microtask so the framework's reducer / hydration code that
-    // follows the pushState() call gets to update its router state first.
-    queueMicrotask(dispatchLocationChange);
-    return result;
-  };
+  // An accessor, not a frozen value: Next.js' App Router (and others) assign
+  // their own `history.pushState = …` in strict mode, and a non-writable
+  // property makes that assignment THROW, which takes the whole app down.
+  // Whatever a framework assigns is wrapped again, so it cannot unwrap us and
+  // the event still fires after its function returns.
+  let current = wrap(history[name] as HistoryFn);
 
   try {
     Object.defineProperty(history, name, {
-      value: wrapped,
-      writable: false,
+      get: () => current,
+      set: (next: unknown) => {
+        if (typeof next === 'function') current = wrap(next as HistoryFn);
+      },
       configurable: true,
       enumerable: false,
     });
@@ -73,8 +69,30 @@ function patchHistoryMethod(name: 'pushState' | 'replaceState'): void {
     // If defineProperty fails (some sandboxed environments), fall back to
     // direct assignment. Loses the "framework can't unwrap" guarantee but
     // still delivers the event.
-    (history as unknown as Record<string, HistoryFn>)[name] = wrapped;
+    (history as unknown as Record<string, HistoryFn>)[name] = current;
   }
+}
+
+function wrap(original: HistoryFn): HistoryFn {
+  return function (this: History, ...args) {
+    const result = original.apply(this, args as Parameters<HistoryFn>);
+    // Schedule as microtask so the framework's reducer / hydration code that
+    // follows the pushState() call gets to update its router state first.
+    scheduleLocationChange();
+    return result;
+  };
+}
+
+let scheduled = false;
+
+/** One event per tick: a framework wrapper that calls ours would otherwise fire it twice. */
+function scheduleLocationChange(): void {
+  if (scheduled) return;
+  scheduled = true;
+  queueMicrotask(() => {
+    scheduled = false;
+    dispatchLocationChange();
+  });
 }
 
 function dispatchLocationChange(): void {
