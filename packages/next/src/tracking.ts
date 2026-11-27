@@ -11,6 +11,8 @@
  * custom-event conversions are inherently client-side (the co-shipped pixel).
  */
 
+import { redactText, scrubUrl } from '@testa-soft/experiment-core';
+
 export interface ExposurePayload {
   /** crobot numeric project id (ProjectConfig.project_id). */
   project_id: number;
@@ -42,20 +44,18 @@ export interface ExposurePayload {
 export interface ExposureContext {
   /** The VISITOR's user agent — see the note in `emitExposure`. */
   userAgent?: string | null;
-  /** The VISITOR's IP, as the proxy saw it. */
-  clientIp?: string | null;
 }
 
 /**
  * POST an exposure to `{trackingHost}/api/leads`. Never throws.
  *
- * The visitor's UA and IP are forwarded because this request is made BY THE
- * SERVER: without them every server-decided exposure is recorded against the
- * edge runtime's own user agent (`Next.js Middleware`) and the deployment's
- * egress IP. Every such row then looks like the same visitor on the same
- * machine, which makes device and geo reporting wrong — and makes non-browser
- * traffic impossible to spot, even though it announces itself clearly: a client
- * that ignores `Set-Cookie` mints a fresh visitor on every single request.
+ * The visitor's UA is forwarded because this request is made BY THE SERVER:
+ * without it every server-decided exposure is recorded against the edge
+ * runtime's own user agent (`Next.js Middleware`), which makes device
+ * reporting wrong and non-browser traffic impossible to spot.
+ *
+ * GDPR: the visitor's IP is deliberately NOT forwarded (it is personal data and
+ * we store none), and the URL/title are scrubbed of personal data.
  */
 export function emitExposure(
   trackingHost: string,
@@ -69,9 +69,12 @@ export function emitExposure(
       'content-type': 'application/json',
       accept: 'application/json',
       ...(context.userAgent ? { 'user-agent': context.userAgent } : {}),
-      ...(context.clientIp ? { 'x-forwarded-for': context.clientIp } : {}),
     },
-    body: JSON.stringify(payload),
+    body: JSON.stringify({
+      ...payload,
+      url: scrubUrl(payload.url),
+      ...(payload.title !== undefined ? { title: redactText(payload.title) } : {}),
+    }),
     keepalive: true,
   }).then(
     () => undefined,

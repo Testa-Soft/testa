@@ -65,7 +65,9 @@ track.post('/track', async (c) => {
   const events = parsePixelEvents(raw);
   // We always set/refresh the cookie regardless of payload validity, so a
   // probe with an empty array still establishes visitor identity.
-  const cookie = await getOrCreateVisitorId(request, env);
+  // GDPR: the id only persists when the client reports a grant.
+  const granted = events.some((e) => e.consent_state === 'granted');
+  const cookie = await getOrCreateVisitorId(request, env, granted);
 
   const baseHeaders = {
     ...CORS_HEADERS,

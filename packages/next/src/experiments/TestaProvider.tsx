@@ -32,7 +32,7 @@
  * `cold-decision.ts` (unit tested); this file is the React + App-Router glue.
  */
 
-import type { ProjectConfig } from '@testa-platform/shared-types';
+import type { ConsentState, ProjectConfig } from '@testa-platform/shared-types';
 import {
   type Teardown,
   applyVariation,
@@ -47,8 +47,10 @@ import {
   emitExposure,
   initTesta,
   preloadConfig,
+  setConsent,
   startPrd006Tracking,
   trackPageView,
+  watchConsent,
 } from '@testa-soft/react';
 import { usePathname, useRouter } from 'next/navigation.js';
 import { useEffect, useRef, useState } from 'react';
@@ -139,6 +141,14 @@ export interface TestaProviderProps {
    * Next build; pass it only to override.
    */
   basePath?: string;
+  /**
+   * The visitor's tracking consent, from your CMP. Until `'granted'` every
+   * cookie Testa writes is session-scoped (session cookies + sessionStorage);
+   * on `'granted'` the same id and assignment are promoted to persistent
+   * cookies. Pair with the proxy's `consent` option, or let either side lead —
+   * the other follows. Outside React, call `setConsent()`.
+   */
+  consent?: ConsentState;
 }
 
 export function TestaProvider(props: TestaProviderProps): null {
@@ -158,6 +168,25 @@ export function TestaProvider(props: TestaProviderProps): null {
     if (!projectId) return Promise.resolve(null);
     return preloadConfig({ projectId, ...(host ? { host } : {}) });
   });
+
+  // Consent BEFORE the cycle effect below builds its stores (effects run in
+  // order), so the first write already has the right lifetime.
+  useEffect(() => {
+    if (props.consent) setConsent(props.consent);
+  }, [props.consent]);
+
+  // Promote/demote what the visitor already carries whenever consent changes.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: cookie scope is fixed per mount
+  useEffect(
+    () =>
+      watchConsent(
+        new DocumentCookieStore({
+          secure: props.secureCookies ?? true,
+          ...(props.cookieDomain ? { domain: props.cookieDomain } : {}),
+        }),
+      ),
+    [],
+  );
 
   // `pathname` is intentionally a dependency: it's the re-apply trigger on
   // App-Router soft navigation, even though it isn't read in the effect body.

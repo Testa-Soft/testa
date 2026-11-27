@@ -13,11 +13,16 @@
  *   export const config = { matcher: ['/((?!_next/|api/|favicon.ico|sitemap.xml|robots.txt).*)'] }
  */
 
+import type { ConsentState } from '@testa-platform/shared-types';
 import {
   ASSIGNMENT_COOKIE,
+  PERSISTENCE_COOKIE,
   SESSION_LENGTH_SEC,
   UUID_BACKUP_COOKIE,
   UUID_COOKIE,
+  effectiveConsent,
+  persistenceFor,
+  syncPersistence,
 } from '@testa-soft/experiment-core';
 import {
   type LegacyMigrationResult,
@@ -265,6 +270,24 @@ export interface TestaProxyOptions extends ConfigSource {
    */
   visitorId?: string | ((req: NextRequest) => string | null | undefined);
   /**
+   * The visitor's tracking consent, usually read from your CMP's cookie. Until
+   * it is `'granted'` every cookie Testa sets is a SESSION cookie: bucketing
+   * stays consistent for the whole browser session (server-side split-URL
+   * redirects keep working), but nothing persists past it. On `'granted'` the
+   * SAME id and assignment are promoted to persistent cookies — no re-bucket.
+   *
+   * Return `null`/`undefined` (or omit the option) when you can't tell: the
+   * proxy then follows what `<TestaProvider consent>` recorded on the client.
+   *
+   * ```ts
+   * createTestaProxy({
+   *   projectId: '…',
+   *   consent: (req) => (req.cookies.get('cmp_analytics')?.value === 'yes' ? 'granted' : 'denied'),
+   * })
+   * ```
+   */
+  consent?: ConsentState | ((req: NextRequest) => ConsentState | null | undefined);
+  /**
    * Extra paths the proxy must pass through untouched, on top of the built-in
    * filter (`/_next/*`, `/api/*`, `/.well-known/*`, static-asset extensions).
    * A string matches as a segment-aligned prefix (`'/admin'` matches `/admin`
@@ -388,10 +411,21 @@ export function createTestaProxy(options: TestaProxyOptions): TestaProxy {
       ...(options.discoverRootDomain ? { discoverRootDomain: true } : {}),
     });
     const cookieState = readCookieState(req, publicUrl);
+    const persistence = persistenceFor(
+      effectiveConsent(
+        resolveConsentOption(options.consent, req),
+        req.cookies.get(PERSISTENCE_COOKIE)?.value ?? null,
+      ),
+    );
     const store = new NextCookieStore(req.cookies, {
       secure,
+      persistence,
       ...(cookieDomain ? { domain: cookieDomain } : {}),
     });
+    // Align the cookies the visitor carries with what consent allows (promote
+    // on grant, demote pre-consent ones). Buffered: only committed responses
+    // flush it, so speculative loads still write nothing.
+    syncPersistence(store, persistence);
     // `decisions: 'client'` — never resolve a config here at all, so no fetch
     // (and no background refresh) is ever issued from the request path.
     const config =
@@ -902,10 +936,9 @@ function fireVariationAssigned(
  * request is server-to-server, so the browser navigating away cannot cancel it;
  * `waitUntil` is what stops the runtime tearing the invocation down first.
  *
- * The visitor's UA and IP ride along because this fetch is made BY THE SERVER:
- * without them every server-side exposure is attributed to the runtime's own
- * user agent and the deployment's egress IP, and device/geo reporting is wrong
- * for the entire server-decided population.
+ * The visitor's UA rides along because this fetch is made BY THE SERVER:
+ * without it every server-side exposure is attributed to the runtime's own
+ * user agent. The IP never does (GDPR — see tracking.ts).
  */
 function reportExposure(
   trackingHost: string,
@@ -927,7 +960,7 @@ function reportExposure(
       url: applied.url,
       source,
     },
-    { userAgent: req.headers.get('user-agent'), clientIp: clientIp(req) },
+    { userAgent: req.headers.get('user-agent') },
   );
   if (fetchEvent?.waitUntil) fetchEvent.waitUntil(pending);
 }
@@ -964,11 +997,16 @@ function resolveVisitorId(
   return ensureVisitorId(store, seed || undefined);
 }
 
-/** The visitor's IP as the edge saw it — first hop of `x-forwarded-for`. */
-function clientIp(req: NextRequest): string | null {
-  const forwarded = req.headers.get('x-forwarded-for');
-  if (forwarded) return (forwarded.split(',')[0] ?? '').trim() || null;
-  return req.headers.get('x-real-ip');
+/** The `consent` option for this request; a resolver that throws counts as "can't tell". */
+function resolveConsentOption(
+  option: TestaProxyOptions['consent'],
+  req: NextRequest,
+): ConsentState | undefined {
+  try {
+    return (typeof option === 'function' ? option(req) : option) ?? undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 /** Best-effort ISO country from common edge geo headers (Vercel / Cloudflare). */

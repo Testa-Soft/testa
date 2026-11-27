@@ -4,7 +4,12 @@
  * v2 experiment sessions from the packed `_testa_exp` cookie. Shared with
  * `@testa-soft/react`; `<TestaProvider>` wires sessions + experiment_view.
  * `pushEvent` (custom goal matching) is unchanged.
+ *
+ * `setConsent` reports the visitor's tracking consent from a CMP callback
+ * (same as the provider's `consent` prop): until `'granted'` everything is
+ * session-scoped.
  */
+export { getConsent, onConsentChange, setConsent } from '@testa-soft/react';
 export {
   DEFAULT_EVENTS_ENDPOINT,
   track,

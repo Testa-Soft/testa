@@ -77,6 +77,25 @@ describe('GET /projects/:slug.js — 4.0 happy path', () => {
     expect(res.headers.get('cache-control')).toContain('private');
   });
 
+  // Found live (pixel e2e): without apiUrl the runtime never installs its
+  // transport, so a served pixel shipped NO events at all.
+  it('stamps cfPrefill.apiUrl with this worker origin (it routes /track)', async () => {
+    const env = makeEnv({ configs: { foo: FIXTURE_4_0 }, bundles: { '4.0': BUNDLE_4_0 } });
+    const res = await app.fetch(new Request('https://track.testa.com/projects/foo.js'), env);
+    const body = await res.text();
+    expect(body).toContain('window.cfPrefill.apiUrl = "https://track.testa.com"');
+    expect(body).not.toContain('trackingHost');
+  });
+
+  it('stamps cfPrefill.trackingHost from TRACKING_HOST when configured', async () => {
+    const env = {
+      ...makeEnv({ configs: { foo: FIXTURE_4_0 }, bundles: { '4.0': BUNDLE_4_0 } }),
+      TRACKING_HOST: 'https://crobot.example',
+    };
+    const res = await app.fetch(new Request('https://track.testa.com/projects/foo.js'), env);
+    expect(await res.text()).toContain('window.cfPrefill.trackingHost = "https://crobot.example"');
+  });
+
   it('injects the visitor geo from request.cf into cfGeoData', async () => {
     const env = makeEnv({
       configs: { foo: FIXTURE_4_0 },

@@ -22,7 +22,7 @@ import {
   installGoalGlobals,
   registerGoalController,
 } from '@testa-soft/dom';
-import { resolveGoalExperiments } from '@testa-soft/experiment-core';
+import { resolveGoalExperiments, scrubProps } from '@testa-soft/experiment-core';
 import { track } from '@testa-soft/react';
 
 export type GoalCycleTeardown = () => void;
@@ -67,7 +67,7 @@ export function startGoalTracking(
         action,
         lead_uuid: uuid,
         variation: variation_id ?? 0,
-        data,
+        data: scrubProps(data), // GDPR: no personal data in goal payloads
       });
     },
   });

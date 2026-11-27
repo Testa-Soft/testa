@@ -9,8 +9,15 @@
  *   - `exp` tuples: `[exp, var, session_start]` (older pixels) → `session_idx` 0
  *   - `screen_w` / `screen_h` default 0, `exp` default `[]` (pre-PRD-006 pixels)
  *   - unknown `page_type` / `click_id_type` values are dropped, not fatal
+ *   - personal data (GDPR) is stripped, never stored: PII props / item fields
+ *     and query params are dropped, emails redacted (shared-types pii.ts)
  */
-import type { ExpSession, Item, PixelEvent } from '@testa-platform/shared-types';
+import {
+  type ExpSession,
+  type Item,
+  type PixelEvent,
+  scrubEvent,
+} from '@testa-platform/shared-types';
 import { z } from 'zod';
 
 export const MAX_ITEMS = 50;
@@ -170,5 +177,5 @@ export function validateEvent(raw: unknown): ValidationResult {
     ...(pageType === undefined ? {} : { page_type: pageType }),
     ...(clickIdType === undefined ? {} : { click_id_type: clickIdType }),
   };
-  return { ok: true, event: event as unknown as PixelEvent };
+  return { ok: true, event: scrubEvent(event) as unknown as PixelEvent };
 }

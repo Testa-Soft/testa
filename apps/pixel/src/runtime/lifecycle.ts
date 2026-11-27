@@ -32,6 +32,7 @@ import {
   type CartOptions,
   type PaymentInfoOptions,
   type PurchaseOptions,
+  type TargetingContext,
   type TrackCall,
   addToCart as buildAddToCart,
   beginCheckout as buildBeginCheckout,
@@ -55,11 +56,17 @@ import {
   installCrossDomainLinkTagging,
   tagUrl,
 } from './experiments/cross-domain.ts';
+import { eligibilityOf } from './experiments/eligibility.ts';
 import {
   type AssignedExperiment,
   type GoalController,
   createGoalController,
 } from './experiments/goals.ts';
+import {
+  __resetLegacyTrackingForTests,
+  legacyConversion,
+  legacyExposure,
+} from './experiments/legacy-tracking.ts';
 import * as expSessions from './experiments/session.ts';
 import {
   type AssignResult,
@@ -71,7 +78,12 @@ import { pushLeadToDataLayer } from './legacy/data-layer.ts';
 import { fireEvent, installLegacy, publishLoaded, publishUuid } from './legacy/index.ts';
 import { snapshot as healthSnapshot, recordDroppedNoSession } from './network/health.ts';
 import { initOutbox, count as outboxCount, enqueue as outboxEnqueue } from './network/outbox.ts';
-import { installTransport, notifyEnqueue, shipEventSync } from './network/transport.ts';
+import {
+  installTransport,
+  notifyEnqueue,
+  shipEventSync,
+  shipUnsentSync,
+} from './network/transport.ts';
 import { uuidv7 } from './network/uuid7.ts';
 import { maybeEnterPreviewMode } from './preview.ts';
 import { readBreadcrumbs as readRedirectBreadcrumbs } from './redirect/breadcrumbs.ts';
@@ -94,7 +106,10 @@ interface PendingEvent {
 
 interface CfPrefill {
   project?: ProjectConfig;
+  /** Edge base URL serving `/track` (and preview). */
   apiUrl?: string;
+  /** crobot base URL for the legacy `/api/leads` + `/api/leads/convert` calls. */
+  trackingHost?: string;
   env?: string;
 }
 
@@ -644,6 +659,8 @@ function buildPixelEvent(
 interface LiftedProps {
   experiment_id?: number;
   variation_id?: number;
+  /** Goal conversions: the crobot goal id is a top-level ClickHouse column. */
+  goal_id?: number;
   value_native?: number;
   currency?: string;
   order_id?: string;
@@ -665,6 +682,7 @@ function liftReservedProps(props: Record<string, unknown>): {
     switch (key) {
       case 'experiment_id':
       case 'variation_id':
+      case 'goal_id':
       case 'value_native':
       case 'items_count':
         if (typeof value === 'number' && Number.isFinite(value)) {
@@ -850,17 +868,28 @@ export function runExperimentCycle(): void {
   // Tear down last cycle's goal listeners; start a fresh controller for this
   // pass (SPA re-entry otherwise leaves stale click handlers attached).
   _goals?.teardown();
-  _goals = createGoalController({ track });
+  _goals = createGoalController({ track: trackGoalConversion });
 
   // Fire session_start (new session only) + page_view for this URL. These are
   // the raw events goals match against at query time; page_view also re-fires
   // on every SPA navigation. On the PRD-006 pipeline they fire AFTER the
   // experiment loop instead, so they land inside the experiment session (§5.3).
   const v2 = v2ExperimentIds(project);
-  if (v2.size === 0) fireLifecycleEvents();
+  // Persist the visitor id before any event is built, so even the first
+  // page's events carry the id the next pages will use.
+  cookies.ensureUuid();
+  // Read BEFORE anything mints the session cookie (session_start detection).
+  const hadSession = Boolean(readValue(SESSION_ID_COOKIE));
+  // Capture the browsing session's entry attribution on its FIRST page, even
+  // when nothing ships from it: on the v2 pipeline an off-experiment landing
+  // page sends no event (no experiment session yet), and the entry would
+  // otherwise be taken from the later page where the exposure happens.
+  entryFor(getOrCreateSessionId());
+  if (v2.size === 0) fireLifecycleEvents(hadSession);
   const pageUrl = typeof location !== 'undefined' ? location.href : '';
 
   const ctx = buildEvalContext();
+  const targetingCtx = buildTargetingContext(ctx);
   const stats = { matched: 0, excluded: 0 };
   const assigned: AssignedExperiment[] = [];
 
@@ -871,7 +900,32 @@ export function runExperimentCycle(): void {
   for (const expConfig of shuffleForVisitor(project.experiments, cookies.getUuid() ?? '')) {
     if (expConfig.status !== 'active') continue;
 
-    if (expConfig.audience !== undefined && !evaluate(expConfig.audience, ctx)) {
+    // Page rule → targeting → exclusions → audience (see eligibility.ts). Off
+    // the experiment's page nothing is bucketed, exposed or mutated — but an
+    // ALREADY-assigned, session-live visitor keeps their goals armed, since a
+    // goal usually completes on a different page (3.3.3 `belongsToExperiment`
+    // + `checkSession`; the session is not bumped off-page).
+    const eligibility = eligibilityOf(expConfig, targetingCtx, {
+      audience: (e) => e.audience === undefined || evaluate(e.audience, ctx),
+    });
+    if (eligibility === 'off_page') {
+      const prior = cookies.getAssignment(expConfig.experiment_id);
+      // PRD-006 §6.1: a returning ASSIGNED visitor gets a new experiment
+      // session on any page load (so a return straight to checkout is
+      // tracked); experiment_view still fires only on a matching page.
+      if (prior !== null && v2.has(expConfig.experiment_id)) {
+        expSessions.ensureSession(expConfig.experiment_id, prior, Date.now());
+      }
+      if (prior !== null && isSessionActive(expConfig.experiment_id)) {
+        assigned.push({
+          experimentId: expConfig.experiment_id,
+          variationId: prior,
+          goals: expConfig.goals,
+        });
+      }
+      continue;
+    }
+    if (eligibility !== 'eligible') {
       stats.excluded += 1;
       continue;
     }
@@ -910,6 +964,11 @@ export function runExperimentCycle(): void {
       variationId: result.variationId,
       goals: expConfig.goals,
     });
+
+    // Legacy crobot exposure (`leads` row = the impression) — every experiment,
+    // v1 and v2, and BEFORE any redirect: a split-URL visitor leaves this page
+    // right after, so this is their only chance to be counted.
+    legacyExposure(project, expConfig, result.variationId, pageUrl);
 
     // SRM fix: when this variation will redirect, ship the experiment_view
     // SYNCHRONOUSLY via sendBeacon BEFORE we lose the page. The normal
@@ -964,7 +1023,13 @@ export function runExperimentCycle(): void {
     // Non-redirect changes (css/html/text/attribute/js).
     const nonRedirect = variation.changes.filter((c) => c.type !== 'redirect');
     if (nonRedirect.length > 0) {
-      const teardowns = applyVariation(result.variationId, nonRedirect);
+      const teardowns = applyVariation(result.variationId, nonRedirect, {
+        // Re-checked at the LIVE URL on every DOM touch: the appliers'
+        // MutationObservers outlive a soft navigation, so without this a late
+        // match on the NEXT page would still be mutated.
+        guard: () =>
+          typeof location !== 'undefined' && matchesPageRule(location.href, expConfig.rules ?? []),
+      });
       _activeTeardowns.push(...teardowns);
     }
 
@@ -980,7 +1045,7 @@ export function runExperimentCycle(): void {
     });
   }
 
-  if (v2.size > 0) fireLifecycleEvents();
+  if (v2.size > 0) fireLifecycleEvents(hadSession);
 
   // Wire click + page_view goals for every assigned experiment. Click goals
   // attach listeners only to their configured selectors (no click autocapture);
@@ -1002,8 +1067,7 @@ export function runExperimentCycle(): void {
  * then `page_view` for the current URL. `page_view` re-fires on every SPA
  * navigation; `session_start` does not (the cookie exists by then).
  */
-function fireLifecycleEvents(): void {
-  const hadSession = Boolean(readValue(SESSION_ID_COOKIE));
+function fireLifecycleEvents(hadSession: boolean): void {
   if (!hadSession) {
     track('session_start');
   }
@@ -1063,6 +1127,28 @@ function buildEvalContext(): EvalContext & { visitor: BuildVisitorContext } {
   };
 }
 
+/** The shared `experiment-core` targeting/exclusion context for this pageview. */
+function buildTargetingContext(ctx: EvalContext): TargetingContext {
+  return {
+    url: ctx.page.url,
+    getCookie: (name) => cookies.cookieStore.get(name),
+    ...(typeof navigator !== 'undefined' && navigator.userAgent
+      ? { userAgent: navigator.userAgent }
+      : {}),
+    ...(ctx.geo.country ? { country: ctx.geo.country } : {}),
+  };
+}
+
+/**
+ * Goal-controller sink: the conversion goes down the normal `track` pipe
+ * (outbox → `/track` → ClickHouse) AND to crobot `/api/leads/convert`, which
+ * is what legacy (v1) results count — and v2 experiments make it too.
+ */
+function trackGoalConversion(name: string, props?: Record<string, unknown>): void {
+  track(name, props);
+  if (name === 'conversion' && props) legacyConversion(props);
+}
+
 function detectDeviceType(): EvalContext['device']['type'] {
   const ua = navigator.userAgent || '';
   if (!ua) return 'unknown';
@@ -1110,6 +1196,17 @@ function installNetwork(): void {
   if (!apiUrl) return;
   const endpoint = `${apiUrl.replace(/\/$/, '')}/track`;
   installTransport({ endpoint });
+  // Events emitted right before a navigation never reach IndexedDB / the
+  // debounced flush; beacon whatever this page emitted and did not confirm.
+  if (typeof addEventListener === 'function') addEventListener('pagehide', shipPageEventsSync);
+}
+
+function shipPageEventsSync(): void {
+  const entries = [];
+  for (const p of _pendingEvents) {
+    if (p.event) entries.push({ event_id: p.event.event_id, payload: JSON.stringify(p.event) });
+  }
+  shipUnsentSync(entries);
 }
 
 // ─── consent mode ──────────────────────────────────────────────────────────
@@ -1185,6 +1282,7 @@ export function __resetForTests(): void {
   _crossDomainUninstall = null;
   _goals?.teardown();
   _goals = null;
+  __resetLegacyTrackingForTests();
   for (const t of _activeTeardowns) {
     try {
       t();

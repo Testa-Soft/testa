@@ -174,3 +174,19 @@ describe('cmp:consent-changed listener', () => {
     expect(handler).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('strict mode default', () => {
+  it('a strict project is held from the start until an explicit grant', () => {
+    consent.setStrictMode(true);
+    expect(consent.getState()).toBe('unknown');
+    expect(consent.isHeld()).toBe(true);
+    consent.setState('granted');
+    expect(consent.isHeld()).toBe(false);
+  });
+
+  it('a grant reported BEFORE strict mode switched on is kept', () => {
+    consent.setState('granted');
+    consent.setStrictMode(true);
+    expect(consent.isHeld()).toBe(false);
+  });
+});

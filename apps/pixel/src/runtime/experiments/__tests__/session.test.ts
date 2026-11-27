@@ -20,7 +20,12 @@ import { snapshot } from '../../network/health.ts';
 import { readValue } from '../../storage.ts';
 import * as sessions from '../session.ts';
 
-const T0 = Date.parse('2026-10-01T10:00:00Z');
+// Anchored to the real clock (hour-aligned): happy-dom's cookie getter judges
+// expiry by the REAL date, so a fixed past T0 made cookies written at fake
+// T0 + 2 days invisible to the reset (already expired) yet alive again once the
+// fake clock went back to T0 — the suite leaked state and failed from the day
+// T0 + 32 days passed.
+const T0 = Math.floor(Date.now() / 3_600_000) * 3_600_000;
 const MIN = 60_000;
 const T0_SEC = T0 / 1000;
 
@@ -178,11 +183,21 @@ describe('pixel lifecycle on the v2 pipeline', () => {
   });
 
   it('re-init on a non-matching page keeps the session but fires no experiment_view', () => {
+    cookies.setAssignment(17, 170); // a returning, assigned visitor
     boot(
       project([experiment(17, { rules: [{ match_type: 'contains', url_pattern: '/only-here' }] })]),
     );
     expect(named('experiment_view')).toEqual([]);
     expect(named('page_view')[0]?.exp).toEqual([[17, 170, T0_SEC, 1]]);
+  });
+
+  it('a NEW visitor on a non-matching page is not enrolled (page-rule gate)', () => {
+    boot(
+      project([experiment(17, { rules: [{ match_type: 'contains', url_pattern: '/only-here' }] })]),
+    );
+    expect(cookies.getAssignment(17)).toBeNull();
+    expect(named('experiment_view')).toEqual([]);
+    expect(named('page_view')).toEqual([]); // no experiment session → dropped (§5.3)
   });
 
   it('v1 experiments in a v2 project: no experiment_view and not in exp', () => {

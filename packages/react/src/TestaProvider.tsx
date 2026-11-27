@@ -23,7 +23,7 @@
  * `useTestaVariant` works. Everything is torn down on unmount.
  */
 
-import type { ProjectConfig } from '@testa-platform/shared-types';
+import type { ConsentState, ProjectConfig } from '@testa-platform/shared-types';
 import {
   type Navigate,
   SHIELD_CSS_STYLE_ID,
@@ -50,6 +50,7 @@ import { type ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState }
 const useBeforePaint = typeof document === 'undefined' ? useEffect : useLayoutEffect;
 import { revealShield } from './apply-assignments.ts';
 import { preloadConfig } from './config.ts';
+import { setConsent, watchConsent } from './consent.ts';
 import { TestaContext, type TestaContextValue } from './context.ts';
 import { DocumentCookieStore } from './cookie-store.ts';
 import { initTesta } from './init.ts';
@@ -110,6 +111,15 @@ export interface TestaProviderProps {
    * `historyNavigate` is available for routers that follow `popstate`.
    */
   navigate?: Navigate;
+  /**
+   * The visitor's tracking consent, from your CMP. Until it is `'granted'`
+   * everything Testa stores is session-scoped (session cookies +
+   * sessionStorage): the visitor keeps one variation for the whole browser
+   * session but is a new visitor next time. Flipping it to `'granted'`
+   * promotes the SAME id and assignment to persistent cookies — no re-bucket.
+   * Outside React, call `setConsent()` instead.
+   */
+  consent?: ConsentState;
 }
 
 export function TestaProvider(props: TestaProviderProps): JSX.Element {
@@ -125,6 +135,12 @@ export function TestaProvider(props: TestaProviderProps): JSX.Element {
   useBeforePaint(() => {
     navigateRef.current = props.navigate;
   });
+
+  // Consent first (pre-paint, before the mount effect builds its store), so the
+  // very first write already has the right lifetime.
+  useBeforePaint(() => {
+    if (props.consent) setConsent(props.consent);
+  }, [props.consent]);
 
   // EAGER FETCH: kick the request off during first render (before children
   // render, before effects) so config resolution overlaps React's initial work.
@@ -165,6 +181,7 @@ export function TestaProvider(props: TestaProviderProps): JSX.Element {
       secure: props.secureCookies ?? true,
       ...(props.cookieDomain ? { domain: props.cookieDomain } : {}),
     });
+    const unwatchConsent = watchConsent(store);
 
     const disposeTeardowns = (list: Teardown[]): void => {
       for (const t of list) {
@@ -259,6 +276,7 @@ export function TestaProvider(props: TestaProviderProps): JSX.Element {
       disposed = true;
       disposeTeardowns(teardowns);
       uninstallNav();
+      unwatchConsent();
     };
   }, []);
 

@@ -102,6 +102,22 @@ describe.skipIf(!liveRedis)('POST /_ingest (live Redis)', () => {
     expect(len).toBe(1);
   });
 
+  it('strips personal data before anything reaches the stream (GDPR)', async () => {
+    const app = buildApp();
+    const ev = {
+      ...makeEvent({ url: 'https://example.com/thanks?email=jane%40example.com&o=1' }),
+      email: 'jane@example.com',
+      props: { plan: 'pro', phone: '+37060000000' },
+    } as EnrichedEvent;
+    expect((await postBatch(app, [ev])).status).toBe(204);
+
+    const entries = await getClient().xrange(config.redis.streamKey, '-', '+');
+    const stored = JSON.parse(entries[0]?.[1][1] ?? '{}') as Record<string, unknown>;
+    expect(stored.url).toBe('https://example.com/thanks?o=1');
+    expect(stored.email).toBeUndefined();
+    expect(stored.props).toEqual({ plan: 'pro' });
+  });
+
   it('rejects a tampered body with 401', async () => {
     const res = await postBatch(buildApp(), [makeEvent()], { tamper: true });
     expect(res.status).toBe(401);

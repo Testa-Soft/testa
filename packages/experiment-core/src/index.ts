@@ -130,3 +130,23 @@ export {
   slideExpSession,
   startExpSessionIfNeeded,
 } from './exp-session.ts';
+
+// GDPR: consent-driven storage lifetime + PII scrubbing (scrubbers live in
+// shared-types so the edge and collector use the very same rules).
+export {
+  PERSISTENCE_COOKIE,
+  SESSION_MAX_AGE_LIMIT_SEC,
+  cookieMaxAge,
+  effectiveConsent,
+  persistenceFor,
+  syncPersistence,
+} from './consent.ts';
+export type { Persistence } from './consent.ts';
+export {
+  REDACTED,
+  containsEmail,
+  isPiiKey,
+  redactText,
+  scrubProps,
+  scrubUrl,
+} from '@testa-platform/shared-types';

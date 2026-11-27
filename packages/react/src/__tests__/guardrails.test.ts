@@ -180,7 +180,7 @@ describe('cookie → localStorage → sessionStorage cascade', () => {
   });
 
   it('records how long a value has been held, so the ordering is auditable', () => {
-    const store = new DocumentCookieStore({ secure: false });
+    const store = new DocumentCookieStore({ secure: false, persistence: 'persistent' });
     store.set(UUID_COOKIE, 'established', { maxAgeSec: 3600 });
     const stamp = JSON.parse(localStorage.getItem(UUID_COOKIE) as string).firstSeenAt;
     expect(stamp).toBeGreaterThan(0);
@@ -249,7 +249,7 @@ describe('the cascade promotes, it does not just fall back', () => {
 
   it('reads a bare string the legacy 3.3.3 pixel mirrored', () => {
     localStorage.setItem(UUID_COOKIE, 'pixel-written-id');
-    const store = new DocumentCookieStore({ secure: false });
+    const store = new DocumentCookieStore({ secure: false, persistence: 'persistent' });
     expect(store.get(UUID_COOKIE)).toBe('pixel-written-id');
     expect(document.cookie).toContain(`${UUID_COOKIE}=pixel-written-id`);
   });

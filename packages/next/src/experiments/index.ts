@@ -40,6 +40,8 @@ export {
   PREVIEW_VARIATION_ID,
 } from './preview.ts';
 
+export { getConsent, onConsentChange, setConsent } from '../track.ts';
+
 // PRD-006 typed tracking helpers (task 5.7) — client-side; posts to the edge `/track`.
 export {
   DEFAULT_EVENTS_ENDPOINT,

@@ -4,6 +4,7 @@
  *   raw body  → HMAC verify (401 on fail)
  *             → JSON parse + zod schema (400 on fail)
  *             → replay-window check (401 on fail)
+ *             → per-event PII scrub (GDPR; defence in depth behind the edge)
  *             → per-event enqueue (503 on Redis failure)
  *             → 204
  *
@@ -12,6 +13,7 @@
  * that. Schema-level zod validation surfaces the offending field.
  */
 
+import { scrubEvent } from '@testa-platform/shared-types';
 import type { Context } from 'hono';
 import type { Redis } from 'ioredis';
 import { z } from 'zod';
@@ -101,7 +103,7 @@ export function makeIngestHandler(deps: IngestRouteDeps) {
     try {
       const redis = deps.getRedis();
       for (const ev of batch.events) {
-        const r = await enqueue(ev as never, {
+        const r = await enqueue(scrubEvent(ev) as never, {
           redis,
           streamKey: config.redis.streamKey,
           streamMaxLen: config.redis.streamMaxLen,

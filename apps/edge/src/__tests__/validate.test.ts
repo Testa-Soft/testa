@@ -107,3 +107,28 @@ describe('validateEvent — normalisation', () => {
     expect([kept.page_type, kept.click_id_type]).toEqual(['thank_you', 'gclid']);
   });
 });
+
+describe('validateEvent — personal data (GDPR)', () => {
+  it('strips PII from URLs, props, items and passthrough fields, keeping the event', () => {
+    const r = validateEvent({
+      ...base,
+      url: 'https://shop.test/thanks?order=1&email=jane%40example.com',
+      referrer: 'https://mail.test/?to=jane@example.com',
+      entry_url: 'https://shop.test/?phone=123&utm_source=x',
+      title: 'Welcome jane@example.com',
+      email: 'jane@example.com',
+      props: { plan: 'pro', user_email: 'jane@example.com', note: 'ping jane@example.com' },
+      items: [{ item_id: 'sku', item_name: 'jane@example.com' }],
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const e = r.event as unknown as Record<string, unknown>;
+    expect(e.url).toBe('https://shop.test/thanks?order=1');
+    expect(e.referrer).toBe('https://mail.test/');
+    expect(e.entry_url).toBe('https://shop.test/?utm_source=x');
+    expect(e.title).toBe('Welcome [redacted]');
+    expect(e.email).toBeUndefined();
+    expect(e.props).toEqual({ plan: 'pro' });
+    expect(e.items).toEqual([{ item_id: 'sku' }]);
+  });
+});

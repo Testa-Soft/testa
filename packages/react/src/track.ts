@@ -19,6 +19,7 @@ import {
   type CookieStore,
   type ExpState,
   LIFTED_EVENT_KEYS,
+  PERSISTENCE_COOKIE,
   type PaymentInfoOptions,
   type PurchaseOptions,
   type TrackCall,
@@ -32,12 +33,16 @@ import {
   parsePacked,
   paymentInfo,
   purchase,
+  scrubProps,
+  scrubUrl,
   serializePacked,
   shippingInfo,
   signUp,
   slideExpSession,
   startExpSessionIfNeeded,
 } from '@testa-soft/experiment-core';
+
+import { resolveConsent } from './consent.ts';
 
 export const SDK_TRACKER_VERSION = 'sdk-prd006';
 /** Same-origin edge route, like the pixel's default. */
@@ -142,7 +147,8 @@ function buildEvent(
 ): PixelEvent {
   const lifted: Record<string, unknown> = {};
   const rest: Record<string, string | number | boolean | null> = {};
-  for (const [k, v] of Object.entries(props)) {
+  // GDPR: personal data never leaves the browser (the edge scrubs again).
+  for (const [k, v] of Object.entries(scrubProps(props))) {
     if (v === undefined) continue;
     if ((LIFTED_EVENT_KEYS as readonly string[]).includes(k) || TOP_LEVEL_KEYS.has(k)) {
       lifted[k] = v;
@@ -165,11 +171,11 @@ function buildEvent(
     project_id: t.projectId,
     visitor_id: t.store.get(UUID_COOKIE) ?? '',
     session_id: sessionId(t.store),
-    url: hasWindow ? window.location.href : '',
+    url: hasWindow ? scrubUrl(window.location.href) : '',
     ...(typeof document !== 'undefined' && document.referrer
-      ? { referrer: document.referrer }
+      ? { referrer: scrubUrl(document.referrer) }
       : {}),
-    consent_state: 'unknown',
+    consent_state: resolveConsent(t.store.get(PERSISTENCE_COOKIE)),
     tracker_version: SDK_TRACKER_VERSION,
     viewport_w: hasWindow ? window.innerWidth || 0 : 0,
     viewport_h: hasWindow ? window.innerHeight || 0 : 0,

@@ -12,4 +12,9 @@ export interface Env {
   COOKIE_FALLBACK_DOMAIN: string;
   VISITOR_ID_SALT: string;
   ENVIRONMENT: string;
+  /**
+   * crobot base URL for the pixel's legacy `/api/leads` + `/api/leads/convert`
+   * calls (`cfPrefill.trackingHost`). Unset → the pixel's default crobot host.
+   */
+  TRACKING_HOST?: string;
 }

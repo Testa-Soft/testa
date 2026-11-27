@@ -140,3 +140,84 @@ describe('drain after success', () => {
     expect(await count()).toBe(0);
   });
 });
+
+describe('sendBeacon — cross-origin edge', () => {
+  // A beacon is sent with credentials. An `application/json` body makes it a
+  // preflighted request, and the edge's `Access-Control-Allow-Origin: *` cannot
+  // satisfy a credentialed preflight — Chrome blocks it (found live: the
+  // pre-redirect experiment_view and the pagehide flush never reached the edge,
+  // and the pagehide flush had already marked them sent). A CORS-safelisted
+  // text/plain body needs no preflight; the edge parses JSON regardless.
+  it('ships with a CORS-safelisted content type (no preflight)', async () => {
+    const types: string[] = [];
+    Object.defineProperty(navigator, 'sendBeacon', {
+      configurable: true,
+      writable: true,
+      value: (_url: string, body: Blob) => {
+        types.push(body.type);
+        return true;
+      },
+    });
+    installTransport({ endpoint: ENDPOINT });
+    const { shipEventSync } = await import('../transport.ts');
+    expect(shipEventSync('{"id":"x"}')).toBe(true);
+    expect(types).toHaveLength(1);
+    expect(types[0]?.startsWith('text/plain')).toBe(true);
+  });
+});
+
+describe('unload safety net — events fired right before a navigation', () => {
+  function stubBeacon(accept = true): string[] {
+    const bodies: string[] = [];
+    Object.defineProperty(navigator, 'sendBeacon', {
+      configurable: true,
+      writable: true,
+      value: (_url: string, body: Blob) => {
+        bodies.push(body.type);
+        return accept;
+      },
+    });
+    return bodies;
+  }
+
+  it('beacons the unconfirmed page events once, and the next flush does not re-ship them', async () => {
+    const beacons = stubBeacon();
+    fetchMock.mockResolvedValue(new Response(null, { status: 204 }));
+    installTransport({ endpoint: ENDPOINT });
+    const { shipUnsentSync } = await import('../transport.ts');
+
+    // The add_to_cart reached IndexedDB but not the network before unload.
+    const id = await enqueueOne();
+    const entries = [{ event_id: id, payload: `{"event_id":"${id}"}` }];
+    expect(shipUnsentSync(entries)).toBe(1);
+    expect(shipUnsentSync(entries)).toBe(0); // already shipped from this page
+    expect(beacons).toHaveLength(1);
+
+    // Next page: the outbox still holds it, but it must not be POSTed again.
+    await flush();
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(await count()).toBe(0);
+  });
+
+  it('does not re-beacon events a flush already delivered', async () => {
+    const beacons = stubBeacon();
+    fetchMock.mockResolvedValue(new Response(null, { status: 204 }));
+    installTransport({ endpoint: ENDPOINT });
+    const { shipUnsentSync } = await import('../transport.ts');
+    const id = await enqueueOne();
+    await flush();
+    expect(shipUnsentSync([{ event_id: id, payload: `{"event_id":"${id}"}` }])).toBe(0);
+    expect(beacons).toHaveLength(0);
+  });
+
+  it('a rejected beacon leaves the events to the next page', async () => {
+    stubBeacon(false);
+    fetchMock.mockResolvedValue(new Response(null, { status: 204 }));
+    installTransport({ endpoint: ENDPOINT });
+    const { shipUnsentSync } = await import('../transport.ts');
+    const id = await enqueueOne();
+    expect(shipUnsentSync([{ event_id: id, payload: `{"event_id":"${id}"}` }])).toBe(0);
+    await flush();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});

@@ -57,7 +57,11 @@ serve.get('/projects/:slug{.+\\.js}', async (c) => {
   }
 
   const visitor = await getOrCreateVisitorId(c.req.raw, c.env);
-  const body = renderPixel(config, bundle, c.env.ENVIRONMENT, geoOf(c.req.raw));
+  const body = renderPixel(config, bundle, c.env.ENVIRONMENT, geoOf(c.req.raw), {
+    // This worker also routes POST /track, so the pixel ships to our origin.
+    apiUrl: new URL(c.req.url).origin,
+    ...(c.env.TRACKING_HOST ? { trackingHost: c.env.TRACKING_HOST } : {}),
+  });
 
   return new Response(body, {
     status: 200,

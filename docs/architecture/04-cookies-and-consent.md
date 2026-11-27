@@ -49,7 +49,48 @@ The customer decides per-project. We expose a "First-Party Tracking" setting in 
 
 Why `_testa_ses` and `_testa_exp` stay JS-set: they're per-session / per-experiment ephemeral. The 7-day ITP cap matters less than for `_testa_uuid` (persistence is the headline win).
 
-## Consent
+## Consent in the SDKs (`@testa-soft/next`, `@testa-soft/react`) — GDPR, 2026-11-07
+
+The SDKs are the live integration; the per-state table further down describes the
+`apps/pixel` runtime only.
+
+**Default is session-scoped.** Until the customer reports `'granted'`, nothing we
+store outlives the browser session:
+
+| | not granted (`unknown` / `denied`, the default) | `granted` |
+|---|---|---|
+| `_testa_uuid`, `_testa_uuid_s`, `_testa_exp` | **session cookies** (no `Max-Age`) | full lifetime (400 d / 30 d) |
+| Client mirror | `sessionStorage` only, never `localStorage` | `localStorage` (+ `sessionStorage` fallback) |
+| Short cookies (`_testa_sid` 30 min, redirect guard 15 s) | keep their own `Max-Age` (≤ 1 day) | same |
+| Edge `/track` `_testa_uuid` | session cookie | 2-year cookie |
+
+Session cookies rather than sessionStorage alone so that the middleware still sees
+the id + assignment: server-side split-URL redirects keep working and every tab of
+the session lands in the same variation. Bucketing is `hash(visitorId:experimentId)`,
+so within a session nothing changes; only cross-session continuity is lost.
+
+**Signalling consent** (customer-set, read per request / per render):
+
+```ts
+createTestaProxy({ projectId, consent: (req) => (req.cookies.get('cmp')?.value === 'yes' ? 'granted' : 'denied') });
+<TestaProvider projectId={…} consent={cmpAccepted ? 'granted' : 'denied'} />
+setConsent('granted'); // from a CMP callback outside React
+```
+
+**Promotion, not re-minting.** On grant the values already held are re-written with
+their full lifetime — same id, same variation. On revoke they are demoted back and the
+`localStorage` copies removed. The `_testa_persist` marker (`p`/`s`) records which
+lifetime the values were last written with, because neither side can read a cookie's
+expiry back. It also lets one side lead: a side that was not told (`consent` omitted /
+resolver returned nothing) follows the marker the other side wrote, so a client-only or
+server-only integration never ping-pongs. An explicit answer always wins. Cookies from
+before this release carry no marker and are demoted once.
+
+Legal note: under ePrivacy Art. 5(3) session cookies / sessionStorage still need
+consent unless strictly necessary. Session scoping minimises the data; it does not by
+itself exempt a site from its CMP.
+
+## Consent (legacy `apps/pixel` runtime)
 
 We are **consent-aware but not gated**. The pixel always fires; what changes is what we persist and for how long.
 
@@ -91,7 +132,8 @@ The salt rotation: a random `VISITOR_ID_SALT` env var on the worker plus the UTC
 - **Roles.** Customer is data controller. We are processor (per DPA, mirrors VWO/Optimizely/AB Tasty industry baseline).
 - **Retention.** 13 months on raw events (CH TTL on partition); aggregates indefinite. Aligns with CNIL recommendation for analytics with consent.
 - **Data subject requests.** Per DPA, customer routes deletion / export requests; we honour them by `visitor_id`. With denied-state daily rotation, denied-visitor data is automatically forgotten after 1 day in any practical sense.
-- **No PII in events.** `value_native`, `order_id`, `items_count`, `props` are not PII (orders are pseudonymous from customer-side already). Email / name / etc. must NEVER appear in `props`.
+- **No PII in events — enforced.** Personal data is STRIPPED (the event is kept) at every hop: the SDKs before sending, the edge `/track` validator, and the collector `/_ingest` (shared rules: `packages/shared-types/src/pii.ts`). PII-named fields (email, phone, names, address, IP, …) and email-bearing values are dropped from props / items / passthrough fields; PII query params are dropped from `url` / `referrer` / `entry_*`; emails in titles and URL paths are redacted. The same scrub applies to the crobot `/api/leads` (exposure) and `/api/leads/convert` (goal `data`) payloads.
+- **No IP addresses.** ClickHouse has no IP column (geo comes from CF headers). The Next middleware no longer forwards the visitor IP (`x-forwarded-for`) to crobot `/api/leads`.
 
 ## Implementation references
 

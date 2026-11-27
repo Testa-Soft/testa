@@ -13,7 +13,12 @@
  * experiment-core's `CookieStore` requires.
  */
 
-import type { CookieSetOptions, CookieStore } from '@testa-soft/experiment-core';
+import {
+  type CookieSetOptions,
+  type CookieStore,
+  type Persistence,
+  cookieMaxAge,
+} from '@testa-soft/experiment-core';
 
 export interface ReadableCookies {
   get(name: string): { value: string } | undefined;
@@ -40,6 +45,11 @@ export interface NextCookieStoreOptions {
   secure?: boolean;
   /** Cookie `Domain` for cross-subdomain sharing. Omit for host-only cookies. */
   domain?: string;
+  /**
+   * Storage lifetime the visitor's consent allows. Default `session`: long-lived
+   * cookies go out as session cookies (see experiment-core/consent.ts).
+   */
+  persistence?: Persistence;
 }
 
 export class NextCookieStore implements CookieStore {
@@ -47,11 +57,13 @@ export class NextCookieStore implements CookieStore {
   private readonly pending = new Map<string, PendingWrite>();
   private readonly secure: boolean;
   private readonly domain: string | undefined;
+  private readonly persistence: Persistence;
 
   constructor(reqCookies: ReadableCookies, opts: NextCookieStoreOptions = {}) {
     this.reqCookies = reqCookies;
     this.secure = opts.secure ?? true;
     this.domain = opts.domain;
+    this.persistence = opts.persistence ?? 'session';
   }
 
   get(name: string): string | null {
@@ -85,8 +97,10 @@ export class NextCookieStore implements CookieStore {
   /** Flush buffered cookies onto a response's cookie jar. */
   applyTo(resCookies: WritableCookies): void {
     for (const [name, write] of this.pending) {
+      // No `maxAge` = a session cookie: no consent to persist.
+      const maxAge = cookieMaxAge(write.maxAgeSec, this.persistence);
       resCookies.set(name, write.value, {
-        maxAge: write.maxAgeSec,
+        ...(maxAge !== undefined ? { maxAge } : {}),
         path: '/',
         sameSite: 'lax',
         secure: this.secure,
