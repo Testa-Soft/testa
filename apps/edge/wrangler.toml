@@ -39,7 +39,8 @@ enabled = true
 
 [env.staging]
 name = "testa-edge-staging"
-vars = { ENVIRONMENT = "staging" }
+# TRACKING_HOST: without it the pixel posts legacy /api/leads to production crobot.
+vars = { ENVIRONMENT = "staging", TRACKING_HOST = "https://testa-staging.on-forge.com" }
 
 # Bindings are not inherited by named environments: staging declares its own.
 # KV IDs come from `wrangler kv namespace create KV_PROJECT_CONFIG --env staging`
