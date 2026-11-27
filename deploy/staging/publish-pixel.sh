@@ -20,7 +20,7 @@ TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
 kv_put() { # binding key file
-  (cd "$ROOT/apps/edge" && npx wrangler kv key put "$2" --path "$3" --binding "$1" --env staging --remote)
+  (cd "$ROOT/apps/edge" && npx wrangler kv key put "$2" --path "$3" --binding "$1" --env staging)
 }
 
 if [ "$WHAT" = "bundle" ] || [ "$WHAT" = "all" ]; then
